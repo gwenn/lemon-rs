@@ -261,10 +261,6 @@ struct symbol {
   char *firstset;          /* First-set for all rules of this symbol */
   Boolean lambda;          /* True if NT and can generate an empty string */
   int useCnt;              /* Number of times used */
-  char *destructor;        /* Code which executes whenever this symbol is
-                           ** popped from the stack during error processing */
-  int destLineno;          /* Line number for start of destructor.  Set to
-                           ** -1 for duplicate destructors. */
   char *datatype;          /* The data type of information held by this
                            ** object. Only used if type==NONTERMINAL */
   int dtnum;               /* The data type number.  In the parser, the value
@@ -400,8 +396,6 @@ struct lemon {
   char *failure;           /* Code to execute on parser failure */
   char *accept;            /* Code to execute when the parser excepts */
   char *extracode;         /* Code appended to the generated file */
-  char *tokendest;         /* Code to execute to destroy token data */
-  char *vardest;           /* Code for the default non-terminal destructor */
   char *filename;          /* Name of the input file */
   char *outname;           /* Name of the current output file */
   char *tokenprefix;       /* A prefix added to token names in the .h file */
@@ -2150,7 +2144,6 @@ enum e_state {
   PRECEDENCE_MARK_2,
   RESYNC_AFTER_RULE_ERROR,
   RESYNC_AFTER_DECL_ERROR,
-  WAITING_FOR_DESTRUCTOR_SYMBOL,
   WAITING_FOR_DATATYPE_SYMBOL,
   WAITING_FOR_FALLBACK_ID,
   WAITING_FOR_WILDCARD_ID,
@@ -2421,10 +2414,6 @@ to follow the previous rule.");
           psp->declargslot = &(psp->gp->include);
         }else if( strcmp(x,"code")==0 ){
           psp->declargslot = &(psp->gp->extracode);
-        }else if( strcmp(x,"token_destructor")==0 ){
-          psp->declargslot = &psp->gp->tokendest;
-        }else if( strcmp(x,"default_destructor")==0 ){
-          psp->declargslot = &psp->gp->vardest;
         }else if( strcmp(x,"token_prefix")==0 ){
           psp->declargslot = &psp->gp->tokenprefix;
           psp->insertLineMacro = 0;
@@ -2463,8 +2452,6 @@ to follow the previous rule.");
           psp->preccounter++;
           psp->declassoc = NONE;
           psp->state = WAITING_FOR_PRECEDENCE_SYMBOL;
-        }else if( strcmp(x,"destructor")==0 ){
-          psp->state = WAITING_FOR_DESTRUCTOR_SYMBOL;
         }else if( strcmp(x,"type")==0 ){
           psp->state = WAITING_FOR_DATATYPE_SYMBOL;
         }else if( strcmp(x,"fallback")==0 ){
@@ -2485,20 +2472,6 @@ to follow the previous rule.");
           "Illegal declaration keyword: \"%s\".",x);
         psp->errorcnt++;
         psp->state = RESYNC_AFTER_DECL_ERROR;
-      }
-      break;
-    case WAITING_FOR_DESTRUCTOR_SYMBOL:
-      if( !ISALPHA(x[0]) ){
-        ErrorMsg(psp->filename,psp->tokenlineno,
-          "Symbol name missing after %%destructor keyword");
-        psp->errorcnt++;
-        psp->state = RESYNC_AFTER_DECL_ERROR;
-      }else{
-        struct symbol *sp = Symbol_new(x);
-        psp->declargslot = &sp->destructor;
-        psp->decllinenoslot = &sp->destLineno;
-        psp->insertLineMacro = 1;
-        psp->state = WAITING_FOR_DECL_ARG;
       }
       break;
     case WAITING_FOR_DATATYPE_SYMBOL:
@@ -3434,67 +3407,6 @@ PRIVATE void tplt_print(FILE *out, struct lemon *lemp, char *str, int *lineno)
 }
 
 /*
-** The following routine emits code for the destructor for the
-** symbol sp
-*/
-void emit_destructor_code(
-  FILE *out,
-  struct symbol *sp,
-  struct lemon *lemp,
-  int *lineno
-){
- char *cp = 0;
-
- if( sp->type==TERMINAL ){
-   cp = lemp->tokendest;
-   if( cp==0 ) return;
-   fprintf(out,"{\n"); (*lineno)++;
- }else if( sp->destructor ){
-   cp = sp->destructor;
-   fprintf(out,"{\n"); (*lineno)++;
-   if( !lemp->nolinenosflag ){
-     (*lineno)++;
-     tplt_linedir(out,sp->destLineno,lemp->filename);
-   }
- }else if( lemp->vardest ){
-   cp = lemp->vardest;
-   if( cp==0 ) return;
-   fprintf(out,"{\n"); (*lineno)++;
- }else{
-   assert( 0 );  /* Cannot happen */
- }
- for(; *cp; cp++){
-   if( *cp=='$' && cp[1]=='$' ){
-     fprintf(out,"(yypminor->yy%d)",sp->dtnum);
-     cp++;
-     continue;
-   }
-   if( *cp=='\n' ) (*lineno)++;
-   fputc(*cp,out);
- }
- fprintf(out,"\n"); (*lineno)++;
- if (!lemp->nolinenosflag) {
-   (*lineno)++; tplt_linedir(out,*lineno,lemp->outname);
- }
- fprintf(out,"}\n"); (*lineno)++;
- return;
-}
-
-/*
-** Return TRUE (non-zero) if the given symbol has a destructor.
-*/
-int has_destructor(struct symbol *sp, struct lemon *lemp)
-{
-  int ret;
-  if( sp->type==TERMINAL ){
-    ret = lemp->tokendest!=0;
-  }else{
-    ret = lemp->vardest!=0 || sp->destructor!=0;
-  }
-  return ret;
-}
-
-/*
 ** Append text to a dynamically allocated string.  If zText is 0 then
 ** reset the string to be empty again.  Always return the complete text
 ** of the string (which is overwritten with each call).
@@ -3586,13 +3498,6 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
     /* The left-most RHS symbol has no value.  LHS direct is ok.  But
     ** we have to call the distructor on the RHS symbol first. */
     lhsdirect = 1;
-    if( has_destructor(rp->rhs[0],lemp) ){
-      append_str(0,0,0,0);
-      append_str("  yy_destructor(yypParser,%d,&yymsp[%d].minor);\n", 0,
-                 rp->rhs[0]->index,1-rp->nrhs);
-      rp->codePrefix = Strsafe(append_str(0,0,0,0));
-      rp->noCode = 0;
-    }
   }else if( rp->lhsalias==0 ){
     /* There is no LHS value symbol. */
     lhsdirect = 1;
@@ -3693,7 +3598,7 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
     lemp->errorcnt++;
   }
 
-  /* Generate destructor code for RHS minor values which are not referenced.
+  /*
   ** Generate error messages for unused labels and duplicate labels.
   */
   for(i=0; i<rp->nrhs; i++){
@@ -3723,9 +3628,6 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
           rp->rhsalias[i],rp->rhs[i]->name,rp->rhsalias[i]);
         lemp->errorcnt++;
       }
-    }else if( i>0 && has_destructor(rp->rhs[i],lemp) ){
-      append_str("  yy_destructor(yypParser,%d,&yymsp[%d].minor);\n", 0,
-         rp->rhs[i]->index,i-rp->nrhs+1);
     }
   }
 
@@ -4349,69 +4251,6 @@ void ReportTable(
   }
   tplt_xfer(lemp->name,in,out,&lineno);
 
-  /* Generate code which executes every time a symbol is popped from
-  ** the stack while processing errors or while destroying the parser.
-  ** (In other words, generate the %destructor actions)
-  */
-  if( lemp->tokendest ){
-    int once = 1;
-    for(i=0; i<lemp->nsymbol; i++){
-      struct symbol *sp = lemp->symbols[i];
-      if( sp==0 || sp->type!=TERMINAL ) continue;
-      if( once ){
-        fprintf(out, "      /* TERMINAL Destructor */\n"); lineno++;
-        once = 0;
-      }
-      fprintf(out,"    case %d: /* %s */\n", sp->index, sp->name); lineno++;
-    }
-    for(i=0; i<lemp->nsymbol && lemp->symbols[i]->type!=TERMINAL; i++);
-    if( i<lemp->nsymbol ){
-      emit_destructor_code(out,lemp->symbols[i],lemp,&lineno);
-      fprintf(out,"      break;\n"); lineno++;
-    }
-  }
-  if( lemp->vardest ){
-    struct symbol *dflt_sp = 0;
-    int once = 1;
-    for(i=0; i<lemp->nsymbol; i++){
-      struct symbol *sp = lemp->symbols[i];
-      if( sp==0 || sp->type==TERMINAL ||
-          sp->index<=0 || sp->destructor!=0 ) continue;
-      if( once ){
-        fprintf(out, "      /* Default NON-TERMINAL Destructor */\n"); lineno++;
-        once = 0;
-      }
-      fprintf(out,"    case %d: /* %s */\n", sp->index, sp->name); lineno++;
-      dflt_sp = sp;
-    }
-    if( dflt_sp!=0 ){
-      emit_destructor_code(out,dflt_sp,lemp,&lineno);
-    }
-    fprintf(out,"      break;\n"); lineno++;
-  }
-  for(i=0; i<lemp->nsymbol; i++){
-    struct symbol *sp = lemp->symbols[i];
-    if( sp==0 || sp->type==TERMINAL || sp->destructor==0 ) continue;
-    if( sp->destLineno<0 ) continue;  /* Already emitted */
-    fprintf(out,"    case %d: /* %s */\n", sp->index, sp->name); lineno++;
-
-    /* Combine duplicate destructors into a single case */
-    for(j=i+1; j<lemp->nsymbol; j++){
-      struct symbol *sp2 = lemp->symbols[j];
-      if( sp2 && sp2->type!=TERMINAL && sp2->destructor
-          && sp2->dtnum==sp->dtnum
-          && strcmp(sp->destructor,sp2->destructor)==0 ){
-         fprintf(out,"    case %d: /* %s */\n",
-                 sp2->index, sp2->name); lineno++;
-         sp2->destLineno = -1;  /* Avoid emitting this destructor again */
-      }
-    }
-
-    emit_destructor_code(out,lemp->symbols[i],lemp,&lineno);
-    fprintf(out,"      break;\n"); lineno++;
-  }
-  tplt_xfer(lemp->name,in,out,&lineno);
-
   /* Generate code which executes whenever the parser stack overflows */
   tplt_print(out,lemp,lemp->overflow,&lineno);
   tplt_xfer(lemp->name,in,out,&lineno);
@@ -4499,29 +4338,12 @@ void ReportTable(
 /* Generate a header file for the parser */
 void ReportHeader(struct lemon *lemp)
 {
-  FILE *out, *in;
+  FILE *out;
   const char *prefix;
-  char line[LINESIZE];
-  char pattern[LINESIZE];
   int i;
 
   if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
   else                    prefix = "";
-  in = file_open(lemp,".h","rb");
-  if( in ){
-    int nextChar;
-    for(i=1; i<lemp->nterminal && fgets(line,LINESIZE,in); i++){
-      lemon_sprintf(pattern,"#define %s%-30s %3d\n",
-                    prefix,lemp->symbols[i]->name,i);
-      if( strcmp(line,pattern) ) break;
-    }
-    nextChar = fgetc(in);
-    fclose(in);
-    if( i==lemp->nterminal && nextChar==EOF ){
-      /* No change in the file.  Don't rewrite it. */
-      return;
-    }
-  }
   out = file_open(lemp,".h","wb");
   if( out ){
     for(i=1; i<lemp->nterminal; i++){
@@ -4945,8 +4767,6 @@ struct symbol *Symbol_new(const char *x)
     sp->assoc = UNK;
     sp->firstset = 0;
     sp->lambda = LEMON_FALSE;
-    sp->destructor = 0;
-    sp->destLineno = 0;
     sp->datatype = 0;
     sp->useCnt = 0;
     Symbol_insert(sp,sp->name);

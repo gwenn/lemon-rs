@@ -308,15 +308,6 @@ static int yyGrowStack(yyParser *p){
 }
 #endif
 
-/* Datatype of the argument to the memory allocated passed as the
-** second argument to ParseAlloc() below.  This can be changed by
-** putting an appropriate #define in the %include section of the input
-** grammar.
-*/
-#ifndef YYMALLOCARGTYPE
-# define YYMALLOCARGTYPE size_t
-#endif
-
 /* Initialize a new parser that has already been allocated.
 */
 void ParseInit(void *yypParser){
@@ -344,64 +335,8 @@ void ParseInit(void *yypParser){
 #endif
 }
 
-#ifndef Parse_ENGINEALWAYSONSTACK
-/* 
-** This function allocates a new parser.
-** The only argument is a pointer to a function which works like
-** malloc.
-**
-** Inputs:
-** A pointer to the function used to allocate memory.
-**
-** Outputs:
-** A pointer to a parser.  This pointer is used in subsequent calls
-** to Parse and ParseFree.
-*/
-void *ParseAlloc(void *(*mallocProc)(YYMALLOCARGTYPE)){
-  yyParser *pParser;
-  pParser = (yyParser*)(*mallocProc)( (YYMALLOCARGTYPE)sizeof(yyParser) );
-  if( pParser ) ParseInit(pParser);
-  return pParser;
-}
-#endif /* Parse_ENGINEALWAYSONSTACK */
-
-
-/* The following function deletes the "minor type" or semantic value
-** associated with a symbol.  The symbol can be either a terminal
-** or nonterminal. "yymajor" is the symbol code, and "yypminor" is
-** a pointer to the value to be deleted.  The code used to do the 
-** deletions is derived from the %destructor and/or %token_destructor
-** directives of the input grammar.
-*/
-static void yy_destructor(
-  yyParser *yypParser,    /* The parser */
-  YYCODETYPE yymajor,     /* Type code for object to destroy */
-  YYMINORTYPE *yypminor   /* The object to be destroyed */
-){
-  ParseARG_FETCH;
-  switch( yymajor ){
-    /* Here is inserted the actions which take place when a
-    ** terminal or non-terminal is destroyed.  This can happen
-    ** when the symbol is popped from the stack during a
-    ** reduce or during error processing or when a parser is 
-    ** being destroyed before it is finished parsing.
-    **
-    ** Note: during a reduce, the only symbols destroyed are those
-    ** which appear on the RHS of the rule, but which are *not* used
-    ** inside the C code.
-    */
-/********* Begin destructor definitions ***************************************/
-%%
-/********* End destructor definitions *****************************************/
-    default:  break;   /* If no destructor action specified: do nothing */
-  }
-}
-
 /*
 ** Pop the parser's stack once.
-**
-** If there is a destructor routine associated with the token which
-** is popped from the stack, then call it.
 */
 static void yy_pop_parser_stack(yyParser *pParser){
   yyStackEntry *yytos;
@@ -415,7 +350,6 @@ static void yy_pop_parser_stack(yyParser *pParser){
       yyTokenName[yytos->major]);
   }
 #endif
-  yy_destructor(pParser, yytos->major, &yytos->minor);
 }
 
 /*
@@ -428,27 +362,6 @@ void ParseFinalize(void *p){
   if( pParser->yystack!=&pParser->yystk0 ) free(pParser->yystack);
 #endif
 }
-
-#ifndef Parse_ENGINEALWAYSONSTACK
-/* 
-** Deallocate and destroy a parser.  Destructors are called for
-** all stack elements before shutting the parser down.
-**
-** If the YYPARSEFREENEVERNULL macro exists (for example because it
-** is defined in a %include section of the input grammar) then it is
-** assumed that the input pointer is never NULL.
-*/
-void ParseFree(
-  void *p,                    /* The parser to be deleted */
-  void (*freeProc)(void*)     /* Function used to reclaim memory */
-){
-#ifndef YYPARSEFREENEVERNULL
-  if( p==0 ) return;
-#endif
-  ParseFinalize(p);
-  (*freeProc)(p);
-}
-#endif /* Parse_ENGINEALWAYSONSTACK */
 
 /*
 ** Return the peak depth of the stack for a parser.
@@ -895,7 +808,6 @@ void Parse(
              yyTracePrompt,yyTokenName[yymajor]);
         }
 #endif
-        yy_destructor(yypParser, (YYCODETYPE)yymajor, &yyminorunion);
         yymajor = YYNOCODE;
       }else{
         while( yypParser->yytos >= yypParser->yystack
@@ -907,7 +819,6 @@ void Parse(
           yy_pop_parser_stack(yypParser);
         }
         if( yypParser->yytos < yypParser->yystack || yymajor==0 ){
-          yy_destructor(yypParser,(YYCODETYPE)yymajor,&yyminorunion);
           yy_parse_failed(yypParser);
 #ifndef YYNOERRORRECOVERY
           yypParser->yyerrcnt = -1;
@@ -928,7 +839,6 @@ void Parse(
       ** they intend to abandon the parse upon the first syntax error seen.
       */
       yy_syntax_error(yypParser,yymajor, yyminor);
-      yy_destructor(yypParser,(YYCODETYPE)yymajor,&yyminorunion);
       yymajor = YYNOCODE;
       
 #else  /* YYERRORSYMBOL is not defined */
@@ -945,7 +855,6 @@ void Parse(
         yy_syntax_error(yypParser,yymajor, yyminor);
       }
       yypParser->yyerrcnt = 3;
-      yy_destructor(yypParser,(YYCODETYPE)yymajor,&yyminorunion);
       if( yyendofinput ){
         yy_parse_failed(yypParser);
 #ifndef YYNOERRORRECOVERY
