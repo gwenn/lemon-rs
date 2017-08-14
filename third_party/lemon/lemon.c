@@ -2540,7 +2540,7 @@ to follow the previous rule.");
           for(z=psp->filename, nBack=0; *z; z++){
             if( *z=='\\' ) nBack++;
           }
-          lemon_sprintf(zLine, "#line %d ", psp->tokenlineno);
+          lemon_sprintf(zLine, "//line %d ", psp->tokenlineno);
           nLine = lemonStrlen(zLine);
           n += nLine + lemonStrlen(psp->filename) + nBack;
         }
@@ -3378,7 +3378,7 @@ PRIVATE FILE *tplt_open(struct lemon *lemp)
 /* Print a #line directive line to the output file. */
 PRIVATE void tplt_linedir(FILE *out, int lineno, char *filename)
 {
-  fprintf(out,"#line %d \"",lineno);
+  fprintf(out,"//line %d \"",lineno);
   while( *filename ){
     if( *filename == '\\' ) putc('\\',out);
     putc(*filename,out);
