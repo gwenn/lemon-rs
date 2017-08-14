@@ -67,7 +67,6 @@
 **    ParseARG_SDECL     A static variable declaration for the %extra_argument
 **    ParseARG_PDECL     A parameter declaration for the %extra_argument
 **    ParseARG_STORE     Code to store %extra_argument into yypParser
-**    ParseARG_FETCH     Code to extract %extra_argument from yypParser
 **    YYERRORSYMBOL      is the code number of the error symbol.  If not
 **                       defined, then do no error processing.
 **    YYNSTATE           the combined number of states.
@@ -471,7 +470,6 @@ static int yy_find_reduce_action(
 ** The following routine is called if the stack overflows.
 */
 static void yyStackOverflow(yyParser *yypParser){
-   ParseARG_FETCH;
 #ifndef NDEBUG
    if( yyTraceFILE ){
      fprintf(yyTraceFILE,"%sStack Overflow!\n",yyTracePrompt);
@@ -483,7 +481,6 @@ static void yyStackOverflow(yyParser *yypParser){
 /******** Begin %stack_overflow code ******************************************/
 %%
 /******** End %stack_overflow code ********************************************/
-   ParseARG_STORE; /* Suppress warning about unused %extra_argument var */
 }
 
 /*
@@ -572,7 +569,6 @@ static void yy_reduce(
   int yyact;                      /* The next action */
   yyStackEntry *yymsp;            /* The top of the parser's stack */
   int yysize;                     /* Amount to pop the stack */
-  ParseARG_FETCH;
   yymsp = yypParser->yytos;
 #ifndef NDEBUG
   if( yyTraceFILE && yyruleno<(int)(sizeof(yyRuleName)/sizeof(yyRuleName[0])) ){
@@ -652,7 +648,6 @@ static void yy_reduce(
 static void yy_parse_failed(
   yyParser *yypParser           /* The parser */
 ){
-  ParseARG_FETCH;
 #ifndef NDEBUG
   if( yyTraceFILE ){
     fprintf(yyTraceFILE,"%sFail!\n",yyTracePrompt);
@@ -664,7 +659,6 @@ static void yy_parse_failed(
 /************ Begin %parse_failure code ***************************************/
 %%
 /************ End %parse_failure code *****************************************/
-  ParseARG_STORE; /* Suppress warning about unused %extra_argument variable */
 }
 #endif /* YYNOERRORRECOVERY */
 
@@ -676,12 +670,10 @@ static void yy_syntax_error(
   int yymajor,                   /* The major type of the error token */
   ParseTOKENTYPE yyminor         /* The minor type of the error token */
 ){
-  ParseARG_FETCH;
 #define TOKEN yyminor
 /************ Begin %syntax_error code ****************************************/
 %%
 /************ End %syntax_error code ******************************************/
-  ParseARG_STORE; /* Suppress warning about unused %extra_argument variable */
 }
 
 /*
@@ -690,7 +682,6 @@ static void yy_syntax_error(
 static void yy_accept(
   yyParser *yypParser           /* The parser */
 ){
-  ParseARG_FETCH;
 #ifndef NDEBUG
   if( yyTraceFILE ){
     fprintf(yyTraceFILE,"%sAccept!\n",yyTracePrompt);
@@ -705,7 +696,6 @@ static void yy_accept(
 /*********** Begin %parse_accept code *****************************************/
 %%
 /*********** End %parse_accept code *******************************************/
-  ParseARG_STORE; /* Suppress warning about unused %extra_argument variable */
 }
 
 /* The main parser program.
