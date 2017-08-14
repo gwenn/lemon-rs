@@ -3824,24 +3824,24 @@ void print_stack_union(
 ** for that type (1, 2, or 4) into *pnByte.
 */
 static const char *minimum_size_type(int lwr, int upr, int *pnByte){
-  const char *zType = "int";
+  const char *zType = "i32";
   int nByte = 4;
   if( lwr>=0 ){
     if( upr<=255 ){
-      zType = "unsigned char";
+      zType = "u8";
       nByte = 1;
     }else if( upr<65535 ){
-      zType = "unsigned short int";
+      zType = "u16";
       nByte = 2;
     }else{
-      zType = "unsigned int";
+      zType = "u32";
       nByte = 4;
     }
   }else if( lwr>=-127 && upr<=127 ){
-    zType = "signed char";
+    zType = "i8";
     nByte = 1;
   }else if( lwr>=-32767 && upr<32767 ){
-    zType = "short";
+    zType = "i16";
     nByte = 2;
   }
   if( pnByte ) *pnByte = nByte;
@@ -3897,7 +3897,7 @@ static void writeRuleText(FILE *out, struct rule *rp){
 }
 
 
-/* Generate C source code for the parser */
+/* Generate Rust source code for the parser */
 void ReportTable(
   struct lemon *lemp,
   int mhflag     /* Output in makeheaders format if true */
@@ -3919,7 +3919,7 @@ void ReportTable(
 
   in = tplt_open(lemp);
   if( in==0 ) return;
-  out = file_open(lemp,".c","wb");
+  out = file_open(lemp,".r","wb");
   if( out==0 ){
     fclose(in);
     return;
@@ -3951,10 +3951,10 @@ void ReportTable(
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate the defines */
-  fprintf(out,"#define YYCODETYPE %s\n",
+  fprintf(out,"type YYCODETYPE = %s;\n",
     minimum_size_type(0, lemp->nsymbol+1, &szCodeType)); lineno++;
-  fprintf(out,"#define YYNOCODE %d\n",lemp->nsymbol+1);  lineno++;
-  fprintf(out,"#define YYACTIONTYPE %s\n",
+  fprintf(out,"const YYNOCODE: YYCODETYPE = %d;\n",lemp->nsymbol+1);  lineno++;
+  fprintf(out,"type YYACTIONTYPE = %s;\n",
     minimum_size_type(0,lemp->nstate+lemp->nrule*2+5,&szActionType)); lineno++;
   if( lemp->wildcard ){
     fprintf(out,"#define YYWILDCARD %d\n",
@@ -3963,9 +3963,9 @@ void ReportTable(
   print_stack_union(out,lemp,&lineno,mhflag);
   fprintf(out, "#ifndef YYSTACKDEPTH\n"); lineno++;
   if( lemp->stacksize ){
-    fprintf(out,"#define YYSTACKDEPTH %s\n",lemp->stacksize);  lineno++;
+    fprintf(out,"const YYSTACKDEPTH: usize = %s;\n",lemp->stacksize);  lineno++;
   }else{
-    fprintf(out,"#define YYSTACKDEPTH 100\n");  lineno++;
+    fprintf(out,"const YYSTACKDEPTH: usize = 100;\n");  lineno++;
   }
   fprintf(out, "#endif\n"); lineno++;
   if( mhflag ){
@@ -3989,7 +3989,7 @@ void ReportTable(
     fprintf(out,"#endif\n"); lineno++;
   }
   if( lemp->errsym->useCnt ){
-    fprintf(out,"#define YYERRORSYMBOL %d\n",lemp->errsym->index); lineno++;
+    fprintf(out,"const YYERRORSYMBOL: YYCODETYPE = %d;\n",lemp->errsym->index); lineno++;
     fprintf(out,"#define YYERRSYMDT yy%d\n",lemp->errsym->dtnum); lineno++;
   }
   if( lemp->has_fallback ){
@@ -4074,18 +4074,18 @@ void ReportTable(
 
   /* Finish rendering the constants now that the action table has
   ** been computed */
-  fprintf(out,"#define YYNSTATE             %d\n",lemp->nxstate);  lineno++;
-  fprintf(out,"#define YYNRULE              %d\n",lemp->nrule);  lineno++;
-  fprintf(out,"#define YY_MAX_SHIFT         %d\n",lemp->nxstate-1); lineno++;
-  fprintf(out,"#define YY_MIN_SHIFTREDUCE   %d\n",lemp->nstate); lineno++;
+  fprintf(out,"const YYNSTATE: YYACTIONTYPE =             %d\n",lemp->nxstate);  lineno++;
+  fprintf(out,"const YYNRULE: YYACTIONTYPE =             %d\n",lemp->nrule);  lineno++;
+  fprintf(out,"const YY_MAX_SHIFT: YYACTIONTYPE =         %d\n",lemp->nxstate-1); lineno++;
+  fprintf(out,"const YY_MIN_SHIFTREDUCE: YYACTIONTYPE =   %d\n",lemp->nstate); lineno++;
   i = lemp->nstate + lemp->nrule;
-  fprintf(out,"#define YY_MAX_SHIFTREDUCE   %d\n", i-1); lineno++;
-  fprintf(out,"#define YY_MIN_REDUCE        %d\n", i); lineno++;
+  fprintf(out,"const YY_MAX_SHIFTREDUCE: YYACTIONTYPE =  %d\n", i-1); lineno++;
+  fprintf(out,"const YY_MIN_REDUCE: YYACTIONTYPE =       %d\n", i); lineno++;
   i = lemp->nstate + lemp->nrule*2;
-  fprintf(out,"#define YY_MAX_REDUCE        %d\n", i-1); lineno++;
-  fprintf(out,"#define YY_ERROR_ACTION      %d\n", i); lineno++;
-  fprintf(out,"#define YY_ACCEPT_ACTION     %d\n", i+1); lineno++;
-  fprintf(out,"#define YY_NO_ACTION         %d\n", i+2); lineno++;
+  fprintf(out,"const YY_MAX_REDUCE: YYACTIONTYPE =        %d\n", i-1); lineno++;
+  fprintf(out,"const YY_ERROR_ACTION: YYACTIONTYPE =      %d\n", i); lineno++;
+  fprintf(out,"const YY_ACCEPT_ACTION: YYACTIONTYPE =     %d\n", i+1); lineno++;
+  fprintf(out,"const YY_NO_ACTION: YYACTIONTYPE =         %d\n", i+2); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Now output the action table and its associates:
@@ -4103,8 +4103,8 @@ void ReportTable(
   /* Output the yy_action table */
   lemp->nactiontab = n = acttab_size(pActtab);
   lemp->tablesize += n*szActionType;
-  fprintf(out,"#define YY_ACTTAB_COUNT (%d)\n", n); lineno++;
-  fprintf(out,"static const YYACTIONTYPE yy_action[] = {\n"); lineno++;
+  fprintf(out,"const YY_ACTTAB_COUNT: usize = %d;\n", n); lineno++;
+  fprintf(out,"static yy_action: [YYACTIONTYPE; %d] = [\n", n); lineno++;
   for(i=j=0; i<n; i++){
     int action = acttab_yyaction(pActtab, i);
     if( action<0 ) action = lemp->nstate + lemp->nrule + 2;
@@ -4117,11 +4117,11 @@ void ReportTable(
       j++;
     }
   }
-  fprintf(out, "};\n"); lineno++;
+  fprintf(out, "];\n"); lineno++;
 
   /* Output the yy_lookahead table */
   lemp->tablesize += n*szCodeType;
-  fprintf(out,"static const YYCODETYPE yy_lookahead[] = {\n"); lineno++;
+  fprintf(out,"static yy_lookahead: [YYCODETYPE; %d] = [\n", n); lineno++;
   for(i=j=0; i<n; i++){
     int la = acttab_yylookahead(pActtab, i);
     if( la<0 ) la = lemp->nsymbol;
@@ -4134,17 +4134,17 @@ void ReportTable(
       j++;
     }
   }
-  fprintf(out, "};\n"); lineno++;
+  fprintf(out, "];\n"); lineno++;
 
   /* Output the yy_shift_ofst[] table */
   n = lemp->nxstate;
   while( n>0 && lemp->sorted[n-1]->iTknOfst==NO_OFFSET ) n--;
-  fprintf(out, "#define YY_SHIFT_USE_DFLT (%d)\n", lemp->nactiontab); lineno++;
-  fprintf(out, "#define YY_SHIFT_COUNT    (%d)\n", n-1); lineno++;
-  fprintf(out, "#define YY_SHIFT_MIN      (%d)\n", mnTknOfst); lineno++;
-  fprintf(out, "#define YY_SHIFT_MAX      (%d)\n", mxTknOfst); lineno++;
-  fprintf(out, "static const %s yy_shift_ofst[] = {\n",
-       minimum_size_type(mnTknOfst, lemp->nterminal+lemp->nactiontab, &sz));
+  fprintf(out, "const YY_SHIFT_USE_DFLT: usize = %d;\n", lemp->nactiontab); lineno++;
+  fprintf(out, "const YY_SHIFT_COUNT: usize =    %d;\n", n-1); lineno++;
+  fprintf(out, "const YY_SHIFT_MIN: isize =      %d;\n", mnTknOfst); lineno++;
+  fprintf(out, "const YY_SHIFT_MAX: usize =      %d;\n", mxTknOfst); lineno++;
+  fprintf(out, "static yy_shift_ofst: [%s; %d] = [\n",
+       minimum_size_type(mnTknOfst, lemp->nterminal+lemp->nactiontab, &sz), n);
        lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
@@ -4161,17 +4161,17 @@ void ReportTable(
       j++;
     }
   }
-  fprintf(out, "};\n"); lineno++;
+  fprintf(out, "];\n"); lineno++;
 
   /* Output the yy_reduce_ofst[] table */
-  fprintf(out, "#define YY_REDUCE_USE_DFLT (%d)\n", mnNtOfst-1); lineno++;
+  fprintf(out, "const YY_REDUCE_USE_DFLT: isize = %d;\n", mnNtOfst-1); lineno++;
   n = lemp->nxstate;
   while( n>0 && lemp->sorted[n-1]->iNtOfst==NO_OFFSET ) n--;
-  fprintf(out, "#define YY_REDUCE_COUNT (%d)\n", n-1); lineno++;
-  fprintf(out, "#define YY_REDUCE_MIN   (%d)\n", mnNtOfst); lineno++;
-  fprintf(out, "#define YY_REDUCE_MAX   (%d)\n", mxNtOfst); lineno++;
-  fprintf(out, "static const %s yy_reduce_ofst[] = {\n",
-          minimum_size_type(mnNtOfst-1, mxNtOfst, &sz)); lineno++;
+  fprintf(out, "const YY_REDUCE_COUNT: usize = %d;\n", n-1); lineno++;
+  fprintf(out, "const YY_REDUCE_MIN: isize =   %d;\n", mnNtOfst); lineno++;
+  fprintf(out, "const YY_REDUCE_MAX: usize =   %d\n", mxNtOfst); lineno++;
+  fprintf(out, "static yy_reduce_ofst: [%s; %d] = [\n",
+          minimum_size_type(mnNtOfst-1, mxNtOfst, &sz), n); lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
     int ofst;
@@ -4187,11 +4187,11 @@ void ReportTable(
       j++;
     }
   }
-  fprintf(out, "};\n"); lineno++;
+  fprintf(out, "];\n"); lineno++;
 
   /* Output the default action table */
-  fprintf(out, "static const YYACTIONTYPE yy_default[] = {\n"); lineno++;
   n = lemp->nxstate;
+  fprintf(out, "static yy_default: [YYACTIONTYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*szActionType;
   for(i=j=0; i<n; i++){
     stp = lemp->sorted[i];
@@ -4204,7 +4204,7 @@ void ReportTable(
       j++;
     }
   }
-  fprintf(out, "};\n"); lineno++;
+  fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate the table of fallback tokens.
@@ -4212,6 +4212,7 @@ void ReportTable(
   if( lemp->has_fallback ){
     int mx = lemp->nterminal - 1;
     while( mx>0 && lemp->symbols[mx]->fallback==0 ){ mx--; }
+    fprintf(out, "static yyFallback: [YYCODETYPE; %d] = [\n", mx); lineno++;
     lemp->tablesize += (mx+1)*szCodeType;
     for(i=0; i<=mx; i++){
       struct symbol *p = lemp->symbols[i];
@@ -4223,29 +4224,35 @@ void ReportTable(
       }
       lineno++;
     }
+    fprintf(out, "];\n"); lineno++;
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 
   /* Generate a table containing the symbolic name of every symbol
   */
+  fprintf(out, "static yyTokenName: [&'static str; %d] = [\n", lemp->nsymbol); lineno++;
   for(i=0; i<lemp->nsymbol; i++){
     lemon_sprintf(line,"\"%s\",",lemp->symbols[i]->name);
     fprintf(out,"  %-15s",line);
     if( (i&3)==3 ){ fprintf(out,"\n"); lineno++; }
   }
   if( (i&3)!=0 ){ fprintf(out,"\n"); lineno++; }
+  fprintf(out, "];\n"); lineno++;
+
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate a table containing a text string that describes every
   ** rule in the rule set of the grammar.  This information is used
   ** when tracing REDUCE actions.
   */
+  fprintf(out, "static yyRuleName: [&'static str; %d] = [\n", lemp->nrule); lineno++;
   for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){
     assert( rp->iRule==i );
     fprintf(out," /* %3d */ \"", i);
     writeRuleText(out, rp);
     fprintf(out,"\",\n"); lineno++;
   }
+  fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate code which executes whenever the parser stack overflows */
@@ -4257,9 +4264,11 @@ void ReportTable(
   ** Note: This code depends on the fact that rules are number
   ** sequentually beginning with 0.
   */
+  fprintf(out, "static yyRuleInfo: [yyRuleInfoEntry; %d] = [\n", lemp->nrule); lineno++;
   for(rp=lemp->rule; rp; rp=rp->next){
-    fprintf(out,"  { %d, %d },\n",rp->lhs->index,-rp->nrhs); lineno++;
+    fprintf(out,"  yyRuleInfoEntry{ lhs: %d, nrhs: %d },\n",rp->lhs->index,-rp->nrhs); lineno++;
   }
+  fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate code which execution during each REDUCE action */

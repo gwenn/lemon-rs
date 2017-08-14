@@ -173,9 +173,7 @@
 ** it appears.
 */
 #ifdef YYFALLBACK
-static const YYCODETYPE yyFallback[] = {
 %%
-};
 #endif /* YYFALLBACK */
 
 /* The following structure represents a single element of the
@@ -260,17 +258,13 @@ void ParseTrace(FILE *TraceFILE, char *zTracePrompt){
 #ifndef NDEBUG
 /* For tracing shifts, the names of all terminals and nonterminals
 ** are required.  The following table supplies these names */
-static const char *const yyTokenName[] = { 
 %%
-};
 #endif /* NDEBUG */
 
 #ifndef NDEBUG
 /* For tracing reduce actions, the names of all rules are required.
 */
-static const char *const yyRuleName[] = {
 %%
-};
 #endif /* NDEBUG */
 
 
@@ -548,14 +542,11 @@ static void yy_shift(
 /* The following table contains information about every rule that
 ** is used during the reduce.
 */
-static const struct {
-  YYCODETYPE lhs;       /* Symbol on the left-hand side of the rule */
-  signed char nrhs;     /* Negative of the number of RHS symbols in the rule */
-} yyRuleInfo[] = {
+struct yyRuleInfoEntry {
+  lhs: YYCODETYPE,  /* Symbol on the left-hand side of the rule */
+  nrhs: i8,         /* Negative of the number of RHS symbols in the rule */
+}
 %%
-};
-
-static void yy_accept(yyParser*);  /* Forward Declaration */
 
 /*
 ** Perform a reduce action and the shift that must immediately
