@@ -581,7 +581,7 @@ impl yyParser {
     self.yy_accept();
   }else{
     self.yyidx += yysize+1;
-    let yymsp = self.yystack[self.yyidx]; // FIXME
+    let yymsp = self.yystack[self.yyidx];
     yymsp.stateno = yyact;
     yymsp.major = yygoto;
     self.yyTraceShift(yyact);
