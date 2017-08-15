@@ -22,7 +22,6 @@
 ** The following is the concatenation of all %include directives from the
 ** input grammar file:
 */
-#include <stdio.h>
 /************ Begin %include sections from the grammar ************************/
 %%
 /**************** End of %include directives **********************************/
@@ -192,36 +191,32 @@
 ** actually contains the reduce action for the second half of the
 ** SHIFTREDUCE.
 */
+#[derive(Default)]
 struct yyStackEntry {
-  YYACTIONTYPE stateno;  /* The state-number, or reduce action in SHIFTREDUCE */
-  YYCODETYPE major;      /* The major token value.  This is the code
+  stateno: YYACTIONTYPE,  /* The state-number, or reduce action in SHIFTREDUCE */
+  major: YYCODETYPE,      /* The major token value.  This is the code
                          ** number for the token at this stack level */
-  YYMINORTYPE minor;     /* The user-supplied minor token value.  This
+  minor: YYMINORTYPE,     /* The user-supplied minor token value.  This
                          ** is the value of the token  */
-};
-typedef struct yyStackEntry yyStackEntry;
+}
 
 /* The state of the parser is completely contained in an instance of
 ** the following structure */
-struct yyParser {
-  yyStackEntry *yytos;          /* Pointer to top element of the stack */
+pub struct yyParser {
+  yyidx: isize,                  /* Index to top element of the stack */
 #ifdef YYTRACKMAXSTACKDEPTH
-  int yyhwm;                    /* High-water mark of the stack */
+  yyhwm: usize,                  /* High-water mark of the stack */
 #endif
 #ifndef YYNOERRORRECOVERY
-  int yyerrcnt;                 /* Shifts left before out of the error */
+  yyerrcnt: i32,                 /* Shifts left before out of the error */
 #endif
-  ParseARG_SDECL                /* A place to hold %extra_argument */
+  ParseARG_SDECL                 /* A place to hold %extra_argument */
 #if YYSTACKDEPTH<=0
-  int yystksz;                  /* Current side of the stack */
-  yyStackEntry *yystack;        /* The parser's stack */
-  yyStackEntry yystk0;          /* First stack entry */
+  yystack: Vec<yyStackEntry>,    /* The parser's stack */
 #else
-  yyStackEntry yystack[YYSTACKDEPTH];  /* The parser's stack */
-  yyStackEntry *yystackEnd;            /* Last entry in the stack */
+  yystack: [yyStackEntry; YYSTACKDEPTH],  /* The parser's stack */
 #endif
-};
-typedef struct yyParser yyParser;
+}
 
 #ifndef NDEBUG
 use log::LogLevel::Debug;
@@ -249,91 +244,80 @@ static TARGET: &'static str = "Parse"; // '
 ** Try to increase the size of the parser stack.  Return the number
 ** of errors.  Return 0 on success.
 */
-static int yyGrowStack(yyParser *p){
-  int newSize;
-  int idx;
-  yyStackEntry *pNew;
-
-  newSize = p->yystksz*2 + 100;
-  idx = p->yytos ? (int)(p->yytos - p->yystack) : 0;
-  if( p->yystack==&p->yystk0 ){
-    pNew = malloc(newSize*sizeof(pNew[0]));
-    if( pNew ) pNew[0] = p->yystk0;
-  }else{
-    pNew = realloc(p->yystack, newSize*sizeof(pNew[0]));
-  }
-  if( pNew ){
-    p->yystack = pNew;
-    p->yytos = &p->yystack[idx];
+impl yyParser {
+    fn yyGrowStack(&mut self) -> bool {
+        let capacity = self.yystack.capacity();
+        let additional = capacity + 100;
+        self.yystack.reserve(additional);
 #ifndef NDEBUG
     debug!(target: TARGET, "Stack grows from {} to {} entries.",
-            p->yystksz, newSize);
+            capacity, self.yystack.capacity());
 #endif
-    p->yystksz = newSize;
-  }
-  return pNew==0; 
+        false
+    }
 }
 #endif
 
-/* Initialize a new parser that has already been allocated.
+/* Initialize a new parser.
 */
-void ParseInit(void *yypParser){
-  yyParser *pParser = (yyParser*)yypParser;
+impl yyParser {
+    pub fn new(
+        ParseARG_PDECL               /* Optional %extra_argument parameter */
+    ) -> yyParser {
+        let p = yyParser {
+  yyidx: 0,
 #ifdef YYTRACKMAXSTACKDEPTH
-  pParser->yyhwm = 0;
+  yyhwm: 0,
 #endif
 #if YYSTACKDEPTH<=0
-  pParser->yytos = NULL;
-  pParser->yystack = NULL;
-  pParser->yystksz = 0;
-  if( yyGrowStack(pParser) ){
-    pParser->yystack = &pParser->yystk0;
-    pParser->yystksz = 1;
-  }
+  yystack: Vec::with_capacity(100),
+#else
+  yystack: [yyStackEntry::default(); YYSTACKDEPTH],
 #endif
 #ifndef YYNOERRORRECOVERY
-  pParser->yyerrcnt = -1;
+  yyerrcnt: -1,
 #endif
-  pParser->yytos = pParser->yystack;
-  pParser->yystack[0].stateno = 0;
-  pParser->yystack[0].major = 0;
-#if YYSTACKDEPTH>0
-  pParser->yystackEnd = &pParser->yystack[YYSTACKDEPTH-1];
+  ParseARG_STORE
+      };
+#if YYSTACKDEPTH<=0
+  p.yystack.push(yyStackEntry::default());
 #endif
+      p
+  }
 }
 
 /*
 ** Pop the parser's stack once.
 */
-static void yy_pop_parser_stack(yyParser *pParser){
-  yyStackEntry *yytos;
-  assert( pParser->yytos!=0 );
-  assert( pParser->yytos > pParser->yystack );
-  yytos = pParser->yytos--;
+impl yyParser {
+    fn yy_pop_parser_stack(&mut self){
+        use std::mem::replace;
+  let yytos = replace(&mut self.yystack[self.yyidx], yyStackEntry::default());
+  self.yyidx -= 1;
 #ifndef NDEBUG
   debug!(target: TARGET, "Popping {}",
-    yyTokenName[yytos->major]);
+    yyTokenName[yytos.major]);
 #endif
+  }
 }
 
 /*
 ** Clear all secondary memory allocations from the parser
 */
-void ParseFinalize(void *p){
-  yyParser *pParser = (yyParser*)p;
-  while( pParser->yytos>pParser->yystack ) yy_pop_parser_stack(pParser);
-#if YYSTACKDEPTH<=0
-  if( pParser->yystack!=&pParser->yystk0 ) free(pParser->yystack);
-#endif
+impl yyParser {
+    pub fn ParseFinalize(&mut self){
+  while( self.yyidx > 0 ) self.yy_pop_parser_stack();
+    }
 }
 
 /*
 ** Return the peak depth of the stack for a parser.
 */
 #ifdef YYTRACKMAXSTACKDEPTH
-int ParseStackPeak(void *p){
-  yyParser *pParser = (yyParser*)p;
-  return pParser->yyhwm;
+impl yyParser {
+    pub fn ParseStackPeak(&self) -> usize {
+  self.yyhwm
+    }
 }
 #endif
 
@@ -341,37 +325,38 @@ int ParseStackPeak(void *p){
 ** Find the appropriate action for a parser given the terminal
 ** look-ahead token iLookAhead.
 */
-static unsigned int yy_find_shift_action(
-  yyParser *pParser,        /* The parser */
-  YYCODETYPE iLookAhead     /* The look-ahead token */
-){
-  int i;
-  int stateno = pParser->yytos->stateno;
+impl yyParser {
+    fn yy_find_shift_action(
+  &self,                     /* The parser */
+  iLookAhead: YYCODETYPE     /* The look-ahead token */
+    ) -> YYACTIONTYPE {
+  let mut i;
+  let stateno = self.yystack[self.yyidx].stateno;
  
-  if( stateno>=YY_MIN_REDUCE ) return stateno;
-  assert( stateno <= YY_SHIFT_COUNT );
-  do{
+  if stateno>=YY_MIN_REDUCE { return stateno };
+  assert!( stateno <= YY_SHIFT_COUNT );
+  loop{
     i = yy_shift_ofst[stateno];
-    assert( iLookAhead!=YYNOCODE );
+    assert!( iLookAhead!=YYNOCODE );
     i += iLookAhead;
-    if( i<0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i]!=iLookAhead ){
+    if i<0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i]!=iLookAhead {
 #ifdef YYFALLBACK
-      YYCODETYPE iFallback;            /* Fallback token */
-      if( iLookAhead<sizeof(yyFallback)/sizeof(yyFallback[0])
-             && (iFallback = yyFallback[iLookAhead])!=0 ){
+      let mut iFallback: YYCODETYPE;            /* Fallback token */
+      if iLookAhead<yyFallback.len()
+             && (iFallback = yyFallback[iLookAhead])!=0 {
 #ifndef NDEBUG
         debug!(target: TARGET, "FALLBACK {} => {}",
            yyTokenName[iLookAhead], yyTokenName[iFallback]);
 #endif
-        assert( yyFallback[iFallback]==0 ); /* Fallback loop must terminate */
+        assert_eq!( yyFallback[iFallback], 0 ); /* Fallback loop must terminate */
         iLookAhead = iFallback;
         continue;
       }
 #endif
 #ifdef YYWILDCARD
       {
-        int j = i - iLookAhead + YYWILDCARD;
-        if( 
+        let j = i - iLookAhead + YYWILDCARD;
+        if
 #if YY_SHIFT_MIN+YYWILDCARD<0
           j>=0 &&
 #endif
@@ -379,7 +364,7 @@ static unsigned int yy_find_shift_action(
           j<YY_ACTTAB_COUNT &&
 #endif
           yy_lookahead[j]==YYWILDCARD && iLookAhead>0
-        ){
+        {
 #ifndef NDEBUG
           debug!(target: TARGET, "WILDCARD {} => {}",
              yyTokenName[iLookAhead],
@@ -393,36 +378,37 @@ static unsigned int yy_find_shift_action(
     }else{
       return yy_action[i];
     }
-  }while(1);
+  }
+    }
 }
 
 /*
 ** Find the appropriate action for a parser given the non-terminal
 ** look-ahead token iLookAhead.
 */
-static int yy_find_reduce_action(
-  int stateno,              /* Current state number */
-  YYCODETYPE iLookAhead     /* The look-ahead token */
-){
-  int i;
+fn yy_find_reduce_action(
+  stateno: YYACTIONTYPE,     /* Current state number */
+  iLookAhead: YYCODETYPE     /* The look-ahead token */
+    ) -> YYACTIONTYPE {
+  let mut i;
 #ifdef YYERRORSYMBOL
-  if( stateno>YY_REDUCE_COUNT ){
+  if stateno>YY_REDUCE_COUNT {
     return yy_default[stateno];
   }
 #else
-  assert( stateno<=YY_REDUCE_COUNT );
+  assert!( stateno<=YY_REDUCE_COUNT );
 #endif
   i = yy_reduce_ofst[stateno];
-  assert( i!=YY_REDUCE_USE_DFLT );
-  assert( iLookAhead!=YYNOCODE );
+  assert_ne!( i, YY_REDUCE_USE_DFLT );
+  assert_ne!( iLookAhead, YYNOCODE );
   i += iLookAhead;
 #ifdef YYERRORSYMBOL
-  if( i<0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i]!=iLookAhead ){
+  if i<0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i]!=iLookAhead {
     return yy_default[stateno];
   }
 #else
-  assert( i>=0 && i<YY_ACTTAB_COUNT );
-  assert( yy_lookahead[i]==iLookAhead );
+  assert!( i>=0 && i<YY_ACTTAB_COUNT );
+  assert_eq!( yy_lookahead[i], iLookAhead );
 #endif
   return yy_action[i];
 }
@@ -430,31 +416,36 @@ static int yy_find_reduce_action(
 /*
 ** The following routine is called if the stack overflows.
 */
-static void yyStackOverflow(yyParser *yypParser){
+impl yyParser {
+    fn yyStackOverflow(&mut self){
 #ifndef NDEBUG
    error!(target: TARGET, "Stack Overflow!");
 #endif
-   while( yypParser->yytos>yypParser->yystack ) yy_pop_parser_stack(yypParser);
+   while( self.yyidx > 0 ) self.yy_pop_parser_stack();
    /* Here code is inserted which will execute if the parser
    ** stack every overflows */
 /******** Begin %stack_overflow code ******************************************/
 %%
 /******** End %stack_overflow code ********************************************/
+    }
 }
 
 /*
 ** Print tracing information for a SHIFT action
 */
 #ifndef NDEBUG
-static void yyTraceShift(yyParser *yypParser, int yyNewState){
-  if( yyNewState<YYNSTATE ){
+impl yyParser {
+    fn yyTraceShift(&self, yyNewState: YYACTIONTYPE){
+  let yytos = self.yystack[self.yyidx];
+  if yyNewState<YYNSTATE {
     debug!(target: TARGET, "Shift '{}', go to state {}",
-       yyTokenName[yypParser->yytos->major],
+       yyTokenName[yytos.major],
        yyNewState);
   }else{
     debug!(target: TARGET, "Shift '{}'",
-       yyTokenName[yypParser->yytos->major]);
+       yyTokenName[yytos.major]);
   }
+    }
 }
 #else
 # define yyTraceShift(X,Y)
@@ -463,31 +454,31 @@ static void yyTraceShift(yyParser *yypParser, int yyNewState){
 /*
 ** Perform a shift action.
 */
-static void yy_shift(
-  yyParser *yypParser,          /* The parser to be shifted */
-  int yyNewState,               /* The new state to shift in */
-  int yyMajor,                  /* The major token to shift in */
-  ParseTOKENTYPE yyMinor        /* The minor token to shift in */
-){
-  yyStackEntry *yytos;
-  yypParser->yytos++;
+impl yyParser {
+    fn yy_shift(
+  &mut self,                    /* The parser to be shifted */
+  yyNewState: YYACTIONTYPE,     /* The new state to shift in */
+  yyMajor: YYCODETYPE,          /* The major token to shift in */
+  yyMinor: ParseTOKENTYPE       /* The minor token to shift in */
+    ){
+  self.yyidx += 1;
 #ifdef YYTRACKMAXSTACKDEPTH
-  if( (int)(yypParser->yytos - yypParser->yystack)>yypParser->yyhwm ){
-    yypParser->yyhwm++;
-    assert( yypParser->yyhwm == (int)(yypParser->yytos - yypParser->yystack) );
+  if self.yyidx>self.yyhwm {
+    self.yyhwm += 1;
+    assert_eq!( self.yyhwm, self.yyidx );
   }
 #endif
 #if YYSTACKDEPTH>0 
-  if( yypParser->yytos>yypParser->yystackEnd ){
-    yypParser->yytos--;
-    yyStackOverflow(yypParser);
+  if self.yyidx>=YYSTACKDEPTH {
+    self.yyidx -= 1;
+    self.yyStackOverflow();
     return;
   }
 #else
-  if( yypParser->yytos>=&yypParser->yystack[yypParser->yystksz] ){
-    if( yyGrowStack(yypParser) ){
-      yypParser->yytos--;
-      yyStackOverflow(yypParser);
+  if self.yyidx>= self.yystack.len() {
+    if self.yyGrowStack() {
+      self.yyidx -= 1;
+      self.yyStackOverflow();
       return;
     }
   }
@@ -495,11 +486,14 @@ static void yy_shift(
   if( yyNewState > YY_MAX_SHIFT ){
     yyNewState += YY_MIN_REDUCE - YY_MIN_SHIFTREDUCE;
   }
-  yytos = yypParser->yytos;
-  yytos->stateno = (YYACTIONTYPE)yyNewState;
-  yytos->major = (YYCODETYPE)yyMajor;
-  yytos->minor.yy0 = yyMinor;
-  yyTraceShift(yypParser, yyNewState);
+  let yytos = yyStackEntry {stateno: yyNewState, major: yyMajor, minor: YYMINORTYPE::YY0(yyMinor)};
+#if YYSTACKDEPTH>0
+  self.yystack[self.yyidx] = yytos;
+#else
+  self.yystack.push(yytos);
+#endif
+  self.yyTraceShift(yyNewState);
+    }
 }
 
 /* The following table contains information about every rule that
@@ -515,50 +509,48 @@ struct yyRuleInfoEntry {
 ** Perform a reduce action and the shift that must immediately
 ** follow the reduce.
 */
-static void yy_reduce(
-  yyParser *yypParser,         /* The parser */
-  unsigned int yyruleno        /* Number of the rule by which to reduce */
-){
-  int yygoto;                     /* The next state */
-  int yyact;                      /* The next action */
-  yyStackEntry *yymsp;            /* The top of the parser's stack */
-  int yysize;                     /* Amount to pop the stack */
-  yymsp = yypParser->yytos;
+impl yyParser {
+    fn yy_reduce(
+  &mut self,             /* The parser */
+  yyruleno: usize        /* Number of the rule by which to reduce */
+    ){
+  let yygoto: YYCODETYPE;     /* The next state */
+  let yyact: YYACTIONTYPE;    /* The next action */
+  let yysize: i8;             /* Amount to pop the stack */
 #ifndef NDEBUG
-  if( yyruleno<(int)(sizeof(yyRuleName)/sizeof(yyRuleName[0])) ){
-    yysize = yyRuleInfo[yyruleno].nrhs;
+  if yyruleno<yyRuleName.len() {
+    let yysize = yyRuleInfo[yyruleno].nrhs;
     debug!(target: TARGET, "Reduce [{}], go to state {}.",
-      yyRuleName[yyruleno], yymsp[yysize].stateno);
+      yyRuleName[yyruleno], self.yystack[self.yyidx+yysize].stateno);
   }
 #endif /* NDEBUG */
 
   /* Check that the stack is large enough to grow by a single entry
   ** if the RHS of the rule is empty.  This ensures that there is room
   ** enough on the stack to push the LHS value */
-  if( yyRuleInfo[yyruleno].nrhs==0 ){
+  if yyRuleInfo[yyruleno].nrhs==0 {
 #ifdef YYTRACKMAXSTACKDEPTH
-    if( (int)(yypParser->yytos - yypParser->yystack)>yypParser->yyhwm ){
-      yypParser->yyhwm++;
-      assert( yypParser->yyhwm == (int)(yypParser->yytos - yypParser->yystack));
+    if self.yyidx>self.yyhwm {
+      self.yyhwm += 1;
+      assert_eq!( self.yyhwm, self.yyidx);
     }
 #endif
 #if YYSTACKDEPTH>0 
-    if( yypParser->yytos>=yypParser->yystackEnd ){
-      yyStackOverflow(yypParser);
+    if self.yyidx>=YYSTACKDEPTH-1 {
+      self.yyStackOverflow();
       return;
     }
 #else
-    if( yypParser->yytos>=&yypParser->yystack[yypParser->yystksz-1] ){
-      if( yyGrowStack(yypParser) ){
-        yyStackOverflow(yypParser);
+    if self.yyidx>=yystack.len()-1 {
+      if self.yyGrowStack() {
+        self.yyStackOverflow();
         return;
       }
-      yymsp = yypParser->yytos;
     }
 #endif
   }
 
-  switch( yyruleno ){
+  match yyruleno {
   /* Beginning here are the reduction cases.  A typical example
   ** follows:
   **   case 0:
@@ -571,81 +563,88 @@ static void yy_reduce(
 %%
 /********** End reduce actions ************************************************/
   };
-  assert( yyruleno<sizeof(yyRuleInfo)/sizeof(yyRuleInfo[0]) );
+  assert!( yyruleno<yyRuleInfo.len() );
   yygoto = yyRuleInfo[yyruleno].lhs;
   yysize = yyRuleInfo[yyruleno].nrhs;
-  yyact = yy_find_reduce_action(yymsp[yysize].stateno,(YYCODETYPE)yygoto);
+  yyact = yy_find_reduce_action(self.yystack[self.yyidx+yysize].stateno,yygoto);
 
   /* There are no SHIFTREDUCE actions on nonterminals because the table
   ** generator has simplified them to pure REDUCE actions. */
-  assert( !(yyact>YY_MAX_SHIFT && yyact<=YY_MAX_SHIFTREDUCE) );
+  assert!( !(yyact>YY_MAX_SHIFT && yyact<=YY_MAX_SHIFTREDUCE) );
 
   /* It is not possible for a REDUCE to be followed by an error */
-  assert( yyact!=YY_ERROR_ACTION );
+  assert_ne!( yyact, YY_ERROR_ACTION );
 
-  if( yyact==YY_ACCEPT_ACTION ){
-    yypParser->yytos += yysize;
-    yy_accept(yypParser);
+  if yyact==YY_ACCEPT_ACTION {
+    self.yyidx += yysize;
+    self.yy_accept();
   }else{
-    yymsp += yysize+1;
-    yypParser->yytos = yymsp;
-    yymsp->stateno = (YYACTIONTYPE)yyact;
-    yymsp->major = (YYCODETYPE)yygoto;
-    yyTraceShift(yypParser, yyact);
+    self.yyidx += yysize+1;
+    let yymsp = self.yystack[self.yyidx]; // FIXME
+    yymsp.stateno = yyact;
+    yymsp.major = yygoto;
+    self.yyTraceShift(yyact);
   }
+    }
 }
 
 /*
 ** The following code executes when the parse fails
 */
 #ifndef YYNOERRORRECOVERY
-static void yy_parse_failed(
-  yyParser *yypParser           /* The parser */
-){
+impl yyParser {
+    fn yy_parse_failed(
+  &mut self           /* The parser */
+    ){
 #ifndef NDEBUG
   error!(target: TARGET, "Fail!");
 #endif
-  while( yypParser->yytos>yypParser->yystack ) yy_pop_parser_stack(yypParser);
+  while( self.yyidx > 0 ) self.yy_pop_parser_stack();
   /* Here code is inserted which will be executed whenever the
   ** parser fails */
 /************ Begin %parse_failure code ***************************************/
 %%
 /************ End %parse_failure code *****************************************/
+    }
 }
 #endif /* YYNOERRORRECOVERY */
 
 /*
 ** The following code executes when a syntax error first occurs.
 */
-static void yy_syntax_error(
-  yyParser *yypParser,           /* The parser */
-  int yymajor,                   /* The major type of the error token */
-  ParseTOKENTYPE yyminor         /* The minor type of the error token */
-){
+impl yyParser {
+    fn yy_syntax_error(
+  &mut self,                     /* The parser */
+  yymajor: YYCODETYPE,           /* The major type of the error token */
+  yyminor: ParseTOKENTYPE        /* The minor type of the error token */
+    ){
 #define TOKEN yyminor
 /************ Begin %syntax_error code ****************************************/
 %%
 /************ End %syntax_error code ******************************************/
+    }
 }
 
 /*
 ** The following is executed when the parser accepts
 */
-static void yy_accept(
-  yyParser *yypParser           /* The parser */
-){
+impl yyParser {
+    fn yy_accept(
+  &mut self           /* The parser */
+    ){
 #ifndef NDEBUG
   debug!(target: TARGET, "Accept!");
 #endif
 #ifndef YYNOERRORRECOVERY
-  yypParser->yyerrcnt = -1;
+  self.yyerrcnt = -1;
 #endif
-  assert( yypParser->yytos==yypParser->yystack );
+  assert_eq!( yyidx, 0 );
   /* Here code is inserted which will be executed whenever the
   ** parser accepts */
 /*********** Begin %parse_accept code *****************************************/
 %%
 /*********** End %parse_accept code *******************************************/
+    }
 }
 
 /* The main parser program.
@@ -667,48 +666,43 @@ static void yy_accept(
 ** Outputs:
 ** None.
 */
-void Parse(
-  void *yyp,                   /* The parser */
-  int yymajor,                 /* The major token code number */
-  ParseTOKENTYPE yyminor       /* The value for the token */
-  ParseARG_PDECL               /* Optional %extra_argument parameter */
-){
-  YYMINORTYPE yyminorunion;
-  unsigned int yyact;   /* The parser action. */
+impl yyParser {
+    fn Parse(
+  &mut self,                   /* The parser */
+  yymajor: YYCODETYPE,         /* The major token code number */
+  yyminor: ParseTOKENTYPE      /* The value for the token */
+    ){
+  let mut yyact: YYACTIONTYPE;   /* The parser action. */
 #if !defined(YYERRORSYMBOL) && !defined(YYNOERRORRECOVERY)
-  int yyendofinput;     /* True if we are at the end of input */
+  let mut yyendofinput: bool;     /* True if we are at the end of input */
 #endif
 #ifdef YYERRORSYMBOL
-  int yyerrorhit = 0;   /* True if yymajor has invoked an error */
+  let mut yyerrorhit: bool = false;   /* True if yymajor has invoked an error */
 #endif
-  yyParser *yypParser;  /* The parser */
 
-  yypParser = (yyParser*)yyp;
-  assert( yypParser->yytos!=0 );
+  //assert_ne!( self.yystack[self.yyidx], null );
 #if !defined(YYERRORSYMBOL) && !defined(YYNOERRORRECOVERY)
   yyendofinput = (yymajor==0);
 #endif
-  ParseARG_STORE;
 
 #ifndef NDEBUG
   debug!(target: TARGET, "Input '{}'",yyTokenName[yymajor]);
 #endif
 
   do{
-    yyact = yy_find_shift_action(yypParser,(YYCODETYPE)yymajor);
-    if( yyact <= YY_MAX_SHIFTREDUCE ){
-      yy_shift(yypParser,yyact,yymajor,yyminor);
+    yyact = self.yy_find_shift_action(yymajor);
+    if yyact <= YY_MAX_SHIFTREDUCE {
+      self.yy_shift(yyact,yymajor,yyminor);
 #ifndef YYNOERRORRECOVERY
-      yypParser->yyerrcnt--;
+      self.yyerrcnt -= 1;
 #endif
       yymajor = YYNOCODE;
-    }else if( yyact <= YY_MAX_REDUCE ){
-      yy_reduce(yypParser,yyact-YY_MIN_REDUCE);
+    }else if yyact <= YY_MAX_REDUCE {
+      self.yy_reduce(yyact-YY_MIN_REDUCE);
     }else{
-      assert( yyact == YY_ERROR_ACTION );
-      yyminorunion.yy0 = yyminor;
+      assert_eq!( yyact, YY_ERROR_ACTION );
 #ifdef YYERRORSYMBOL
-      int yymx;
+      let yymx;
 #endif
 #ifndef NDEBUG
       debug!(target: TARGET, "Syntax Error!");
@@ -733,37 +727,37 @@ void Parse(
       **    shifted successfully.
       **
       */
-      if( yypParser->yyerrcnt<0 ){
-        yy_syntax_error(yypParser,yymajor,yyminor);
+      if self.yyerrcnt<0 {
+        self.yy_syntax_error(yymajor,yyminor);
       }
-      yymx = yypParser->yytos->major;
-      if( yymx==YYERRORSYMBOL || yyerrorhit ){
+      yymx = self.yystack[self.yyidx].major;
+      if yymx==YYERRORSYMBOL || yyerrorhit {
 #ifndef NDEBUG
         debug!(target: TARGET, "Discard input token {}",
            yyTokenName[yymajor]);
 #endif
         yymajor = YYNOCODE;
       }else{
-        while( yypParser->yytos >= yypParser->yystack
+        while self.yyidx >= 0
             && yymx != YYERRORSYMBOL
             && (yyact = yy_find_reduce_action(
-                        yypParser->yytos->stateno,
+                        self.yystack[self.yyidx].stateno,
                         YYERRORSYMBOL)) >= YY_MIN_REDUCE
-        ){
-          yy_pop_parser_stack(yypParser);
+        {
+          self.yy_pop_parser_stack();
         }
-        if( yypParser->yytos < yypParser->yystack || yymajor==0 ){
-          yy_parse_failed(yypParser);
+        if yyidx < 0 || yymajor==0 {
+          self.yy_parse_failed();
 #ifndef YYNOERRORRECOVERY
-          yypParser->yyerrcnt = -1;
+          self.yyerrcnt = -1;
 #endif
           yymajor = YYNOCODE;
-        }else if( yymx!=YYERRORSYMBOL ){
-          yy_shift(yypParser,yyact,YYERRORSYMBOL,yyminor);
+        }else if yymx!=YYERRORSYMBOL {
+          self.yy_shift(yyact,YYERRORSYMBOL,yyminor);
         }
       }
-      yypParser->yyerrcnt = 3;
-      yyerrorhit = 1;
+      self.yyerrcnt = 3;
+      yyerrorhit = true;
 #elif defined(YYNOERRORRECOVERY)
       /* If the YYNOERRORRECOVERY macro is defined, then do not attempt to
       ** do any kind of error recovery.  Instead, simply invoke the syntax
@@ -772,7 +766,7 @@ void Parse(
       ** Applications can set this macro (for example inside %include) if
       ** they intend to abandon the parse upon the first syntax error seen.
       */
-      yy_syntax_error(yypParser,yymajor, yyminor);
+      self.yy_syntax_error(yymajor, yyminor);
       yymajor = YYNOCODE;
       
 #else  /* YYERRORSYMBOL is not defined */
@@ -785,30 +779,32 @@ void Parse(
       ** As before, subsequent error messages are suppressed until
       ** three input tokens have been successfully shifted.
       */
-      if( yypParser->yyerrcnt<=0 ){
-        yy_syntax_error(yypParser,yymajor, yyminor);
+      if self.yyerrcnt<=0 {
+        self.yy_syntax_error(yymajor, yyminor);
       }
-      yypParser->yyerrcnt = 3;
-      if( yyendofinput ){
-        yy_parse_failed(yypParser);
+      self.yyerrcnt = 3;
+      if yyendofinput {
+        self.yy_parse_failed();
 #ifndef YYNOERRORRECOVERY
-        yypParser->yyerrcnt = -1;
+        self.yyerrcnt = -1;
 #endif
       }
       yymajor = YYNOCODE;
 #endif
     }
-  }while( yymajor!=YYNOCODE && yypParser->yytos>yypParser->yystack );
+  }while( yymajor!=YYNOCODE && self.yyidx>0 );
 #ifndef NDEBUG
   if log_enabled!(target: TARGET, Debug) {
-    yyStackEntry *i;
-    char cDiv = '[';
-    for(i=&yypParser->yystack[1]; i<=yypParser->yytos; i++){
-      //"%c%s", cDiv, yyTokenName[i->major];
+    let mut cDiv = '[';
+    let mut msg = String::new();
+    for entry in self.yystack[1...self.yyidx] {
+      msg.push(cDiv);
+      msg.push_str(yyTokenName[entry.major]);
       cDiv = ' ';
     }
     debug!(target: TARGET, "Return Stack=[{}]", msg);
   }
 #endif
   return;
+    }
 }
