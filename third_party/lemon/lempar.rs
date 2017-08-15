@@ -55,7 +55,7 @@
 **                       the minor type might be the name of the identifier.
 **                       Each non-terminal can have a different minor type.
 **                       Terminal symbols all have the same minor type, though.
-**                       This macros defines the minor type for terminal 
+**                       This macros defines the minor type for terminal
 **                       symbols.
 **    YYMINORTYPE        is the data type used for all minor types.
 **                       This is typically a union of many types, one of
@@ -101,7 +101,7 @@
 /* Next are the tables used to determine what action to take based on the
 ** current state and lookahead token.  These tables are used to implement
 ** functions that take a state number and lookahead value and return an
-** action integer.  
+** action integer.
 **
 ** Suppose the action integer is N.  Then the action is determined as
 ** follows
@@ -157,9 +157,9 @@
 %%
 /********** End of lemon-generated parsing tables *****************************/
 
-/* The next table maps tokens (terminal symbols) into fallback tokens.  
+/* The next table maps tokens (terminal symbols) into fallback tokens.
 ** If a construct like the following:
-** 
+**
 **      %fallback ID X Y Z.
 **
 ** appears in the grammar, then ID becomes a fallback token for X, Y,
@@ -220,7 +220,7 @@ pub struct yyParser {
 
 #ifndef NDEBUG
 use log::LogLevel::Debug;
-static TARGET: &'static str = "Parse"; // '
+static TARGET: &'static str = "Parse";
 #endif /* NDEBUG */
 
 #ifndef NDEBUG
@@ -332,7 +332,7 @@ impl yyParser {
     ) -> YYACTIONTYPE {
   let mut i;
   let stateno = self.yystack[self.yyidx].stateno;
- 
+
   if stateno>=YY_MIN_REDUCE { return stateno };
   assert!( stateno <= YY_SHIFT_COUNT );
   loop{
@@ -468,7 +468,7 @@ impl yyParser {
     assert_eq!( self.yyhwm, self.yyidx );
   }
 #endif
-#if YYSTACKDEPTH>0 
+#if YYSTACKDEPTH>0
   if self.yyidx>=YYSTACKDEPTH {
     self.yyidx -= 1;
     self.yyStackOverflow();
@@ -535,7 +535,7 @@ impl yyParser {
       assert_eq!( self.yyhwm, self.yyidx);
     }
 #endif
-#if YYSTACKDEPTH>0 
+#if YYSTACKDEPTH>0
     if self.yyidx>=YYSTACKDEPTH-1 {
       self.yyStackOverflow();
       return;
@@ -711,7 +711,7 @@ impl yyParser {
 #ifdef YYERRORSYMBOL
       /* A syntax error has occurred.
       ** The response to an error depends upon whether or not the
-      ** grammar defines an error token "ERROR".  
+      ** grammar defines an error token "ERROR".
       **
       ** This is what we do if the grammar does define ERROR:
       **
@@ -769,7 +769,7 @@ impl yyParser {
       */
       self.yy_syntax_error(yymajor, yyminor);
       yymajor = YYNOCODE;
-      
+
 #else  /* YYERRORSYMBOL is not defined */
       /* This is what we do if the grammar does not define ERROR:
       **
