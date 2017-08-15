@@ -550,6 +550,7 @@ impl yyParser {
 #endif
   }
 
+  let mut yylhsminor = YYMINORTYPE::default();
   match yyruleno {
   /* Beginning here are the reduction cases.  A typical example
   ** follows:

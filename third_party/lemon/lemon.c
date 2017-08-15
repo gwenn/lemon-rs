@@ -3798,23 +3798,28 @@ void print_stack_union(
   name = lemp->name ? lemp->name : "Parse";
   lineno = *plineno;
   if( mhflag ){ fprintf(out,"#if INTERFACE\n"); lineno++; }
-  fprintf(out,"#define %sTOKENTYPE %s\n",name,
-    lemp->tokentype?lemp->tokentype:"void*");  lineno++;
+  fprintf(out,"type %sTOKENTYPE = %s\n",name,
+    lemp->tokentype?lemp->tokentype:"void*");  lineno++; // FIXME
   if( mhflag ){ fprintf(out,"#endif\n"); lineno++; }
-  fprintf(out,"typedef union {\n"); lineno++;
-  fprintf(out,"  int yyinit;\n"); lineno++;
-  fprintf(out,"  %sTOKENTYPE yy0;\n",name); lineno++;
+  fprintf(out,"union YYMINORTYPE {\n"); lineno++;
+  fprintf(out,"    yyinit: i32,\n"); lineno++;
+  fprintf(out,"    yy0: %sTOKENTYPE,\n",name); lineno++;
   for(i=0; i<arraysize; i++){
     if( types[i]==0 ) continue;
-    fprintf(out,"  %s yy%d;\n",types[i],i+1); lineno++;
+    fprintf(out,"    yy%d: %s,\n",i+1,types[i]); lineno++;
     free(types[i]);
   }
   if( lemp->errsym->useCnt ){
-    fprintf(out,"  int yy%d;\n",lemp->errsym->dtnum); lineno++;
+    fprintf(out,"    yy%d: i32,\n",lemp->errsym->dtnum); lineno++;
   }
   free(stddt);
   free(types);
-  fprintf(out,"} YYMINORTYPE;\n"); lineno++;
+  fprintf(out,"}\n"); lineno++;
+
+  fprintf(out,"impl Default for YYMINORTYPE {\n"); lineno++;
+  fprintf(out,"    fn default() -> YYMINORTYPE { YYMINORTYPE { YYINIT: 0 } }\n"); lineno++;
+  fprintf(out,"}\n"); lineno++;
+
   *plineno = lineno;
 }
 
@@ -3939,13 +3944,18 @@ void ReportTable(
   /* Generate #defines for all tokens */
   if( mhflag ){
     const char *prefix;
+    const char *type;
     fprintf(out,"#if INTERFACE\n"); lineno++;
     if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
     else                    prefix = "";
+    type = minimum_size_type(0, lemp->nsymbol+1, 0);
+    fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n"); lineno++;
+    fprintf(out,"pub enum TokenType {\n"); lineno++;
     for(i=1; i<lemp->nterminal; i++){
-      fprintf(out,"#define %s%-30s %2d\n",prefix,lemp->symbols[i]->name,i);
+      fprintf(out,"%s%-30s = %3d as %s,\n",prefix,lemp->symbols[i]->name,i,type);
       lineno++;
     }
+    fprintf(out,"}\n"); lineno++;
     fprintf(out,"#endif\n"); lineno++;
   }
   tplt_xfer(lemp->name,in,out,&lineno);
@@ -3990,7 +4000,7 @@ void ReportTable(
   }
   if( lemp->errsym->useCnt ){
     fprintf(out,"const YYERRORSYMBOL: YYCODETYPE = %d;\n",lemp->errsym->index); lineno++;
-    fprintf(out,"#define YYERRSYMDT yy%d\n",lemp->errsym->dtnum); lineno++;
+    //fprintf(out,"#define YYERRSYMDT yy%d\n",lemp->errsym->dtnum); lineno++;
   }
   if( lemp->has_fallback ){
     fprintf(out,"#define YYFALLBACK 1\n");  lineno++;
@@ -4277,7 +4287,7 @@ void ReportTable(
     i += translate_code(lemp, rp);
   }
   if( i ){
-    fprintf(out,"        YYMINORTYPE yylhsminor;\n"); lineno++;
+    //fprintf(out,"        YYMINORTYPE yylhsminor;\n"); lineno++;
   }
   /* First output rules other than the default: rule */
   for(rp=lemp->rule; rp; rp=rp->next){
@@ -4345,6 +4355,7 @@ void ReportTable(
 void ReportHeader(struct lemon *lemp)
 {
   FILE *out;
+  const char *type;
   const char *prefix;
   int i;
 
@@ -4352,9 +4363,13 @@ void ReportHeader(struct lemon *lemp)
   else                    prefix = "";
   out = file_open(lemp,".h","wb");
   if( out ){
+    type = minimum_size_type(0, lemp->nsymbol+1, 0);
+    fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n");
+    fprintf(out,"pub enum TokenType {\n");
     for(i=1; i<lemp->nterminal; i++){
-      fprintf(out,"#define %s%-30s %3d\n",prefix,lemp->symbols[i]->name,i);
+      fprintf(out,"%s%-30s = %3d as %s,\n",prefix,lemp->symbols[i]->name,i,type);
     }
+    fprintf(out,"}\n");
     fclose(out);
   }
   return;
