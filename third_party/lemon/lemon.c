@@ -3817,7 +3817,7 @@ void print_stack_union(
   fprintf(out,"}\n"); lineno++;
 
   fprintf(out,"impl Default for YYMINORTYPE {\n"); lineno++;
-  fprintf(out,"    fn default() -> YYMINORTYPE { YYMINORTYPE { YYINIT: 0 } }\n"); lineno++;
+  fprintf(out,"    fn default() -> YYMINORTYPE { YYMINORTYPE { yyinit: 0 } }\n"); lineno++;
   fprintf(out,"}\n"); lineno++;
 
   *plineno = lineno;
@@ -3980,29 +3980,11 @@ void ReportTable(
     fprintf(out,"const YYSTACKDEPTH: usize = 100;\n");  lineno++;
   }
   //fprintf(out, "#endif\n"); lineno++;
-  if( mhflag ){
-    fprintf(out,"#if INTERFACE\n"); lineno++;
-  }
-  name = lemp->name ? lemp->name : "Parse";
-  if( lemp->arg && lemp->arg[0] ){
-    i = lemonStrlen(lemp->arg);
-    while( i>=1 && ISSPACE(lemp->arg[i-1]) ) i--;
-    while( i>=1 && (ISALNUM(lemp->arg[i-1]) || lemp->arg[i-1]=='_') ) i--;
-    fprintf(out,"//#define %sARG_SDECL %s,\n",name,lemp->arg);  lineno++;
-    fprintf(out,"//#define %sARG_PDECL %s\n",name,lemp->arg);  lineno++;
-    fprintf(out,"//#define %sARG_STORE %s: %s,\n",
-                 name,&lemp->arg[i],&lemp->arg[i]);  lineno++;
-  }else{
-    //fprintf(out,"#define %sARG_SDECL\n",name);  lineno++;
-    //fprintf(out,"#define %sARG_PDECL\n",name);  lineno++;
-    //fprintf(out,"#define %sARG_STORE\n",name); lineno++;
-  }
-  if( mhflag ){
-    fprintf(out,"#endif\n"); lineno++;
-  }
   if( lemp->errsym->useCnt ){
     fprintf(out,"const YYERRORSYMBOL: YYCODETYPE = %d;\n",lemp->errsym->index); lineno++;
     //fprintf(out,"#define YYERRSYMDT yy%d\n",lemp->errsym->dtnum); lineno++;
+  } else {
+    fprintf(out,"const YYERRORSYMBOL: YYCODETYPE = 0;\n"); lineno++;
   }
   if( lemp->has_fallback ){
     fprintf(out,"const YYFALLBACK: bool = true;\n");  lineno++;
@@ -4153,13 +4135,13 @@ void ReportTable(
   /* Output the yy_shift_ofst[] table */
   n = lemp->nxstate;
   while( n>0 && lemp->sorted[n-1]->iTknOfst==NO_OFFSET ) n--;
-  fprintf(out, "const YY_SHIFT_USE_DFLT: usize = %d;\n", lemp->nactiontab); lineno++;
-  fprintf(out, "const YY_SHIFT_COUNT: usize =    %d;\n", n-1); lineno++;
-  fprintf(out, "const YY_SHIFT_MIN: isize =      %d;\n", mnTknOfst); lineno++;
-  fprintf(out, "const YY_SHIFT_MAX: usize =      %d;\n", mxTknOfst); lineno++;
-  fprintf(out, "static yy_shift_ofst: [%s; %d] = [\n",
-       minimum_size_type(mnTknOfst, lemp->nterminal+lemp->nactiontab, &sz), n);
-       lineno++;
+  fprintf(out, "type YY_SHIFT_TYPE = %s;\n",
+       minimum_size_type(mnTknOfst, lemp->nterminal+lemp->nactiontab, &sz)); lineno++;
+  fprintf(out, "const YY_SHIFT_USE_DFLT: YY_SHIFT_TYPE = %d;\n", lemp->nactiontab); lineno++;
+  fprintf(out, "const YY_SHIFT_COUNT: YYACTIONTYPE =    %d;\n", n-1); lineno++;
+  fprintf(out, "const YY_SHIFT_MIN: YY_SHIFT_TYPE =      %d;\n", mnTknOfst); lineno++;
+  fprintf(out, "const YY_SHIFT_MAX: YYACTIONTYPE =      %d;\n", mxTknOfst); lineno++;
+  fprintf(out, "static yy_shift_ofst: [YY_SHIFT_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
     int ofst;
@@ -4178,14 +4160,15 @@ void ReportTable(
   fprintf(out, "];\n"); lineno++;
 
   /* Output the yy_reduce_ofst[] table */
-  fprintf(out, "const YY_REDUCE_USE_DFLT: isize = %d;\n", mnNtOfst-1); lineno++;
+  fprintf(out, "type YY_REDUCE_TYPE = %s;\n",
+       minimum_size_type(mnNtOfst-1, mxNtOfst, &sz)); lineno++;
+  fprintf(out, "const YY_REDUCE_USE_DFLT: YY_REDUCE_TYPE = %d;\n", mnNtOfst-1); lineno++;
   n = lemp->nxstate;
   while( n>0 && lemp->sorted[n-1]->iNtOfst==NO_OFFSET ) n--;
-  fprintf(out, "const YY_REDUCE_COUNT: usize = %d;\n", n-1); lineno++;
-  fprintf(out, "const YY_REDUCE_MIN: isize =   %d;\n", mnNtOfst); lineno++;
-  fprintf(out, "const YY_REDUCE_MAX: usize =   %d;\n", mxNtOfst); lineno++;
-  fprintf(out, "static yy_reduce_ofst: [%s; %d] = [\n",
-          minimum_size_type(mnNtOfst-1, mxNtOfst, &sz), n); lineno++;
+  fprintf(out, "const YY_REDUCE_COUNT: YYACTIONTYPE = %d;\n", n-1); lineno++;
+  fprintf(out, "const YY_REDUCE_MIN: YY_REDUCE_TYPE =   %d;\n", mnNtOfst); lineno++;
+  fprintf(out, "const YY_REDUCE_MAX: YYACTIONTYPE =   %d;\n", mxNtOfst); lineno++;
+  fprintf(out, "static yy_reduce_ofst: [YY_REDUCE_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
     int ofst;
@@ -4244,6 +4227,13 @@ void ReportTable(
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 
+  /* Generate %extra_argument field declaration
+  */
+  if( lemp->arg && lemp->arg[0] ){
+    fprintf(out,"%s,\n",lemp->arg);  lineno++;
+  }
+  tplt_xfer(lemp->name, in, out, &lineno);
+
   /* Generate a table containing the symbolic name of every symbol
   */
   fprintf(out, "static yyTokenName: [&'static str; %d] = [\n", lemp->nsymbol); lineno++;
@@ -4270,6 +4260,23 @@ void ReportTable(
   }
   fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
+
+  /* Generate %extra_argument parameter declaration
+  */
+  if( lemp->arg && lemp->arg[0] ){
+    fprintf(out,"%s\n",lemp->arg);  lineno++;
+  }
+  tplt_xfer(lemp->name, in, out, &lineno);
+
+  /* Generate %extra_argument field initialization
+  */
+  if( lemp->arg && lemp->arg[0] ){
+    char *name = strsep(&lemp->arg,":");
+    if (name) {
+      fprintf(out,"%s: %s,\n",name, name);  lineno++;
+    }
+  }
+  tplt_xfer(lemp->name, in, out, &lineno);
 
   /* Generate code which executes whenever the parser stack overflows */
   tplt_print(out,lemp,lemp->overflow,&lineno);
@@ -4303,25 +4310,25 @@ void ReportTable(
       /* No C code actions, so this will be part of the "default:" rule */
       continue;
     }
-    fprintf(out,"      %d => /* ", rp->iRule);
+    fprintf(out,"      %d => {/* ", rp->iRule);
     writeRuleText(out, rp);
     fprintf(out, " */\n"); lineno++;
     for(rp2=rp->next; rp2; rp2=rp2->next){
       if( rp2->code==rp->code && rp2->codePrefix==rp->codePrefix
              && rp2->codeSuffix==rp->codeSuffix ){
-        fprintf(out,"      %d => /* ", rp2->iRule);
+        fprintf(out,"      %d => {/* ", rp2->iRule);
         writeRuleText(out, rp2);
         fprintf(out," */ yytestcase(yyruleno==%d);\n", rp2->iRule); lineno++;
         rp2->codeEmitted = 1;
       }
     }
     emit_code(out,rp,lemp,&lineno);
-    fprintf(out,"        break;\n"); lineno++;
+    fprintf(out,"        }\n"); lineno++;
     rp->codeEmitted = 1;
   }
   /* Finally, output the default: rule.  We choose as the default: all
   ** empty actions. */
-  fprintf(out,"      _ =>\n"); lineno++;
+  fprintf(out,"      _ => {\n"); lineno++;
   for(rp=lemp->rule; rp; rp=rp->next){
     if( rp->codeEmitted ) continue;
     assert( rp->noCode );
@@ -4334,7 +4341,7 @@ void ReportTable(
               rp->iRule); lineno++;
     }
   }
-  fprintf(out,"        break;\n"); lineno++;
+  fprintf(out,"        }\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate code which executes if a parse fails */

@@ -1,0 +1,18 @@
+[package]
+name = "lemon-rs"
+version = "0.0.1"
+authors = ["gwenn"]
+description = "LALR(1) parser generator for Rust based on Lemon"
+#documentation = "http://docs.rs/lemon-rs"
+repository = "https://github.com/gwenn/lemon-rs"
+#readme = "README.md"
+#categories = ["parser-implementations"]
+keywords = ["sql", "parser", "sqlite"]
+license = "Apache-2.0/MIT"
+#build = "build.rs" # Lemon preprocessing
+
+[dependencies]
+log = "0.3"
+
+#[build-dependencies]
+#lemon = "0.0.1"

@@ -38,7 +38,7 @@ impl Expr {
   panic!("near token {}: syntax error", yyminor);
 }
 
-program ::= expr(A). { self.result.expr = A; }
+program ::= expr(A). { self.result.expr = Some(A); }
 
 %type expr { Expr }
 expr(A) ::= expr(B) MINUS expr(C). { A = Expr::binary(Operator::Substract, B, C); }
