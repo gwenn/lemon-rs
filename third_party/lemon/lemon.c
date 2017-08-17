@@ -4099,7 +4099,8 @@ void ReportTable(
   /* Output the yy_action table */
   lemp->nactiontab = n = acttab_size(pActtab);
   lemp->tablesize += n*szActionType;
-  fprintf(out,"const YY_ACTTAB_COUNT: usize = %d;\n", n); lineno++;
+  fprintf(out,"const YY_ACTTAB_COUNT: %s = %d;\n",
+       minimum_size_type(0, n, 0), n); lineno++;
   fprintf(out,"static yy_action: [YYACTIONTYPE; %d] = [\n", n); lineno++;
   for(i=j=0; i<n; i++){
     int action = acttab_yyaction(pActtab, i);
@@ -4138,9 +4139,10 @@ void ReportTable(
   fprintf(out, "type YY_SHIFT_TYPE = %s;\n",
        minimum_size_type(mnTknOfst, lemp->nterminal+lemp->nactiontab, &sz)); lineno++;
   fprintf(out, "const YY_SHIFT_USE_DFLT: YY_SHIFT_TYPE = %d;\n", lemp->nactiontab); lineno++;
-  fprintf(out, "const YY_SHIFT_COUNT: YYACTIONTYPE =    %d;\n", n-1); lineno++;
+  fprintf(out, "const YY_SHIFT_COUNT: %s =    %d;\n",
+       minimum_size_type(0, n-1, 0), n-1); lineno++;
   fprintf(out, "const YY_SHIFT_MIN: YY_SHIFT_TYPE =      %d;\n", mnTknOfst); lineno++;
-  fprintf(out, "const YY_SHIFT_MAX: YYACTIONTYPE =      %d;\n", mxTknOfst); lineno++;
+  fprintf(out, "const YY_SHIFT_MAX: YY_SHIFT_TYPE =      %d;\n", mxTknOfst); lineno++;
   fprintf(out, "static yy_shift_ofst: [YY_SHIFT_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
@@ -4165,9 +4167,10 @@ void ReportTable(
   fprintf(out, "const YY_REDUCE_USE_DFLT: YY_REDUCE_TYPE = %d;\n", mnNtOfst-1); lineno++;
   n = lemp->nxstate;
   while( n>0 && lemp->sorted[n-1]->iNtOfst==NO_OFFSET ) n--;
-  fprintf(out, "const YY_REDUCE_COUNT: YYACTIONTYPE = %d;\n", n-1); lineno++;
+  fprintf(out, "const YY_REDUCE_COUNT: %s = %d;\n",
+       minimum_size_type(0, n-1, 0), n-1); lineno++;
   fprintf(out, "const YY_REDUCE_MIN: YY_REDUCE_TYPE =   %d;\n", mnNtOfst); lineno++;
-  fprintf(out, "const YY_REDUCE_MAX: YYACTIONTYPE =   %d;\n", mxNtOfst); lineno++;
+  fprintf(out, "const YY_REDUCE_MAX: YY_REDUCE_TYPE =   %d;\n", mxNtOfst); lineno++;
   fprintf(out, "static yy_reduce_ofst: [YY_REDUCE_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
@@ -4271,7 +4274,7 @@ void ReportTable(
   /* Generate %extra_argument field initialization
   */
   if( lemp->arg && lemp->arg[0] ){
-    char *name = strsep(&lemp->arg,":");
+    char *name = strtok(lemp->arg,":");
     if (name) {
       fprintf(out,"%s: %s,\n",name, name);  lineno++;
     }

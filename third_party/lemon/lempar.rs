@@ -500,7 +500,7 @@ impl yyParser {
   if yyNewState > YY_MAX_SHIFT {
     yyNewState += YY_MIN_REDUCE - YY_MIN_SHIFTREDUCE;
   }
-  let yytos = yyStackEntry {stateno: yyNewState, major: yyMajor, minor: YYMINORTYPE::yy0(yyMinor)};
+  let yytos = yyStackEntry {stateno: yyNewState, major: yyMajor, minor: YYMINORTYPE { yy0: yyMinor }};
   self.push(yytos);
   self.yyTraceShift(yyNewState);
     }
