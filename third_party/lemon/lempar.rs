@@ -377,10 +377,10 @@ impl yyParser {
     i = yy_shift_ofst[stateno as usize];
     assert!( iLookAhead!=YYNOCODE );
     i += iLookAhead;
-    if i<0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i as usize]!=iLookAhead {
+    if i < 0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i as usize]!=iLookAhead {
 if YYFALLBACK {
       let mut iFallback: YYCODETYPE;            /* Fallback token */
-      if iLookAhead<yyFallback.len()
+      if (iLookAhead as usize) < yyFallback.len()
              && {iFallback = yyFallback[iLookAhead as usize]; iFallback}!=0 {
 if cfg!(not(feature = "NDEBUG")) {
         debug!(target: TARGET, "FALLBACK {} => {}",
@@ -432,18 +432,18 @@ if cfg!(feature = "YYERRORSYMBOL") {
     return yy_default[stateno as usize];
   }
 } else {
-  assert!( stateno<=YY_REDUCE_COUNT );
+  assert!( stateno <= YY_REDUCE_COUNT );
 }
   i = yy_reduce_ofst[stateno as usize];
   assert_ne!( i, YY_REDUCE_USE_DFLT );
   assert_ne!( iLookAhead, YYNOCODE );
   i += iLookAhead;
 if cfg!(feature = "YYERRORSYMBOL") {
-  if i<0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i as usize]!=iLookAhead {
+  if i < 0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i as usize]!=iLookAhead {
     return yy_default[stateno as usize];
   }
 } else {
-  assert!( i>=0 && i<YY_ACTTAB_COUNT );
+  assert!( i>=0 && i < YY_ACTTAB_COUNT );
   assert_eq!( yy_lookahead[i as usize], iLookAhead );
 }
   return yy_action[i as usize];
@@ -473,7 +473,7 @@ impl yyParser {
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE){
 if cfg!(not(feature = "NDEBUG")) {
   let yytos = self.yystack[self.yyidx];
-  if yyNewState<YYNSTATE {
+  if yyNewState < YYNSTATE {
     debug!(target: TARGET, "Shift '{}', go to state {}",
        yyTokenName[yytos.major as usize],
        yyNewState);
@@ -521,22 +521,22 @@ struct yyRuleInfoEntry {
 */
 impl yyParser {
     fn yy_reduce(
-  &mut self,             /* The parser */
-  yyruleno: usize        /* Number of the rule by which to reduce */
+  &mut self,              /* The parser */
+  yyruleno: YYACTIONTYPE  /* Number of the rule by which to reduce */
     ){
   let yygoto: YYCODETYPE;     /* The next state */
   let yyact: YYACTIONTYPE;    /* The next action */
   let yysize: i8;             /* Amount to pop the stack */
-  if cfg!(not(feature = "NDEBUG")) && yyruleno<yyRuleName.len() {
-    let yysize = yyRuleInfo[yyruleno].nrhs;
+  if cfg!(not(feature = "NDEBUG")) && (yyruleno as usize) < yyRuleName.len() {
+    let yysize = yyRuleInfo[yyruleno as usize].nrhs;
     debug!(target: TARGET, "Reduce [{}], go to state {}.",
-      yyRuleName[yyruleno], self.yystack[self.yyidx+yysize].stateno);
+      yyRuleName[yyruleno as usize], self.yystack[self.yyidx+yysize].stateno);
   }
 
   /* Check that the stack is large enough to grow by a single entry
   ** if the RHS of the rule is empty.  This ensures that there is room
   ** enough on the stack to push the LHS value */
-  if yyRuleInfo[yyruleno].nrhs==0 {
+  if yyRuleInfo[yyruleno as usize].nrhs==0 {
     self.IncrStack();
     self.yyGrowStackForPush();
   }
@@ -555,14 +555,14 @@ impl yyParser {
 %%
 /********** End reduce actions ************************************************/
   };
-  assert!( yyruleno<yyRuleInfo.len() );
-  yygoto = yyRuleInfo[yyruleno].lhs;
-  yysize = yyRuleInfo[yyruleno].nrhs;
+  assert!( (yyruleno as usize) < yyRuleInfo.len() );
+  yygoto = yyRuleInfo[yyruleno as usize].lhs;
+  yysize = yyRuleInfo[yyruleno as usize].nrhs;
   yyact = yy_find_reduce_action(self.yystack[self.yyidx+yysize].stateno,yygoto);
 
   /* There are no SHIFTREDUCE actions on nonterminals because the table
   ** generator has simplified them to pure REDUCE actions. */
-  assert!( !(yyact>YY_MAX_SHIFT && yyact<=YY_MAX_SHIFTREDUCE) );
+  assert!( !(yyact>YY_MAX_SHIFT && yyact <= YY_MAX_SHIFTREDUCE) );
 
   /* It is not possible for a REDUCE to be followed by an error */
   assert_ne!( yyact, YY_ERROR_ACTION );
@@ -712,7 +712,7 @@ if cfg!(feature = "YYERRORSYMBOL") {
       **    shifted successfully.
       **
       */
-      if self.yyerrcnt<0 {
+      if self.yyerrcnt < 0 {
         self.yy_syntax_error(yymajor,yyminor);
       }
       let yymx = self.yystack[self.yyidx].major;
@@ -764,7 +764,7 @@ if cfg!(not(feature = "YYNOERRORRECOVERY")) {
       ** As before, subsequent error messages are suppressed until
       ** three input tokens have been successfully shifted.
       */
-      if self.yyerrcnt<=0 {
+      if self.yyerrcnt <= 0 {
         self.yy_syntax_error(yymajor, yyminor);
       }
       self.yyerrcnt = 3;
