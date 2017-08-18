@@ -427,7 +427,7 @@ fn yy_find_reduce_action(
   iLookAhead: YYCODETYPE     /* The look-ahead token */
     ) -> YYACTIONTYPE {
   let mut i;
-if cfg!(feature = "YYERRORSYMBOL") {
+if YYERRORSYMBOL > 0 {
   if stateno>YY_REDUCE_COUNT {
     return yy_default[stateno as usize];
   }
@@ -438,7 +438,7 @@ if cfg!(feature = "YYERRORSYMBOL") {
   assert_ne!( i, YY_REDUCE_USE_DFLT );
   assert_ne!( iLookAhead, YYNOCODE );
   i += iLookAhead;
-if cfg!(feature = "YYERRORSYMBOL") {
+if YYERRORSYMBOL > 0 {
   if i < 0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i as usize]!=iLookAhead {
     return yy_default[stateno as usize];
   }
@@ -669,7 +669,7 @@ impl yyParser {
   let mut yyerrorhit: bool = false;   /* True if yymajor has invoked an error */
 
   //assert_ne!( self.yystack[self.yyidx], null );
-if cfg!(not(feature = "YYERRORSYMBOL")) && cfg!(not(feature = "YYNOERRORRECOVERY")) {
+if YYERRORSYMBOL == 0 && cfg!(not(feature = "YYNOERRORRECOVERY")) {
   yyendofinput = yymajor==0;
 }
 
@@ -692,7 +692,7 @@ if cfg!(not(feature = "YYNOERRORRECOVERY")) {
 if cfg!(not(feature = "NDEBUG")) {
       debug!(target: TARGET, "Syntax Error!");
 }
-if cfg!(feature = "YYERRORSYMBOL") {
+if YYERRORSYMBOL > 0 {
       /* A syntax error has occurred.
       ** The response to an error depends upon whether or not the
       ** grammar defines an error token "ERROR".

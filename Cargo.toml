@@ -11,7 +11,15 @@ keywords = ["sql", "parser", "sqlite"]
 license = "Apache-2.0/MIT"
 #build = "build.rs" # Lemon preprocessing
 
+[features]
+# FIXME: specific to one parser, not global
+YYTRACKMAXSTACKDEPTH = []
+YYNOERRORRECOVERY = []
+YYSTACKDYNAMIC = []
+NDEBUG = []
+
 [dependencies]
+# FIXME optional when NDEBUG
 log = "0.3"
 
 #[build-dependencies]

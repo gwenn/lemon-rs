@@ -3970,7 +3970,7 @@ void ReportTable(
     fprintf(out,"const YYWILDCARD: YYCODETYPE = %d;\n",
        lemp->wildcard->index); lineno++;
   } else {
-    fprintf(out,"const YYWILDCARD: YYCODETYPE = 0;\n"); lineno++;
+    fprintf(out,"const YYWILDCARD: YYCODETYPE = 0; // No wildcard\n"); lineno++;
   }
   print_stack_union(out,lemp,&lineno,mhflag);
   //fprintf(out, "#ifndef YYSTACKDEPTH\n"); lineno++;
@@ -3984,7 +3984,7 @@ void ReportTable(
     fprintf(out,"const YYERRORSYMBOL: YYCODETYPE = %d;\n",lemp->errsym->index); lineno++;
     //fprintf(out,"#define YYERRSYMDT yy%d\n",lemp->errsym->dtnum); lineno++;
   } else {
-    fprintf(out,"const YYERRORSYMBOL: YYCODETYPE = 0;\n"); lineno++;
+    fprintf(out,"const YYERRORSYMBOL: YYCODETYPE = 0; // No error symbol\n"); lineno++;
   }
   if( lemp->has_fallback ){
     fprintf(out,"const YYFALLBACK: bool = true;\n");  lineno++;
