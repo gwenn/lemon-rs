@@ -32,6 +32,10 @@ impl Expr {
 		Expr::Binary(op, Box::new(lhs), Box::new(rhs))
 	}
 }
+
+fn main() {
+    println!("WIP");
+}
 }
 
 %syntax_error {

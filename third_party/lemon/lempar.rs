@@ -475,7 +475,7 @@ fn yy_find_reduce_action(
   stateno: YYACTIONTYPE,     /* Current state number */
   iLookAhead: YYCODETYPE     /* The look-ahead token */
     ) -> YYACTIONTYPE {
-  let mut i;
+  let mut i: i32;
 if YYERRORSYMBOL > 0 {
   if stateno>YY_REDUCE_COUNT {
     return yy_default[stateno as usize];
@@ -483,19 +483,19 @@ if YYERRORSYMBOL > 0 {
 } else {
   assert!( stateno <= YY_REDUCE_COUNT );
 }
-  i = yy_reduce_ofst[stateno as usize];
-  assert_ne!( i, YY_REDUCE_USE_DFLT );
+  i = yy_reduce_ofst[stateno as usize] as i32;
+  assert_ne!( i, YY_REDUCE_USE_DFLT as i32 );
   assert_ne!( iLookAhead, YYNOCODE );
-  i += iLookAhead;
+  i += iLookAhead as i32;
 if YYERRORSYMBOL > 0 {
-  if i < 0 || i>=YY_ACTTAB_COUNT || yy_lookahead[i as usize]!=iLookAhead {
+  if i < 0 || i>=(YY_ACTTAB_COUNT as i32) || yy_lookahead[i as usize]!=iLookAhead {
     return yy_default[stateno as usize];
   }
 } else {
-  assert!( i>=0 && i < YY_ACTTAB_COUNT );
+  assert!( i>=0 && i < (YY_ACTTAB_COUNT as i32) );
   assert_eq!( yy_lookahead[i as usize], iLookAhead );
 }
-  return yy_action[i as usize];
+  yy_action[i as usize]
 }
 
 /*
