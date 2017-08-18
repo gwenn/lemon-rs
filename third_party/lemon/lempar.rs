@@ -214,6 +214,44 @@ pub struct yyParser {
   yystack: [yyStackEntry; YYSTACKDEPTH],  /* The parser's stack */
 }
 
+use std::ops::Neg;
+impl yyParser {
+    fn shift(&self, shift: i8) -> usize {
+        if shift == 0 {
+          self.yyidx
+        } else if shift > 0 {
+          self.yyidx + shift as usize
+        } else {
+          self.yyidx.checked_sub(shift.neg() as usize).unwrap()
+        }
+    }
+
+    fn yyidx_shift(&mut self, shift: i8) {
+        if shift == 0 {
+        } else if shift > 0 {
+          self.yyidx += shift as usize;
+        } else {
+          self.yyidx = self.yyidx.checked_sub(shift.neg() as usize).unwrap()
+        }
+    }
+}
+
+use std::ops::{Index,IndexMut};
+impl Index<i8> for yyParser {
+     type Output = yyStackEntry;
+
+    fn index(&self, shift: i8) -> &yyStackEntry {
+        let idx = self.shift(shift);
+        &self.yystack[idx]
+    }
+}
+impl IndexMut<i8> for yyParser {
+    fn index_mut(&mut self, shift: i8) -> &mut yyStackEntry {
+        let idx = self.shift(shift);
+        &mut self.yystack[idx]
+    }
+}
+
 #[cfg(not(feature = "NDEBUG"))]
 use log::LogLevel::Debug;
 #[cfg(not(feature = "NDEBUG"))]
@@ -318,6 +356,17 @@ impl yyParser {
 ** Pop the parser's stack once.
 */
 impl yyParser {
+    #[cfg(feature = "YYSTACKDYNAMIC")]
+    fn yy_pop_parser_stack(&mut self){
+  let yytos = self.yystack.pop();
+  self.yyidx -= 1;
+if cfg!(not(feature = "NDEBUG")) {
+  debug!(target: TARGET, "Popping {}",
+    yyTokenName[yytos.major as usize]);
+}
+    }
+
+    #[cfg(not(feature = "YYSTACKDYNAMIC"))]
     fn yy_pop_parser_stack(&mut self){
         use std::mem::replace;
   let yytos = replace(&mut self.yystack[self.yyidx], yyStackEntry::default());
@@ -326,7 +375,7 @@ if cfg!(not(feature = "NDEBUG")) {
   debug!(target: TARGET, "Popping {}",
     yyTokenName[yytos.major as usize]);
 }
-  }
+    }
 }
 
 /*
@@ -369,7 +418,7 @@ impl yyParser {
   iLookAhead: YYCODETYPE     /* The look-ahead token */
     ) -> YYACTIONTYPE {
   let mut i;
-  let stateno = self.yystack[self.yyidx].stateno;
+  let stateno = self[0].stateno;
 
   if stateno>=YY_MIN_REDUCE { return stateno };
   assert!( stateno <= YY_SHIFT_COUNT );
@@ -472,7 +521,7 @@ if cfg!(not(feature = "NDEBUG")) {
 impl yyParser {
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE){
 if cfg!(not(feature = "NDEBUG")) {
-  let yytos = self.yystack[self.yyidx];
+  let yytos = self[0];
   if yyNewState < YYNSTATE {
     debug!(target: TARGET, "Shift '{}', go to state {}",
        yyTokenName[yytos.major as usize],
@@ -495,7 +544,7 @@ impl yyParser {
   yyMajor: YYCODETYPE,          /* The major token to shift in */
   yyMinor: ParseTOKENTYPE       /* The minor token to shift in */
     ){
-  self.yyidx += 1;
+  self.yyidx_shift(1);
   self.yyGrowStackIfNeeded();
   if yyNewState > YY_MAX_SHIFT {
     yyNewState += YY_MIN_REDUCE - YY_MIN_SHIFTREDUCE;
@@ -530,7 +579,7 @@ impl yyParser {
   if cfg!(not(feature = "NDEBUG")) && (yyruleno as usize) < yyRuleName.len() {
     let yysize = yyRuleInfo[yyruleno as usize].nrhs;
     debug!(target: TARGET, "Reduce [{}], go to state {}.",
-      yyRuleName[yyruleno as usize], self.yystack[self.yyidx+yysize].stateno);
+      yyRuleName[yyruleno as usize], self[yysize].stateno);
   }
 
   /* Check that the stack is large enough to grow by a single entry
@@ -558,7 +607,7 @@ impl yyParser {
   assert!( (yyruleno as usize) < yyRuleInfo.len() );
   yygoto = yyRuleInfo[yyruleno as usize].lhs;
   yysize = yyRuleInfo[yyruleno as usize].nrhs;
-  yyact = yy_find_reduce_action(self.yystack[self.yyidx+yysize].stateno,yygoto);
+  yyact = yy_find_reduce_action(self[yysize].stateno,yygoto);
 
   /* There are no SHIFTREDUCE actions on nonterminals because the table
   ** generator has simplified them to pure REDUCE actions. */
@@ -568,11 +617,11 @@ impl yyParser {
   assert_ne!( yyact, YY_ERROR_ACTION );
 
   if yyact==YY_ACCEPT_ACTION {
-    self.yyidx += yysize;
+    self.yyidx_shift(yysize);
     self.yy_accept();
   }else{
-    self.yyidx += yysize+1;
-    let yymsp = self.yystack[self.yyidx];
+    self.yyidx_shift(yysize+1);
+    let yymsp = self[0];
     yymsp.stateno = yyact;
     yymsp.major = yygoto;
     self.yyTraceShift(yyact);
@@ -668,7 +717,7 @@ impl yyParser {
   //#[cfg(feature = "YYERRORSYMBOL")]
   let mut yyerrorhit: bool = false;   /* True if yymajor has invoked an error */
 
-  //assert_ne!( self.yystack[self.yyidx], null );
+  //assert_ne!( self[0], null );
 if YYERRORSYMBOL == 0 && cfg!(not(feature = "YYNOERRORRECOVERY")) {
   yyendofinput = yymajor==0;
 }
@@ -715,7 +764,7 @@ if YYERRORSYMBOL > 0 {
       if self.yyerrcnt < 0 {
         self.yy_syntax_error(yymajor,yyminor);
       }
-      let yymx = self.yystack[self.yyidx].major;
+      let yymx = self[0].major;
       if yymx==YYERRORSYMBOL || yyerrorhit {
 if cfg!(not(feature = "NDEBUG")) {
         debug!(target: TARGET, "Discard input token {}",
@@ -726,7 +775,7 @@ if cfg!(not(feature = "NDEBUG")) {
         while self.yyidx >= 0
             && yymx != YYERRORSYMBOL
             && {yyact = yy_find_reduce_action(
-                        self.yystack[self.yyidx].stateno,
+                        self[0].stateno,
                         YYERRORSYMBOL); yyact} >= YY_MIN_REDUCE
         {
           self.yy_pop_parser_stack();
