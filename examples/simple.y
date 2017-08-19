@@ -34,12 +34,14 @@ impl Expr {
 }
 
 fn main() {
-    println!("WIP");
+    let r = Result { expr: None };
+    let mut p = yyParser::new(r);
+    p.Parse(TokenType::EOF as YYCODETYPE, 0);
 }
 }
 
 %syntax_error {
-    panic!("near token {}: syntax error", yyminor);
+    println!("near token {}: syntax error", yyminor);
 }
 
 program ::= expr(A). { self.result.expr = Some(A); }

@@ -228,6 +228,12 @@ impl yyParser {
             self.yyidx = self.yyidx.checked_sub(shift.neg() as usize).unwrap()
         }
     }
+
+    fn get_and_reset(&mut self, shift: i8) -> yyStackEntry {
+         use std::mem::replace;
+        let idx = self.shift(shift);
+        replace(&mut self.yystack[idx], yyStackEntry::default())
+    }
 }
 
 use std::ops::{Index, IndexMut};

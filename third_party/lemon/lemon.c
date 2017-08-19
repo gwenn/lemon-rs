@@ -3572,7 +3572,7 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
               }else{
                 dtnum = sp->dtnum;
               }
-              append_str("self[%d].minor.yy%d",0,i-rp->nrhs+1, dtnum);
+              append_str("self.get_and_reset(%d).minor.yy%d",0,i-rp->nrhs+1, dtnum);
             }
             cp = xp;
             used[i] = 1;
@@ -3943,6 +3943,7 @@ void ReportTable(
     else                    prefix = "";
     fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n"); lineno++;
     fprintf(out,"pub enum TokenType {\n"); lineno++;
+    fprintf(out,"    %sEOF = 0,\n",prefix);
     for(i=1; i<lemp->nterminal; i++){
       fprintf(out,"    %s%s = %d,\n",prefix,lemp->symbols[i]->name,i);
       lineno++;
@@ -4378,6 +4379,7 @@ void ReportHeader(struct lemon *lemp)
   if( out ){
     fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n");
     fprintf(out,"pub enum TokenType {\n");
+    fprintf(out,"    %sEOF = 0,\n",prefix);
     for(i=1; i<lemp->nterminal; i++){
       fprintf(out,"    %s%s = %d,\n",prefix,lemp->symbols[i]->name,i);
     }
