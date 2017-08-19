@@ -64,9 +64,6 @@
 **                       for terminal symbols is called "yy0".
 **    YYSTACKDEPTH       is the maximum depth of the parser's stack.  If
 **                       zero the stack is dynamically sized using realloc()
-**    ParseARG_SDECL     A static variable declaration for the %extra_argument
-**    ParseARG_PDECL     A parameter declaration for the %extra_argument
-**    ParseARG_STORE     Code to store %extra_argument into yypParser
 **    YYERRORSYMBOL      is the code number of the error symbol.  If not
 **                       defined, then do no error processing.
 **    YYNSTATE           the combined number of states.
@@ -79,9 +76,6 @@
 **    YY_ACCEPT_ACTION   The yy_action[] code for accept
 **    YY_NO_ACTION       The yy_action[] code for no-op
 */
-//#ifndef INTERFACE
-//# define INTERFACE 1
-//#endif
 /************* Begin control #defines *****************************************/
 %%
 /************* End control #defines *******************************************/
@@ -416,6 +410,7 @@ impl yyParser {
 }
 #[cfg(not(feature = "YYTRACKMAXSTACKDEPTH"))]
 impl yyParser {
+    #[inline]
     fn IncrStack(&mut self) {}
 }
 
