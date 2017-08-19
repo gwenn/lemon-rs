@@ -3814,7 +3814,9 @@ void print_stack_union(
   fprintf(out,"}\n"); lineno++;
 
   fprintf(out,"impl Default for YYMINORTYPE {\n"); lineno++;
-  fprintf(out,"    fn default() -> YYMINORTYPE { YYMINORTYPE { yyinit: 0 } }\n"); lineno++;
+  fprintf(out,"    fn default() -> YYMINORTYPE {\n"); lineno++;
+  fprintf(out,"        YYMINORTYPE { yyinit: 0 }\n"); lineno++;
+  fprintf(out,"    }\n"); lineno++;
   fprintf(out,"}\n"); lineno++;
 
   *plineno = lineno;
@@ -3942,7 +3944,7 @@ void ReportTable(
     fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n"); lineno++;
     fprintf(out,"pub enum TokenType {\n"); lineno++;
     for(i=1; i<lemp->nterminal; i++){
-      fprintf(out,"%s%-30s = %3d,\n",prefix,lemp->symbols[i]->name,i);
+      fprintf(out,"    %s%s = %d,\n",prefix,lemp->symbols[i]->name,i);
       lineno++;
     }
     fprintf(out,"}\n"); lineno++;
@@ -4090,6 +4092,7 @@ void ReportTable(
   lemp->tablesize += n*szActionType;
   fprintf(out,"const YY_ACTTAB_COUNT: %s = %d;\n",
        minimum_size_type(0, n, 0), n); lineno++;
+  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
   fprintf(out,"static yy_action: [YYACTIONTYPE; %d] = [\n", n); lineno++;
   for(i=j=0; i<n; i++){
     int action = acttab_yyaction(pActtab, i);
@@ -4107,6 +4110,7 @@ void ReportTable(
 
   /* Output the yy_lookahead table */
   lemp->tablesize += n*szCodeType;
+  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
   fprintf(out,"static yy_lookahead: [YYCODETYPE; %d] = [\n", n); lineno++;
   for(i=j=0; i<n; i++){
     int la = acttab_yylookahead(pActtab, i);
@@ -4132,6 +4136,7 @@ void ReportTable(
        minimum_size_type(0, n-1, 0), n-1); lineno++;
   fprintf(out, "const YY_SHIFT_MIN: YY_SHIFT_TYPE =      %d;\n", mnTknOfst); lineno++;
   fprintf(out, "const YY_SHIFT_MAX: YY_SHIFT_TYPE =      %d;\n", mxTknOfst); lineno++;
+  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
   fprintf(out, "static yy_shift_ofst: [YY_SHIFT_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
@@ -4160,6 +4165,7 @@ void ReportTable(
        minimum_size_type(0, n-1, 0), n-1); lineno++;
   fprintf(out, "const YY_REDUCE_MIN: YY_REDUCE_TYPE =   %d;\n", mnNtOfst); lineno++;
   fprintf(out, "const YY_REDUCE_MAX: YY_REDUCE_TYPE =   %d;\n", mxNtOfst); lineno++;
+  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
   fprintf(out, "static yy_reduce_ofst: [YY_REDUCE_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
@@ -4180,6 +4186,7 @@ void ReportTable(
 
   /* Output the default action table */
   n = lemp->nxstate;
+  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
   fprintf(out, "static yy_default: [YYACTIONTYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*szActionType;
   for(i=j=0; i<n; i++){
@@ -4222,12 +4229,13 @@ void ReportTable(
   /* Generate %extra_argument field declaration
   */
   if( lemp->arg && lemp->arg[0] ){
-    fprintf(out,"%s,\n",lemp->arg);  lineno++;
+    fprintf(out,"    %s,\n",lemp->arg);  lineno++;
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 
   /* Generate a table containing the symbolic name of every symbol
   */
+  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
   fprintf(out, "static yyTokenName: [&'static str; %d] = [\n", lemp->nsymbol); lineno++;
   for(i=0; i<lemp->nsymbol; i++){
     lemon_sprintf(line,"\"%s\",",lemp->symbols[i]->name);
@@ -4243,6 +4251,7 @@ void ReportTable(
   ** rule in the rule set of the grammar.  This information is used
   ** when tracing REDUCE actions.
   */
+  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
   fprintf(out, "static yyRuleName: [&'static str; %d] = [\n", lemp->nrule); lineno++;
   for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){
     assert( rp->iRule==i );
@@ -4256,7 +4265,7 @@ void ReportTable(
   /* Generate %extra_argument parameter declaration
   */
   if( lemp->arg && lemp->arg[0] ){
-    fprintf(out,"%s\n",lemp->arg);  lineno++;
+    fprintf(out,"        %s,\n",lemp->arg);  lineno++;
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 
@@ -4265,7 +4274,7 @@ void ReportTable(
   if( lemp->arg && lemp->arg[0] ){
     char *name = strtok(lemp->arg,":");
     if (name) {
-      fprintf(out,"%s: %s,\n",name, name);  lineno++;
+      fprintf(out,"        %s: %s,\n",name, name);  lineno++;
     }
   }
   tplt_xfer(lemp->name, in, out, &lineno);
@@ -4281,7 +4290,7 @@ void ReportTable(
   */
   fprintf(out, "static yyRuleInfo: [yyRuleInfoEntry; %d] = [\n", lemp->nrule); lineno++;
   for(rp=lemp->rule; rp; rp=rp->next){
-    fprintf(out,"  yyRuleInfoEntry{ lhs: %d, nrhs: %d },\n",rp->lhs->index,-rp->nrhs); lineno++;
+    fprintf(out,"    yyRuleInfoEntry{ lhs: %d, nrhs: %d },\n",rp->lhs->index,-rp->nrhs); lineno++;
   }
   fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
@@ -4370,7 +4379,7 @@ void ReportHeader(struct lemon *lemp)
     fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n");
     fprintf(out,"pub enum TokenType {\n");
     for(i=1; i<lemp->nterminal; i++){
-      fprintf(out,"%s%-30s = %3d,\n",prefix,lemp->symbols[i]->name,i);
+      fprintf(out,"    %s%s = %d,\n",prefix,lemp->symbols[i]->name,i);
     }
     fprintf(out,"}\n");
     fclose(out);

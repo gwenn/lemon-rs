@@ -11,7 +11,7 @@
 extern crate log;
 
 pub struct Result {
-	expr: Option<Expr>,
+    expr: Option<Expr>,
 }
 
 #[derive(Debug)]
@@ -28,9 +28,9 @@ pub enum Expr {
     Binary(Operator, Box<Expr>, Box<Expr>),
 }
 impl Expr {
-	fn binary(op: Operator, lhs: Expr, rhs: Expr) -> Expr {
-		Expr::Binary(op, Box::new(lhs), Box::new(rhs))
-	}
+    fn binary(op: Operator, lhs: Expr, rhs: Expr) -> Expr {
+        Expr::Binary(op, Box::new(lhs), Box::new(rhs))
+    }
 }
 
 fn main() {
@@ -39,7 +39,7 @@ fn main() {
 }
 
 %syntax_error {
-  panic!("near token {}: syntax error", yyminor);
+    panic!("near token {}: syntax error", yyminor);
 }
 
 program ::= expr(A). { self.result.expr = Some(A); }

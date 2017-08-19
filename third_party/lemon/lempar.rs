@@ -693,7 +693,7 @@ impl yyParser {
 impl yyParser {
     fn yy_syntax_error(
         &mut self,
-        _yymajor: YYCODETYPE,     /* The major type of the error token */
+        _yymajor: YYCODETYPE,    /* The major type of the error token */
         yyminor: ParseTOKENTYPE, /* The minor type of the error token */
     ) {
         /************ Begin %syntax_error code ****************************************/
