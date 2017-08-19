@@ -445,7 +445,7 @@ impl yyParser {
         assert!(stateno <= YY_SHIFT_COUNT);
         loop {
             i = yy_shift_ofst[stateno as usize] as i32;
-            assert!(iLookAhead != YYNOCODE);
+            assert_ne!(iLookAhead, YYNOCODE);
             i += iLookAhead as i32;
             if i < 0 || i >= (YY_ACTTAB_COUNT as i32) || yy_lookahead[i as usize] != iLookAhead {
                 if YYFALLBACK {
