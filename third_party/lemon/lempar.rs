@@ -191,7 +191,7 @@
 ** SHIFTREDUCE.
 */
 #[derive(Default)]
-struct yyStackEntry {
+pub struct yyStackEntry {
     stateno: YYACTIONTYPE, /* The state-number, or reduce action in SHIFTREDUCE */
     major: YYCODETYPE,     /* The major token value.  This is the code
                             ** number for the token at this stack level */
@@ -362,7 +362,7 @@ impl yyParser {
 impl yyParser {
     #[cfg(feature = "YYSTACKDYNAMIC")]
     fn yy_pop_parser_stack(&mut self) {
-        let yytos = self.yystack.pop();
+        let yytos = self.yystack.pop().unwrap();
         self.yyidx -= 1;
         if cfg!(not(feature = "NDEBUG")) {
             debug!(
@@ -428,6 +428,7 @@ impl yyParser {
         &self,
         iLookAhead: YYCODETYPE, /* The look-ahead token */
     ) -> YYACTIONTYPE {
+        let mut iLookAhead = iLookAhead;
         let mut i;
         let stateno = self[0].stateno;
 
@@ -441,7 +442,7 @@ impl yyParser {
             i += iLookAhead;
             if i < 0 || i >= YY_ACTTAB_COUNT || yy_lookahead[i as usize] != iLookAhead {
                 if YYFALLBACK {
-                    let mut iFallback: YYCODETYPE; /* Fallback token */
+                    let mut iFallback: YYCODETYPE = 0; /* Fallback token */
                     if (iLookAhead as usize) < yyFallback.len() && {
                         iFallback = yyFallback[iLookAhead as usize];
                         iFallback
@@ -544,7 +545,7 @@ impl yyParser {
 impl yyParser {
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE) {
         if cfg!(not(feature = "NDEBUG")) {
-            let yytos = self[0];
+            let yytos = &self[0];
             if yyNewState < YYNSTATE {
                 debug!(
                     target: TARGET,
@@ -573,6 +574,7 @@ impl yyParser {
         yyMajor: YYCODETYPE,      /* The major token to shift in */
         yyMinor: ParseTOKENTYPE,  /* The minor token to shift in */
     ) {
+        let mut yyNewState = yyNewState;
         self.yyidx_shift(1);
         self.yyGrowStackIfNeeded();
         if yyNewState > YY_MAX_SHIFT {
@@ -628,7 +630,8 @@ impl yyParser {
         }
 
         let mut yylhsminor = YYMINORTYPE::default();
-        match yyruleno {
+        unsafe {
+            match yyruleno {
   /* Beginning here are the reduction cases.  A typical example
   ** follows:
   **   case 0:
@@ -640,7 +643,8 @@ impl yyParser {
 /********** Begin reduce actions **********************************************/
 %%
 /********** End reduce actions ************************************************/
-  };
+            };
+        }
         assert!((yyruleno as usize) < yyRuleInfo.len());
         yygoto = yyRuleInfo[yyruleno as usize].lhs;
         yysize = yyRuleInfo[yyruleno as usize].nrhs;
@@ -658,9 +662,11 @@ impl yyParser {
             self.yy_accept();
         } else {
             self.yyidx_shift(yysize + 1);
-            let yymsp = self[0];
-            yymsp.stateno = yyact;
-            yymsp.major = yygoto;
+            {
+                let mut yymsp = &mut self[0];
+                yymsp.stateno = yyact;
+                yymsp.major = yygoto;
+            }
             self.yyTraceShift(yyact);
         }
     }
@@ -746,9 +752,10 @@ impl yyParser {
         yymajor: YYCODETYPE,     /* The major token code number */
         yyminor: ParseTOKENTYPE, /* The value for the token */
     ) {
+        let mut yymajor = yymajor;
         let mut yyact: YYACTIONTYPE; /* The parser action. */
         //#[cfg(all(not(feature = "YYERRORSYMBOL"), not(feature = "YYNOERRORRECOVERY")))]
-        let mut yyendofinput: bool; /* True if we are at the end of input */
+        let mut yyendofinput: bool = false; /* True if we are at the end of input */
         //#[cfg(feature = "YYERRORSYMBOL")]
         let mut yyerrorhit: bool = false; /* True if yymajor has invoked an error */
 

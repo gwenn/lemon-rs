@@ -3705,8 +3705,7 @@ PRIVATE void emit_code(
 void print_stack_union(
   FILE *out,                  /* The output stream */
   struct lemon *lemp,         /* The main info structure for this parser */
-  int *plineno,               /* Pointer to the line number */
-  int mhflag                  /* True if generating makeheaders output */
+  int *plineno                /* Pointer to the line number */
 ){
   int lineno = *plineno;    /* The line number of the output */
   char **types;             /* A hash table of datatypes */
@@ -3797,10 +3796,8 @@ void print_stack_union(
   /* Print out the definition of YYTOKENTYPE and YYMINORTYPE */
   name = lemp->name ? lemp->name : "Parse";
   lineno = *plineno;
-  if( mhflag ){ fprintf(out,"#if INTERFACE\n"); lineno++; }
   fprintf(out,"type %sTOKENTYPE = %s;\n",name,
     lemp->tokentype?lemp->tokentype:"void*");  lineno++; // FIXME
-  if( mhflag ){ fprintf(out,"#endif\n"); lineno++; }
   fprintf(out,"union YYMINORTYPE {\n"); lineno++;
   fprintf(out,"    yyinit: i32,\n"); lineno++;
   fprintf(out,"    yy0: %sTOKENTYPE,\n",name); lineno++;
@@ -3934,29 +3931,21 @@ void ReportTable(
 
   /* Generate the include code, if any */
   tplt_print(out,lemp,lemp->include,&lineno);
-  if( mhflag ){
-    char *incName = file_makename(lemp, ".h");
-    fprintf(out,"#include \"%s\"\n", incName); lineno++;
-    free(incName);
-  }
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate #defines for all tokens */
   if( mhflag ){
     const char *prefix;
     const char *type;
-    fprintf(out,"#if INTERFACE\n"); lineno++;
     if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
     else                    prefix = "";
-    type = minimum_size_type(0, lemp->nsymbol+1, 0);
     fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n"); lineno++;
     fprintf(out,"pub enum TokenType {\n"); lineno++;
     for(i=1; i<lemp->nterminal; i++){
-      fprintf(out,"%s%-30s = %3d as %s,\n",prefix,lemp->symbols[i]->name,i,type);
+      fprintf(out,"%s%-30s = %3d,\n",prefix,lemp->symbols[i]->name,i);
       lineno++;
     }
     fprintf(out,"}\n"); lineno++;
-    fprintf(out,"#endif\n"); lineno++;
   }
   tplt_xfer(lemp->name,in,out,&lineno);
 
@@ -3972,7 +3961,7 @@ void ReportTable(
   } else {
     fprintf(out,"const YYWILDCARD: YYCODETYPE = 0; // No wildcard\n"); lineno++;
   }
-  print_stack_union(out,lemp,&lineno,mhflag);
+  print_stack_union(out,lemp,&lineno);
   //fprintf(out, "#ifndef YYSTACKDEPTH\n"); lineno++;
   if( lemp->stacksize ){
     fprintf(out,"const YYSTACKDEPTH: usize = %s;\n",lemp->stacksize);  lineno++;
@@ -4371,7 +4360,6 @@ void ReportTable(
 void ReportHeader(struct lemon *lemp)
 {
   FILE *out;
-  const char *type;
   const char *prefix;
   int i;
 
@@ -4379,11 +4367,10 @@ void ReportHeader(struct lemon *lemp)
   else                    prefix = "";
   out = file_open(lemp,".h","wb");
   if( out ){
-    type = minimum_size_type(0, lemp->nsymbol+1, 0);
     fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n");
     fprintf(out,"pub enum TokenType {\n");
     for(i=1; i<lemp->nterminal; i++){
-      fprintf(out,"%s%-30s = %3d as %s,\n",prefix,lemp->symbols[i]->name,i,type);
+      fprintf(out,"%s%-30s = %3d,\n",prefix,lemp->symbols[i]->name,i);
     }
     fprintf(out,"}\n");
     fclose(out);

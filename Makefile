@@ -34,7 +34,7 @@ rlemon$(BEXE): $(TOP)/third_party/lemon/lemon.c
 # Rules to build simple parser - the outputs of rlemon.
 #
 simple: rlemon$(BEXE) $(TOP)/examples/simple.y $(TOP)/third_party/lemon/lempar.rs
-	./rlemon$(BEXE) -T$(TOP)/third_party/lemon/lempar.rs $(TOP)/examples/simple.y
+	./rlemon$(BEXE) -m -T$(TOP)/third_party/lemon/lempar.rs $(TOP)/examples/simple.y
 
 clean:
 	-rm -f rlemon$(BEXE)
