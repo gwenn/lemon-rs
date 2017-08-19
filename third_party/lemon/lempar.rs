@@ -277,7 +277,7 @@ static TARGET: &'static str = "Parse";
 #[cfg(feature = "YYSTACKDYNAMIC")]
 impl yyParser {
     fn yy_grow_stack_if_needed(&mut self) -> bool {
-        if self.yyidx >= self.yystack.len() {
+        if self.yyidx >= self.yystack.capacity() {
             if self.yyGrowStack() {
                 self.yyidx -= 1;
                 self.yyStackOverflow();
@@ -287,7 +287,7 @@ impl yyParser {
         false
     }
     fn yy_grow_stack_for_push(&mut self) -> bool {
-        if self.yyidx >= self.yystack.len() - 1 {
+        if self.yyidx >= self.yystack.capacity() - 1 {
             if self.yyGrowStack() {
                 self.yyStackOverflow();
                 return true;
