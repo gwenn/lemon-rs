@@ -184,6 +184,7 @@
 ** actually contains the reduce action for the second half of the
 ** SHIFTREDUCE.
 */
+#[allow(non_camel_case_types)]
 #[derive(Default)]
 pub struct yyStackEntry {
     stateno: YYACTIONTYPE, /* The state-number, or reduce action in SHIFTREDUCE */
@@ -195,6 +196,7 @@ pub struct yyStackEntry {
 
 /* The state of the parser is completely contained in an instance of
 ** the following structure */
+#[allow(non_camel_case_types)]
 pub struct yyParser {
     yyidx: usize, /* Index to top element of the stack */
     #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
@@ -274,7 +276,7 @@ static TARGET: &'static str = "Parse";
 */
 #[cfg(feature = "YYSTACKDYNAMIC")]
 impl yyParser {
-    fn yyGrowStackIfNeeded(&mut self) -> bool {
+    fn yy_grow_stack_if_needed(&mut self) -> bool {
         if self.yyidx >= self.yystack.len() {
             if self.yyGrowStack() {
                 self.yyidx -= 1;
@@ -284,7 +286,7 @@ impl yyParser {
         }
         false
     }
-    fn yyGrowStackForPush(&mut self) -> bool {
+    fn yy_grow_stack_for_push(&mut self) -> bool {
         if self.yyidx >= self.yystack.len() - 1 {
             if self.yyGrowStack() {
                 self.yyStackOverflow();
@@ -293,6 +295,7 @@ impl yyParser {
         }
         false
     }
+    #[allow(non_snake_case)]
     fn yyGrowStack(&mut self) -> bool {
         let capacity = self.yystack.capacity();
         let additional = capacity + 100;
@@ -313,7 +316,7 @@ impl yyParser {
 }
 #[cfg(not(feature = "YYSTACKDYNAMIC"))]
 impl yyParser {
-    fn yyGrowStackIfNeeded(&mut self) -> bool {
+    fn yy_grow_stack_if_needed(&mut self) -> bool {
         if self.yyidx >= YYSTACKDEPTH {
             self.yyidx -= 1;
             self.yyStackOverflow();
@@ -321,7 +324,7 @@ impl yyParser {
         }
         false
     }
-    fn yyGrowStackForPush(&mut self) -> bool {
+    fn yy_grow_stack_for_push(&mut self) -> bool {
         if self.yyidx >= YYSTACKDEPTH - 1 {
             self.yyStackOverflow();
             return true;
@@ -392,6 +395,7 @@ impl yyParser {
 ** Clear all secondary memory allocations from the parser
 */
 impl yyParser {
+    #[allow(non_snake_case)]
     pub fn ParseFinalize(&mut self) {
         while self.yyidx > 0 {
             self.yy_pop_parser_stack();
@@ -404,10 +408,11 @@ impl yyParser {
 */
 #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
 impl yyParser {
+    #[allow(non_snake_case)]
     pub fn ParseStackPeak(&self) -> usize {
         self.yyhwm
     }
-    fn IncrStack(&mut self) {
+    fn yyhwm_incr(&mut self) {
         if self.yyidx > self.yyhwm {
             self.yyhwm += 1;
             assert_eq!(self.yyhwm, self.yyidx);
@@ -417,7 +422,7 @@ impl yyParser {
 #[cfg(not(feature = "YYTRACKMAXSTACKDEPTH"))]
 impl yyParser {
     #[inline]
-    fn IncrStack(&mut self) {}
+    fn yyhwm_incr(&mut self) {}
 }
 
 /*
@@ -425,6 +430,7 @@ impl yyParser {
 ** look-ahead token iLookAhead.
 */
 impl yyParser {
+    #[allow(non_snake_case)]
     fn yy_find_shift_action(
         &self,
         iLookAhead: YYCODETYPE, /* The look-ahead token */
@@ -463,23 +469,21 @@ impl yyParser {
                     }
                 }
                 if YYWILDCARD > 0 {
+                    let j = i - (iLookAhead + YYWILDCARD) as i32;
+                    if (YY_SHIFT_MIN + YYWILDCARD >= 0 || j >= 0) &&
+                        (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT || j < YY_ACTTAB_COUNT as i32) &&
+                        yy_lookahead[j as usize] == YYWILDCARD &&
+                        iLookAhead > 0
                     {
-                        let j = i - (iLookAhead + YYWILDCARD) as i32;
-                        if (YY_SHIFT_MIN + YYWILDCARD >= 0 || j >= 0) &&
-                            (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT || j < YY_ACTTAB_COUNT as i32) &&
-                            yy_lookahead[j as usize] == YYWILDCARD &&
-                            iLookAhead > 0
-                        {
-                            if cfg!(not(feature = "NDEBUG")) {
-                                debug!(
-                                    target: TARGET,
-                                    "WILDCARD {} => {}",
-                                    yyTokenName[iLookAhead as usize],
-                                    yyTokenName[YYWILDCARD as usize]
-                                );
-                            }
-                            return yy_action[j as usize];
+                        if cfg!(not(feature = "NDEBUG")) {
+                            debug!(
+                                target: TARGET,
+                                "WILDCARD {} => {}",
+                                yyTokenName[iLookAhead as usize],
+                                yyTokenName[YYWILDCARD as usize]
+                            );
                         }
+                        return yy_action[j as usize];
                     }
                 } /* YYWILDCARD */
                 return yy_default[stateno as usize];
@@ -494,6 +498,7 @@ impl yyParser {
 ** Find the appropriate action for a parser given the non-terminal
 ** look-ahead token iLookAhead.
 */
+#[allow(non_snake_case)]
 fn yy_find_reduce_action(
     stateno: YYACTIONTYPE,  /* Current state number */
     iLookAhead: YYCODETYPE, /* The look-ahead token */
@@ -525,6 +530,7 @@ fn yy_find_reduce_action(
 ** The following routine is called if the stack overflows.
 */
 impl yyParser {
+    #[allow(non_snake_case)]
     fn yyStackOverflow(&mut self) {
         if cfg!(not(feature = "NDEBUG")) {
             error!(target: TARGET, "Stack Overflow!");
@@ -544,6 +550,7 @@ impl yyParser {
 ** Print tracing information for a SHIFT action
 */
 impl yyParser {
+    #[allow(non_snake_case)]
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE) {
         if cfg!(not(feature = "NDEBUG")) {
             let yytos = &self[0];
@@ -569,6 +576,7 @@ impl yyParser {
 ** Perform a shift action.
 */
 impl yyParser {
+    #[allow(non_snake_case)]
     fn yy_shift(
         &mut self,
         yyNewState: YYACTIONTYPE, /* The new state to shift in */
@@ -577,7 +585,7 @@ impl yyParser {
     ) {
         let mut yyNewState = yyNewState;
         self.yyidx_shift(1);
-        self.yyGrowStackIfNeeded();
+        self.yy_grow_stack_if_needed();
         if yyNewState > YY_MAX_SHIFT {
             yyNewState += YY_MIN_REDUCE - YY_MIN_SHIFTREDUCE;
         }
@@ -594,6 +602,7 @@ impl yyParser {
 /* The following table contains information about every rule that
 ** is used during the reduce.
 */
+#[allow(non_camel_case_types)]
 struct yyRuleInfoEntry {
     lhs: YYCODETYPE, /* Symbol on the left-hand side of the rule */
     nrhs: i8,        /* Negative of the number of RHS symbols in the rule */
@@ -626,8 +635,8 @@ impl yyParser {
          ** if the RHS of the rule is empty.  This ensures that there is room
          ** enough on the stack to push the LHS value */
         if yyRuleInfo[yyruleno as usize].nrhs == 0 {
-            self.IncrStack();
-            self.yyGrowStackForPush();
+            self.yyhwm_incr();
+            self.yy_grow_stack_for_push();
         }
 
         let mut yylhsminor = YYMINORTYPE::default();
@@ -664,7 +673,7 @@ impl yyParser {
         } else {
             self.yyidx_shift(yysize + 1);
             {
-                let mut yymsp = &mut self[0];
+                let yymsp = &mut self[0];
                 yymsp.stateno = yyact;
                 yymsp.major = yygoto;
             }
@@ -748,6 +757,7 @@ impl yyParser {
 ** None.
 */
 impl yyParser {
+    #[allow(non_snake_case)]
     fn Parse(
         &mut self,
         yymajor: YYCODETYPE,     /* The major token code number */

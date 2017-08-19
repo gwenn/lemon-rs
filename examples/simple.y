@@ -37,6 +37,7 @@ fn main() {
     let r = Result { expr: None };
     let mut p = yyParser::new(r);
     p.Parse(TokenType::EOF as YYCODETYPE, 0);
+    p.ParseFinalize();
 }
 }
 
