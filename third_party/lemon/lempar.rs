@@ -429,7 +429,7 @@ impl yyParser {
         iLookAhead: YYCODETYPE, /* The look-ahead token */
     ) -> YYACTIONTYPE {
         let mut iLookAhead = iLookAhead;
-        let mut i;
+        let mut i: i32;
         let stateno = self[0].stateno;
 
         if stateno >= YY_MIN_REDUCE {
@@ -437,10 +437,10 @@ impl yyParser {
         }
         assert!(stateno <= YY_SHIFT_COUNT);
         loop {
-            i = yy_shift_ofst[stateno as usize];
+            i = yy_shift_ofst[stateno as usize] as i32;
             assert!(iLookAhead != YYNOCODE);
-            i += iLookAhead;
-            if i < 0 || i >= YY_ACTTAB_COUNT || yy_lookahead[i as usize] != iLookAhead {
+            i += iLookAhead as i32;
+            if i < 0 || i >= (YY_ACTTAB_COUNT as i32) || yy_lookahead[i as usize] != iLookAhead {
                 if YYFALLBACK {
                     let mut iFallback: YYCODETYPE = 0; /* Fallback token */
                     if (iLookAhead as usize) < yyFallback.len() && {
@@ -463,9 +463,9 @@ impl yyParser {
                 }
                 if YYWILDCARD > 0 {
                     {
-                        let j = i - iLookAhead + YYWILDCARD;
+                        let j = i - (iLookAhead + YYWILDCARD) as i32;
                         if (YY_SHIFT_MIN + YYWILDCARD >= 0 || j >= 0) &&
-                            (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT || j < YY_ACTTAB_COUNT) &&
+                            (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT || j < YY_ACTTAB_COUNT as i32) &&
                             yy_lookahead[j as usize] == YYWILDCARD &&
                             iLookAhead > 0
                         {
