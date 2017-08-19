@@ -194,6 +194,8 @@ pub struct yyStackEntry {
                             ** is the value of the token  */
 }
 
+use smallvec::SmallVec;
+
 /* The state of the parser is completely contained in an instance of
 ** the following structure */
 #[allow(non_camel_case_types)]
@@ -204,10 +206,7 @@ pub struct yyParser {
     #[cfg(not(feature = "YYNOERRORRECOVERY"))]
     yyerrcnt: i32, /* Shifts left before out of the error */
 %%                               /* A place to hold %extra_argument */
-    #[cfg(feature = "YYSTACKDYNAMIC")]
-    yystack: Vec<yyStackEntry>, /* The parser's stack */
-    #[cfg(not(feature = "YYSTACKDYNAMIC"))]
-    yystack: [yyStackEntry; YYSTACKDEPTH], /* The parser's stack */
+    yystack: SmallVec<[yyStackEntry; YYSTACKDEPTH]>, /* The parser's stack */
 }
 
 use std::ops::Neg;
@@ -274,7 +273,6 @@ static TARGET: &'static str = "Parse";
 ** Try to increase the size of the parser stack.  Return the number
 ** of errors.  Return 0 on success.
 */
-#[cfg(feature = "YYSTACKDYNAMIC")]
 impl yyParser {
     fn yy_grow_stack_if_needed(&mut self) -> bool {
         if self.yyidx >= self.yystack.capacity() {
@@ -312,27 +310,7 @@ impl yyParser {
     }
     fn push(&mut self, entry: yyStackEntry) {
         self.yystack.push(entry);
-    }
-}
-#[cfg(not(feature = "YYSTACKDYNAMIC"))]
-impl yyParser {
-    fn yy_grow_stack_if_needed(&mut self) -> bool {
-        if self.yyidx >= YYSTACKDEPTH {
-            self.yyidx -= 1;
-            self.yyStackOverflow();
-            return true;
-        }
-        false
-    }
-    fn yy_grow_stack_for_push(&mut self) -> bool {
-        if self.yyidx >= YYSTACKDEPTH - 1 {
-            self.yyStackOverflow();
-            return true;
-        }
-        false
-    }
-    fn push(&mut self, entry: yyStackEntry) {
-        self.yystack[self.yyidx] = entry;
+        assert_eq!(self.yyidx+1, self.yystack.len());
     }
 }
 
@@ -346,10 +324,7 @@ impl yyParser {
             yyidx: 0,
             #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
             yyhwm: 0,
-            #[cfg(feature = "YYSTACKDYNAMIC")]
-            yystack: Vec::with_capacity(100),
-            #[cfg(not(feature = "YYSTACKDYNAMIC"))]
-            yystack: [yyStackEntry::default(); YYSTACKDEPTH],
+            yystack: SmallVec::new(),
             #[cfg(not(feature = "YYNOERRORRECOVERY"))]
             yyerrcnt: -1,
 %%
@@ -363,24 +338,10 @@ impl yyParser {
 ** Pop the parser's stack once.
 */
 impl yyParser {
-    #[cfg(feature = "YYSTACKDYNAMIC")]
     fn yy_pop_parser_stack(&mut self) {
         let yytos = self.yystack.pop().unwrap();
         self.yyidx -= 1;
-        if cfg!(not(feature = "NDEBUG")) {
-            debug!(
-                target: TARGET,
-                "Popping {}",
-                yyTokenName[yytos.major as usize]
-            );
-        }
-    }
-
-    #[cfg(not(feature = "YYSTACKDYNAMIC"))]
-    fn yy_pop_parser_stack(&mut self) {
-        use std::mem::replace;
-        let yytos = replace(&mut self.yystack[self.yyidx], yyStackEntry::default());
-        self.yyidx -= 1;
+        assert_eq!(self.yyidx+1, self.yystack.len());
         if cfg!(not(feature = "NDEBUG")) {
             debug!(
                 target: TARGET,

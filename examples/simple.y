@@ -9,6 +9,7 @@
 %include {
 #[macro_use]
 extern crate log;
+extern crate smallvec;
 
 use std::io::{self, Write};
 use log::{LogLevel, LogLevelFilter, LogMetadata, LogRecord, SetLoggerError};

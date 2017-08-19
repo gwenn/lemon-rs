@@ -3967,11 +3967,10 @@ void ReportTable(
     fprintf(out,"const YYWILDCARD: YYCODETYPE = 0; // No wildcard\n"); lineno++;
   }
   print_stack_union(out,lemp,&lineno);
-  fprintf(out, "#[cfg(not(feature = \"YYSTACKDYNAMIC\"))]\n"); lineno++;
   if( lemp->stacksize ){
     fprintf(out,"const YYSTACKDEPTH: usize = %s;\n",lemp->stacksize);  lineno++;
   }else{
-    fprintf(out,"const YYSTACKDEPTH: usize = 100;\n");  lineno++;
+    fprintf(out,"const YYSTACKDEPTH: usize = 32;\n");  lineno++;
   }
   if( lemp->errsym->useCnt ){
     fprintf(out,"const YYERRORSYMBOL: YYCODETYPE = %d;\n",lemp->errsym->index); lineno++;
