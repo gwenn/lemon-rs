@@ -36,8 +36,47 @@ impl Expr {
 fn main() {
     let r = Result { expr: None };
     let mut p = yyParser::new(r);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 5);
+    p.Parse(TokenType::PLUS as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 10);
+    p.Parse(TokenType::TIMES as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 4);
     p.Parse(TokenType::EOF as YYCODETYPE, 0);
     p.ParseFinalize();
+    let s = format!("{:?}", p.result.expr);
+    assert_eq!(s, "Some(Binary(Add, Number(5), Binary(Multiply, Number(10), Number(4))))");
+
+    let r = Result { expr: None };
+    let mut p = yyParser::new(r);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 15);
+    p.Parse(TokenType::DIVIDE as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 5);
+    p.Parse(TokenType::EOF as YYCODETYPE, 0);
+    p.ParseFinalize();
+    let s = format!("{:?}", p.result.expr);
+    assert_eq!(s, "Some(Binary(Divide, Number(15), Number(5)))");
+
+    let r = Result { expr: None };
+    let mut p = yyParser::new(r);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 50);
+    p.Parse(TokenType::PLUS as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 125);
+    p.Parse(TokenType::EOF as YYCODETYPE, 0);
+    p.ParseFinalize();
+    let s = format!("{:?}", p.result.expr);
+    assert_eq!(s, "Some(Binary(Add, Number(50), Number(125)))");
+
+    let r = Result { expr: None };
+    let mut p = yyParser::new(r);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 50);
+    p.Parse(TokenType::TIMES as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 125);
+    p.Parse(TokenType::PLUS as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, 125);
+    p.Parse(TokenType::EOF as YYCODETYPE, 0);
+    p.ParseFinalize();
+    let s = format!("{:?}", p.result.expr);
+    assert_eq!(s, "Some(Binary(Add, Number(50), Number(125)))");
 }
 }
 
