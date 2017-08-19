@@ -888,13 +888,9 @@ impl yyParser {
         }
         if cfg!(not(feature = "NDEBUG")) {
             if log_enabled!(target: TARGET, Debug) {
-                let mut cDiv = '[';
-                let mut msg = String::new();
-                for entry in self.yystack[1..self.yyidx + 1].iter() {
-                    msg.push(cDiv);
-                    msg.push_str(yyTokenName[entry.major as usize]);
-                    cDiv = ' ';
-                }
+                let msg = self.yystack[1..self.yyidx + 1].iter()
+                    .map(|entry| yyTokenName[entry.major as usize])
+                    .collect::<Vec<&str>>().join(" ");
                 debug!(target: TARGET, "Return Stack=[{}]", msg);
             }
         }
