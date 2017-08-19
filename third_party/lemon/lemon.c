@@ -3400,9 +3400,9 @@ PRIVATE void tplt_print(FILE *out, struct lemon *lemp, char *str, int *lineno)
     putc('\n',out);
     (*lineno)++;
   }
-  if (!lemp->nolinenosflag) {
+  /*if (!lemp->nolinenosflag) {
     (*lineno)++; tplt_linedir(out,*lineno,lemp->outname);
-  }
+  }*/
   return;
 }
 
@@ -3676,10 +3676,10 @@ PRIVATE void emit_code(
    fprintf(out,"{%s",rp->code);
    for(cp=rp->code; *cp; cp++){ if( *cp=='\n' ) (*lineno)++; }
    fprintf(out,"}\n"); (*lineno)++;
-   if( !lemp->nolinenosflag ){
+   /*if( !lemp->nolinenosflag ){
      (*lineno)++;
      tplt_linedir(out,*lineno,lemp->outname);
-   }
+   }*/
  }
 
  /* Generate breakdown code that occurs after the #line directive */
