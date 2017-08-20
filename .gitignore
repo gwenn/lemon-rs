@@ -1,3 +1,4 @@
-GPATH
-GRTAGS
-GTAGS
+target
+rlemon
+*.h
+*.out

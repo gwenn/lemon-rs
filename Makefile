@@ -38,5 +38,4 @@ simple: rlemon$(BEXE) $(TOP)/examples/simple.y $(TOP)/third_party/lemon/lempar.r
 
 clean:
 	-rm -f rlemon$(BEXE)
-	-rm -f $(GEN)/examples/simple.h
 	-rm -f $(TOP)/examples/simple.out
