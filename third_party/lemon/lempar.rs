@@ -235,6 +235,14 @@ impl yyParser {
         let idx = self.shift(shift);
         replace(&mut self.yystack[idx], yyStackEntry::default())
     }
+
+    fn push(&mut self, entry: yyStackEntry) {
+        if self.yyidx == self.yystack.len() {
+            self.yystack.push(entry);
+        } else {
+            self.yystack[self.yyidx] = entry;
+        }
+    }
 }
 
 use std::ops::{Index, IndexMut};
@@ -293,7 +301,9 @@ impl yyParser {
         }
         false
     }
+
     #[allow(non_snake_case)]
+    #[cfg(feature = "YYSTACKDYNAMIC")]
     fn yyGrowStack(&mut self) -> bool {
         let capacity = self.yystack.capacity();
         let additional = capacity + 100;
@@ -308,12 +318,10 @@ impl yyParser {
         }
         false
     }
-    fn push(&mut self, entry: yyStackEntry) {
-        if self.yyidx == self.yystack.len() {
-            self.yystack.push(entry);
-        } else {
-            self.yystack[self.yyidx] = entry;
-        }
+    #[allow(non_snake_case)]
+    #[cfg(not(feature = "YYSTACKDYNAMIC"))]
+    fn yyGrowStack(&mut self) -> bool {
+        true
     }
 }
 

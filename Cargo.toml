@@ -15,6 +15,7 @@ license = "Apache-2.0/MIT"
 # FIXME: specific to one parser, not global
 YYTRACKMAXSTACKDEPTH = []
 YYNOERRORRECOVERY = []
+YYSTACKDYNAMIC = []
 NDEBUG = []
 
 [dependencies]
