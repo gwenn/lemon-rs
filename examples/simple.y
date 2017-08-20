@@ -82,7 +82,7 @@ fn main() {
     p.Parse(TokenType::EOF as YYCODETYPE, 0);
     p.ParseFinalize();
     let s = format!("{:?}", p.ctx.expr);
-    assert_eq!(s, "Some(Binary(Add, Number(50), Number(125)))");
+    assert_eq!(s, "Some(Binary(Add, Binary(Multiply, Number(50), Number(125)), Number(125)))");
 }
 
 struct Logger;

@@ -309,8 +309,11 @@ impl yyParser {
         false
     }
     fn push(&mut self, entry: yyStackEntry) {
-        self.yystack.push(entry);
-        assert_eq!(self.yyidx+1, self.yystack.len());
+        if self.yyidx == self.yystack.len() {
+            self.yystack.push(entry);
+        } else {
+            self.yystack[self.yyidx] = entry;
+        }
     }
 }
 
