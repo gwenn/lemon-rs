@@ -3400,9 +3400,9 @@ PRIVATE void tplt_print(FILE *out, struct lemon *lemp, char *str, int *lineno)
     putc('\n',out);
     (*lineno)++;
   }
-  /*if (!lemp->nolinenosflag) {
-    (*lineno)++; tplt_linedir(out,*lineno,lemp->outname);
-  }*/
+  if (!lemp->nolinenosflag) {
+    //(*lineno)++; tplt_linedir(out,*lineno,lemp->outname);
+  }
   return;
 }
 
@@ -3917,7 +3917,6 @@ void ReportTable(
   int i, j, n, sz;
   int szActionType;     /* sizeof(YYACTIONTYPE) */
   int szCodeType;       /* sizeof(YYCODETYPE)   */
-  const char *name;
   int mnTknOfst, mxTknOfst;
   int mnNtOfst, mxNtOfst;
   struct axset *ax;
@@ -3939,7 +3938,6 @@ void ReportTable(
   /* Generate #defines for all tokens */
   if( mhflag ){
     const char *prefix;
-    const char *type;
     if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
     else                    prefix = "";
     fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n"); lineno++;
