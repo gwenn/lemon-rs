@@ -3573,7 +3573,7 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
                 dtnum = sp->dtnum;
               }
               // TODO: check that the same index (i-rp->nrhs+1) is used only once.
-              append_str("self.get_and_reset(%d).minor.yy%d",0,i-rp->nrhs+1, dtnum);
+              append_str("self.yy_move(%d).minor.yy%d",0,i-rp->nrhs+1, dtnum);
             }
             cp = xp;
             used[i] = 1;
