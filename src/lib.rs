@@ -1,7 +1,9 @@
+#![feature(read_initializer)]
 #![feature(plugin)]
 #![plugin(phf_macros)]
 
 extern crate phf;
 
-pub mod token;
 pub mod error;
+pub mod scan;
+pub mod token;
