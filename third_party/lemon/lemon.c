@@ -3941,6 +3941,8 @@ void ReportTable(
     if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
     else                    prefix = "";
     fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n"); lineno++;
+    fprintf(out,"#[repr(%s)]\n",
+      minimum_size_type(0, lemp->nsymbol+1, &szCodeType)); lineno++;
     fprintf(out,"pub enum TokenType {\n"); lineno++;
     fprintf(out,"    %sEOF = 0,\n",prefix);
     for(i=1; i<lemp->nterminal; i++){
