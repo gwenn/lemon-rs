@@ -21,9 +21,7 @@ NDEBUG = []
 [dependencies]
 # FIXME optional when NDEBUG
 log = "0.3"
-smallvec = "0.4"
-phf = "0.7"
-phf_macros = "0.7"
+smallvec = "0.5"
 
 #[build-dependencies]
 #gcc = "0.3"
