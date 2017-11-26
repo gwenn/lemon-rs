@@ -29,3 +29,14 @@ https://www.codeproject.com/Articles/1056460/Generating-a-High-Speed-Parser-Part
 
 * RHS are moved. Maybe it is not a problem if they are always used once.
   Just add a check in lemon...
+
+## Raison d'être
+
+* [lemon_rust](https://github.com/rodrigorc/lemon_rust) does the same thing
+but with an old version of `lemon`. And it seems not possible to use `yystack`
+as a stack because items may be access randomly and the `top+1` item can be used.
+
+* [lalrpop](https://github.com/nikomatsakis/lalrpop) would be the perfect
+alternative but it does not support fallback/streaming
+(see [this](https://github.com/nikomatsakis/lalrpop/issues/156) issue)
+and compilation/generation is slow.
