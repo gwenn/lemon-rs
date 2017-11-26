@@ -29,6 +29,3 @@ https://www.codeproject.com/Articles/1056460/Generating-a-High-Speed-Parser-Part
 
 * RHS are moved. Maybe it is not a problem if they are always used once.
   Just add a check in lemon...
-* unions_with_drop_fields. It means we are leaking memory.
-  Reintroduce destructors?
-`warning: union contains a field with possibly non-trivial drop code, drop code of union fields is ignored when dropping the union`

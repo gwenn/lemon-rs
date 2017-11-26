@@ -22,7 +22,6 @@
 ** The following is the concatenation of all %include directives from the
 ** input grammar file:
 */
-#![feature(untagged_unions)]
 /************ Begin %include sections from the grammar ************************/
 %%
 /**************** End of %include directives **********************************/
@@ -564,7 +563,7 @@ impl yyParser {
         let yytos = yyStackEntry {
             stateno: yyNewState,
             major: yyMajor,
-            minor: YYMINORTYPE { yy0: yyMinor },
+            minor: YYMINORTYPE::yy0(yyMinor),
         };
         self.push(yytos);
         self.yyTraceShift(yyNewState);
@@ -611,9 +610,8 @@ impl yyParser {
             self.yy_grow_stack_for_push();
         }
 
-        let mut yylhsminor = YYMINORTYPE::default();
-        unsafe {
-            match yyruleno {
+        let yylhsminor;
+        match yyruleno {
   /* Beginning here are the reduction cases.  A typical example
   ** follows:
   **   case 0:
@@ -625,8 +623,7 @@ impl yyParser {
 /********** Begin reduce actions **********************************************/
 %%
 /********** End reduce actions ************************************************/
-            };
-        }
+        };
         assert!((yyruleno as usize) < yyRuleInfo.len());
         yygoto = yyRuleInfo[yyruleno as usize].lhs;
         yysize = yyRuleInfo[yyruleno as usize].nrhs;

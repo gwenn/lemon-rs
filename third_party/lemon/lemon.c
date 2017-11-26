@@ -3477,6 +3477,8 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
   char used[MAXRHS];     /* True for each RHS element which is used */
   char zLhs[50];         /* Convert the LHS symbol into this string */
   char zOvwrt[900];      /* Comment that to allow LHS to overwrite RHS */
+  char lhsaccess = 0;
+  char lhswrite = 0;
 
   for(i=0; i<rp->nrhs; i++) used[i] = 0;
   lhsused = 0;
@@ -3527,10 +3529,10 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
     }
   }
   if( lhsdirect ){
-    sprintf(zLhs, "self[%d].minor.yy%d",1-rp->nrhs,rp->lhs->dtnum);
+    sprintf(zLhs, "self[%d].minor",1-rp->nrhs);
   }else{
     rc = 1;
-    sprintf(zLhs, "yylhsminor.yy%d",rp->lhs->dtnum);
+    sprintf(zLhs, "yylhsminor");
   }
 
   append_str(0,0,0,0);
@@ -3552,6 +3554,7 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
         append_str(zLhs,0,0,0);
         cp = xp;
         lhsused = 1;
+        lhsaccess = 1;
       }else{
         for(i=0; i<rp->nrhs; i++){
           if( rp->rhsalias[i] && strcmp(cp,rp->rhsalias[i])==0 ){
@@ -3572,8 +3575,7 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
               }else{
                 dtnum = sp->dtnum;
               }
-              // TODO: check that the same index (i-rp->nrhs+1) is used only once.
-              append_str("self.yy_move(%d).minor.yy%d",0,i-rp->nrhs+1, dtnum);
+              append_str("self.yy_move(%d).yy%d()",0,i-rp->nrhs+1, dtnum);
             }
             cp = xp;
             used[i] = 1;
@@ -3583,7 +3585,29 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
       }
       *xp = saved;
     }
+    if( lhsaccess ){
+      if( cp[0] == '=' ){
+      }else if ( !ISSPACE(*cp) ){
+        append_str(".yy%d()",0,rp->lhs->dtnum,0); // FIXME
+        lhsaccess = 0;
+      }
+    }
+    if( lhswrite ){
+      if( cp[0] == ';' ){
+        append_str(")",0,0,0);
+        lhswrite = 0;
+      }
+    }
     append_str(cp, 1, 0, 0);
+    if( lhsaccess ){
+      if( cp[0] == '=' ){
+        lhswrite = cp[1] != '=';
+        lhsaccess = 0;
+        if( lhswrite ) {
+          append_str(" YYMINORTYPE::yy%d(",0,rp->lhs->dtnum,0);
+        }
+      }
+    }
   } /* End loop */
 
   /* Main code generation completed */
@@ -3635,7 +3659,7 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
   /* If unable to write LHS values directly into the stack, write the
   ** saved LHS value now. */
   if( lhsdirect==0 ){
-    append_str("  self[%d].minor.yy%d = ", 0, 1-rp->nrhs, rp->lhs->dtnum);
+    append_str("  self[%d].minor = ", 0, 1-rp->nrhs, 0);
     append_str(zLhs, 0, 0, 0);
     append_str(";\n", 0, 0, 0);
   }
@@ -3799,16 +3823,17 @@ void print_stack_union(
   lineno = *plineno;
   fprintf(out,"type %sTOKENTYPE = %s;\n",name,
     lemp->tokentype?lemp->tokentype:"void*");  lineno++; // FIXME
-  fprintf(out,"union YYMINORTYPE {\n"); lineno++;
-  fprintf(out,"    yyinit: i32,\n"); lineno++;
-  fprintf(out,"    yy0: %sTOKENTYPE,\n",name); lineno++;
+  fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
+  fprintf(out,"enum YYMINORTYPE {\n"); lineno++;
+  fprintf(out,"    yyinit(i32),\n"); lineno++;
+  fprintf(out,"    yy0(%sTOKENTYPE),\n",name); lineno++;
   for(i=0; i<arraysize; i++){
     if( types[i]==0 ) continue;
-    fprintf(out,"    yy%d: %s,\n",i+1,types[i]); lineno++;
-    free(types[i]);
+    fprintf(out,"    yy%d(%s),\n",i+1,types[i]); lineno++;
+//    free(types[i]);
   }
   if( lemp->errsym->useCnt ){
-    fprintf(out,"    yy%d: i32,\n",lemp->errsym->dtnum); lineno++;
+    fprintf(out,"    yy%d(i32),\n",lemp->errsym->dtnum); lineno++;
   }
   free(stddt);
   free(types);
@@ -3816,8 +3841,38 @@ void print_stack_union(
 
   fprintf(out,"impl Default for YYMINORTYPE {\n"); lineno++;
   fprintf(out,"    fn default() -> YYMINORTYPE {\n"); lineno++;
-  fprintf(out,"        YYMINORTYPE { yyinit: 0 }\n"); lineno++;
+  fprintf(out,"        YYMINORTYPE::yyinit(0)\n"); lineno++;
   fprintf(out,"    }\n"); lineno++;
+  fprintf(out,"}\n"); lineno++;
+
+  fprintf(out,"impl yyStackEntry {\n"); lineno++;
+  fprintf(out,"    fn yy0(self) -> %sTOKENTYPE {\n",name); lineno++;
+  fprintf(out,"        if let YYMINORTYPE::yy0(v) = self.minor {\n"); lineno++;
+  fprintf(out,"            v\n"); lineno++;
+  fprintf(out,"        } else {\n"); lineno++;
+  fprintf(out,"            unreachable!()\n"); lineno++;
+  fprintf(out,"        }\n"); lineno++;
+  fprintf(out,"    }\n"); lineno++;
+  for(i=0; i<arraysize; i++){
+    if( types[i]==0 ) continue;
+    fprintf(out,"    fn yy%d(self) -> %s {\n",i+1,types[i]); lineno++;
+    fprintf(out,"        if let YYMINORTYPE::yy%d(v) = self.minor {\n",i+1); lineno++;
+    fprintf(out,"            v\n"); lineno++;
+    fprintf(out,"        } else {\n"); lineno++;
+    fprintf(out,"            unreachable!()\n"); lineno++;
+    fprintf(out,"        }\n"); lineno++;
+    fprintf(out,"    }\n"); lineno++;
+    free(types[i]);
+  }
+  if( lemp->errsym->useCnt ){
+    fprintf(out,"    fn yy%d(self) -> i32 {\n",lemp->errsym->dtnum); lineno++;
+    fprintf(out,"        if let YYMINORTYPE::yy%d(v) = self.minor {\n",lemp->errsym->dtnum); lineno++;
+    fprintf(out,"            v\n"); lineno++;
+    fprintf(out,"        } else {\n"); lineno++;
+    fprintf(out,"            unreachable!()\n"); lineno++;
+    fprintf(out,"        }\n"); lineno++;
+    fprintf(out,"    }\n"); lineno++;
+  }
   fprintf(out,"}\n"); lineno++;
 
   *plineno = lineno;
