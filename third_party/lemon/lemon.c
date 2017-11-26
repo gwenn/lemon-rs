@@ -3825,7 +3825,7 @@ void print_stack_union(
     lemp->tokentype?lemp->tokentype:"void*");  lineno++; // FIXME
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
   fprintf(out,"enum YYMINORTYPE {\n"); lineno++;
-  fprintf(out,"    yyinit(i32),\n"); lineno++;
+  fprintf(out,"    yyinit(),\n"); lineno++;
   fprintf(out,"    yy0(%sTOKENTYPE),\n",name); lineno++;
   for(i=0; i<arraysize; i++){
     if( types[i]==0 ) continue;
@@ -3841,7 +3841,7 @@ void print_stack_union(
 
   fprintf(out,"impl Default for YYMINORTYPE {\n"); lineno++;
   fprintf(out,"    fn default() -> YYMINORTYPE {\n"); lineno++;
-  fprintf(out,"        YYMINORTYPE::yyinit(0)\n"); lineno++;
+  fprintf(out,"        YYMINORTYPE::yyinit()\n"); lineno++;
   fprintf(out,"    }\n"); lineno++;
   fprintf(out,"}\n"); lineno++;
 
