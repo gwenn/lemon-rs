@@ -20,7 +20,7 @@ NDEBUG = []
 
 [dependencies]
 # FIXME optional when NDEBUG
-log = "0.3"
+log = "0.4"
 smallvec = "0.6"
 
 #[build-dependencies]

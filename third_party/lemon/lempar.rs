@@ -261,7 +261,7 @@ impl IndexMut<i8> for yyParser {
 }
 
 #[cfg(not(feature = "NDEBUG"))]
-use log::LogLevel::Debug;
+use log::Level::Debug;
 #[cfg(not(feature = "NDEBUG"))]
 static TARGET: &'static str = "Parse";
 

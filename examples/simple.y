@@ -12,7 +12,7 @@ extern crate log;
 extern crate smallvec;
 
 use std::io::{self, Write};
-use log::{LogLevel, LogLevelFilter, LogMetadata, LogRecord, SetLoggerError};
+use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 
 pub struct Context {
     expr: Option<Expr>,
@@ -85,25 +85,28 @@ fn main() {
     assert_eq!(s, "Some(Binary(Add, Binary(Multiply, Number(50), Number(125)), Number(125)))");
 }
 
+static LOGGER: Logger = Logger;
 struct Logger;
 
 impl log::Log for Logger {
-    fn enabled(&self, metadata: &LogMetadata) -> bool {
-        metadata.level() <= LogLevel::Debug
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Debug
     }
 
-    fn log(&self, record: &LogRecord) {
+    fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
             writeln!(io::stderr(), "{} - {}", record.level(), record.args()).unwrap();
         }
     }
+
+    fn flush(&self) {
+    }
 }
 
 fn init_logger() -> Result<(), SetLoggerError> {
-    log::set_logger(|max_log_level| {
-        max_log_level.set(LogLevelFilter::Debug);
-        Box::new(Logger)
-    })
+    try!(log::set_logger(&LOGGER));
+    log::set_max_level(LevelFilter::Debug);
+    Ok(())
 }
 }
 
