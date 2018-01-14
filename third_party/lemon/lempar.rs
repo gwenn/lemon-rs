@@ -67,13 +67,15 @@
 **                       defined, then do no error processing.
 **    YYNSTATE           the combined number of states.
 **    YYNRULE            the number of rules in the grammar
+**    YYNTOKEN           Number of terminal symbols
 **    YY_MAX_SHIFT       Maximum value for shift actions
 **    YY_MIN_SHIFTREDUCE Minimum value for shift-reduce actions
 **    YY_MAX_SHIFTREDUCE Maximum value for shift-reduce actions
-**    YY_MIN_REDUCE      Maximum value for reduce actions
 **    YY_ERROR_ACTION    The yy_action[] code for syntax error
 **    YY_ACCEPT_ACTION   The yy_action[] code for accept
 **    YY_NO_ACTION       The yy_action[] code for no-op
+**    YY_MIN_REDUCE      Minimum value for reduce actions
+**    YY_MAX_REDUCE      Maximum value for reduce actions
 */
 /************* Begin control #defines *****************************************/
 %%
@@ -106,9 +108,6 @@
 **   N between YY_MIN_SHIFTREDUCE       Shift to an arbitrary state then
 **     and YY_MAX_SHIFTREDUCE           reduce by rule N-YY_MIN_SHIFTREDUCE.
 **
-**   N between YY_MIN_REDUCE            Reduce by rule N-YY_MIN_REDUCE
-**     and YY_MAX_REDUCE
-**
 **   N == YY_ERROR_ACTION               A syntax error has occurred.
 **
 **   N == YY_ACCEPT_ACTION              The parser accepts its input.
@@ -116,25 +115,22 @@
 **   N == YY_NO_ACTION                  No such action.  Denotes unused
 **                                      slots in the yy_action[] table.
 **
+**   N between YY_MIN_REDUCE            Reduce by rule N-YY_MIN_REDUCE
+**     and YY_MAX_REDUCE
+**
 ** The action table is constructed as a single large table named yy_action[].
 ** Given state S and lookahead X, the action is computed as either:
 **
 **    (A)   N = yy_action[ yy_shift_ofst[S] + X ]
 **    (B)   N = yy_default[S]
 **
-** The (A) formula is preferred.  The B formula is used instead if:
-**    (1)  The yy_shift_ofst[S]+X value is out of range, or
-**    (2)  yy_lookahead[yy_shift_ofst[S]+X] is not equal to X, or
-**    (3)  yy_shift_ofst[S] equal YY_SHIFT_USE_DFLT.
-** (Implementation note: YY_SHIFT_USE_DFLT is chosen so that
-** YY_SHIFT_USE_DFLT+X will be out of range for all possible lookaheads X.
-** Hence only tests (1) and (2) need to be evaluated.)
+** The (A) formula is preferred.  The B formula is used instead if
+** yy_lookahead[yy_shift_ofst[S]+X] is not equal to X.
 **
 ** The formulas above are for computing the action when the lookahead is
 ** a terminal symbol.  If the lookahead is a non-terminal (as occurs after
 ** a reduce action) then the yy_reduce_ofst[] array is used in place of
-** the yy_shift_ofst[] array and YY_REDUCE_USE_DFLT is used in place of
-** YY_SHIFT_USE_DFLT.
+** the yy_shift_ofst[] array.
 **
 ** The following are the tables generated in this section:
 **
@@ -268,7 +264,7 @@ static TARGET: &'static str = "Parse";
 
 /* For tracing shifts, the names of all terminals and nonterminals
 ** are required.  The following table supplies these names */
-#[cfg(not(feature = "NDEBUG"))]
+#[cfg(any(feature = "YYCOVERAGE", not(feature = "NDEBUG")))]
 %%
 
 /* For tracing reduce actions, the names of all rules are required.
@@ -396,6 +392,41 @@ impl yyParser {
     fn yyhwm_incr(&mut self) {}
 }
 
+/* This array of booleans keeps track of the parser statement
+** coverage.  The element yycoverage[X][Y] is set when the parser
+** is in state X and has a lookahead token Y.  In a well-tested
+** systems, every element of this matrix should end up being set.
+*/
+#[cfg(feature = "YYCOVERAGE")]
+static yycoverage: [[bool; YYNTOKEN]; YYNSTATE] = [];
+
+/*
+** Write into out a description of every state/lookahead combination that
+**
+**   (1)  has not been used by the parser, and
+**   (2)  is not a syntax error.
+**
+** Return the number of missed state/lookahead combinations.
+*/
+#[cfg(feature = "YYCOVERAGE")]
+fn ParseCoverage(/*FILE *out*/) -> i32 {
+  //int stateno, iLookAhead, i;
+  let mut nMissed = 0;
+  /*for(stateno=0; stateno<YYNSTATE; stateno++){
+    i = yy_shift_ofst[stateno];
+    for(iLookAhead=0; iLookAhead<YYNTOKEN; iLookAhead++){
+      if( yy_lookahead[i+iLookAhead]!=iLookAhead ) continue;
+      if( yycoverage[stateno][iLookAhead]==0 ) nMissed++;
+      if( out ){
+        fprintf(out,"State %d lookahead %s %s\n", stateno,
+                yyTokenName[iLookAhead],
+                yycoverage[stateno][iLookAhead] ? "ok" : "missed");
+      }
+    }
+  }*/
+  return nMissed;
+}
+
 /*
 ** Find the appropriate action for a parser given the terminal
 ** look-ahead token iLookAhead.
@@ -410,15 +441,20 @@ impl yyParser {
         let mut i: i32;
         let stateno = self[0].stateno;
 
-        if stateno >= YY_MIN_REDUCE {
+        if stateno > YY_MAX_SHIFT {
             return stateno;
         }
         assert!(stateno <= YY_SHIFT_COUNT);
+        if cfg!(feature = "YYCOVERAGE") {
+            //yycoverage[stateno][iLookAhead] = true;
+        }
         loop {
             i = yy_shift_ofst[stateno as usize] as i32;
+            assert!(i >= 0 && i+YYNTOKEN as i32 <= yy_lookahead.len() as i32);
             assert_ne!(iLookAhead, YYNOCODE);
+            assert!(iLookAhead < YYNTOKEN);
             i += iLookAhead as i32;
-            if i < 0 || i >= (YY_ACTTAB_COUNT as i32) || yy_lookahead[i as usize] != iLookAhead {
+            if yy_lookahead[i as usize] != iLookAhead {
                 if YYFALLBACK {
                     let mut iFallback: YYCODETYPE = 0; /* Fallback token */
                     if (iLookAhead as usize) < yyFallback.len() && {
@@ -483,7 +519,6 @@ fn yy_find_reduce_action(
         assert!(stateno <= YY_REDUCE_COUNT);
     }
     i = yy_reduce_ofst[stateno as usize] as i32;
-    assert_ne!(i, YY_REDUCE_USE_DFLT as i32);
     assert_ne!(iLookAhead, YYNOCODE);
     i += iLookAhead as i32;
     if YYERRORSYMBOL > 0 {
@@ -522,21 +557,24 @@ impl yyParser {
 */
 impl yyParser {
     #[allow(non_snake_case)]
-    fn yyTraceShift(&self, yyNewState: YYACTIONTYPE) {
+    fn yyTraceShift(&self, yyNewState: YYACTIONTYPE, zTag: &str) {
         if cfg!(not(feature = "NDEBUG")) {
             let yytos = &self[0];
             if yyNewState < YYNSTATE {
                 debug!(
                     target: TARGET,
-                    "Shift '{}', go to state {}",
+                    "{} '{}', go to state {}",
+                    zTag,
                     yyTokenName[yytos.major as usize],
                     yyNewState
                 );
             } else {
                 debug!(
                     target: TARGET,
-                    "Shift '{}'",
-                    yyTokenName[yytos.major as usize]
+                    "{} '{}', pending reduce {}",
+                    zTag,
+                    yyTokenName[yytos.major as usize],
+                    yyNewState - YY_MIN_REDUCE
                 );
             }
         }
@@ -566,7 +604,7 @@ impl yyParser {
             minor: YYMINORTYPE::yy0(yyMinor),
         };
         self.push(yytos);
-        self.yyTraceShift(yyNewState);
+        self.yyTraceShift(yyNewState, "Shift");
     }
 }
 
@@ -583,23 +621,41 @@ struct yyRuleInfoEntry {
 /*
 ** Perform a reduce action and the shift that must immediately
 ** follow the reduce.
+**
+** The yyLookahead and yyLookaheadToken parameters provide reduce actions
+** access to the lookahead token (if any).  The yyLookahead will be YYNOCODE
+** if the lookahead token has already been consumed.  As this procedure is
+** only called from one place, optimizing compilers will in-line it, which
+** means that the extra parameters have no performance impact.
 */
 impl yyParser {
     fn yy_reduce(
         &mut self,
         yyruleno: YYACTIONTYPE, /* Number of the rule by which to reduce */
+        yyLookahead: YYCODETYPE,             /* Lookahead token, or YYNOCODE if none */
+        yyLookaheadToken: ParseTOKENTYPE  /* Value of the lookahead token */
     ) {
         let yygoto: YYCODETYPE; /* The next state */
         let yyact: YYACTIONTYPE; /* The next action */
         let yysize: i8; /* Amount to pop the stack */
         if cfg!(not(feature = "NDEBUG")) && (yyruleno as usize) < yyRuleName.len() {
             let yysize = yyRuleInfo[yyruleno as usize].nrhs;
-            debug!(
+            if yysize != 0 {
+                debug!(
                 target: TARGET,
-                "Reduce [{}], go to state {}.",
+                "Reduce {} [{}], go to state {}.",
+                yyruleno,
                 yyRuleName[yyruleno as usize],
                 self[yysize].stateno
-            );
+                );
+            } else {
+                debug!(
+                target: TARGET,
+                "Reduce {} [{}].",
+                yyruleno,
+                yyRuleName[yyruleno as usize]
+                );
+            }
         }
 
         /* Check that the stack is large enough to grow by a single entry
@@ -636,18 +692,13 @@ impl yyParser {
         /* It is not possible for a REDUCE to be followed by an error */
         assert_ne!(yyact, YY_ERROR_ACTION);
 
-        if yyact == YY_ACCEPT_ACTION {
-            self.yyidx_shift(yysize);
-            self.yy_accept();
-        } else {
-            self.yyidx_shift(yysize + 1);
-            {
-                let yymsp = &mut self[0];
-                yymsp.stateno = yyact;
-                yymsp.major = yygoto;
-            }
-            self.yyTraceShift(yyact);
+        self.yyidx_shift(yysize + 1);
+        {
+            let yymsp = &mut self[0];
+            yymsp.stateno = yyact;
+            yymsp.major = yygoto;
         }
+        self.yyTraceShift(yyact, "... then shift");
     }
 }
 
@@ -745,19 +796,28 @@ impl yyParser {
         }
 
         if cfg!(not(feature = "NDEBUG")) {
-            debug!(target: TARGET, "Input '{}'", yyTokenName[yymajor as usize]);
+            let stateno = self[0].stateno;
+            if stateno < YY_MIN_REDUCE {
+                debug!(target: TARGET, "Input '{}' in state {}", yyTokenName[yymajor as usize],stateno);
+            } else {
+                debug!(target: TARGET, "Input '{}' with pending reduce {}", yyTokenName[yymajor as usize],stateno-YY_MIN_REDUCE);
+            }
         }
 
         loop {
             yyact = self.yy_find_shift_action(yymajor);
-            if yyact <= YY_MAX_SHIFTREDUCE {
+            if yyact >= YY_MIN_REDUCE {
+                self.yy_reduce(yyact - YY_MIN_REDUCE,yymajor,yyminor);
+            } else if yyact <= YY_MAX_SHIFTREDUCE {
                 self.yy_shift(yyact, yymajor, yyminor);
                 if cfg!(not(feature = "YYNOERRORRECOVERY")) {
                     self.yyerrcnt -= 1;
                 }
                 yymajor = YYNOCODE;
-            } else if yyact <= YY_MAX_REDUCE {
-                self.yy_reduce(yyact - YY_MIN_REDUCE);
+            } else if yyact == YY_ACCEPT_ACTION {
+                self.yyidx_shift(-1);
+                self.yy_accept();
+                return;
             } else {
                 assert_eq!(yyact, YY_ERROR_ACTION);
                 if cfg!(not(feature = "NDEBUG")) {
