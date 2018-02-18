@@ -449,11 +449,11 @@ impl yyParser {
             //yycoverage[stateno][iLookAhead] = true;
         }
         loop {
-            i = yy_shift_ofst[stateno as usize] as i32;
-            assert!(i >= 0 && i+YYNTOKEN as i32 <= yy_lookahead.len() as i32);
+            i = i32::from(yy_shift_ofst[stateno as usize]);
+            assert!(i >= 0 && i+i32::from(YYNTOKEN) <= yy_lookahead.len() as i32);
             assert_ne!(iLookAhead, YYNOCODE);
             assert!(iLookAhead < YYNTOKEN);
-            i += iLookAhead as i32;
+            i += i32::from(iLookAhead);
             if yy_lookahead[i as usize] != iLookAhead {
                 if YYFALLBACK {
                     let mut iFallback: YYCODETYPE = 0; /* Fallback token */
@@ -476,9 +476,9 @@ impl yyParser {
                     }
                 }
                 if YYWILDCARD > 0 {
-                    let j = i - (iLookAhead + YYWILDCARD) as i32;
+                    let j = i - i32::from(iLookAhead + YYWILDCARD);
                     if (YY_SHIFT_MIN + YYWILDCARD >= 0 || j >= 0) &&
-                        (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT || j < YY_ACTTAB_COUNT as i32) &&
+                        (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT || j < i32::from(YY_ACTTAB_COUNT)) &&
                         yy_lookahead[j as usize] == YYWILDCARD &&
                         iLookAhead > 0
                     {
@@ -518,15 +518,15 @@ fn yy_find_reduce_action(
     } else {
         assert!(stateno <= YY_REDUCE_COUNT);
     }
-    i = yy_reduce_ofst[stateno as usize] as i32;
+    i = i32::from(yy_reduce_ofst[stateno as usize]);
     assert_ne!(iLookAhead, YYNOCODE);
-    i += iLookAhead as i32;
+    i += i32::from(iLookAhead);
     if YYERRORSYMBOL > 0 {
-        if i < 0 || i >= (YY_ACTTAB_COUNT as i32) || yy_lookahead[i as usize] != iLookAhead {
+        if i < 0 || i >= i32::from(YY_ACTTAB_COUNT) || yy_lookahead[i as usize] != iLookAhead {
             return yy_default[stateno as usize];
         }
     } else {
-        assert!(i >= 0 && i < (YY_ACTTAB_COUNT as i32));
+        assert!(i >= 0 && i < i32::from(YY_ACTTAB_COUNT));
         assert_eq!(yy_lookahead[i as usize], iLookAhead);
     }
     yy_action[i as usize]

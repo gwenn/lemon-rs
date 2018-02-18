@@ -11,7 +11,6 @@
 extern crate log;
 extern crate smallvec;
 
-use std::io::{self, Write};
 use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 
 pub struct Context {
@@ -95,7 +94,7 @@ impl log::Log for Logger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            writeln!(io::stderr(), "{} - {}", record.level(), record.args()).unwrap();
+            eprintln!("{} - {}", record.level(), record.args());
         }
     }
 
