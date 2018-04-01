@@ -450,7 +450,8 @@ impl yyParser {
         }
         loop {
             i = i32::from(yy_shift_ofst[stateno as usize]);
-            assert!(i >= 0 && i+i32::from(YYNTOKEN) <= yy_lookahead.len() as i32);
+            assert!(i >= 0);
+            assert!(i+i32::from(YYNTOKEN) <= yy_lookahead.len() as i32);
             assert_ne!(iLookAhead, YYNOCODE);
             assert!(iLookAhead < YYNTOKEN);
             i += i32::from(iLookAhead);
