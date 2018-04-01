@@ -36,6 +36,11 @@ rlemon$(BEXE): $(TOP)/third_party/lemon/lemon.c
 simple: rlemon$(BEXE) $(TOP)/examples/simple.y $(TOP)/third_party/lemon/lempar.rs
 	./rlemon$(BEXE) -m -T$(TOP)/third_party/lemon/lempar.rs $(TOP)/examples/simple.y
 
+# Rules to build sqlite parser
+#
+sqlite: rlemon$(BEXE) $(TOP)/src/parse.y $(TOP)/third_party/lemon/lempar.rs
+	./rlemon$(BEXE) -m -T$(TOP)/third_party/lemon/lempar.rs $(TOP)/src/parse.y
+
 clean:
 	-rm -f rlemon$(BEXE)
 	-rm -f $(TOP)/examples/simple.out
