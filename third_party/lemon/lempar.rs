@@ -436,10 +436,10 @@ impl yyParser {
     fn yy_find_shift_action(
         &self,
         iLookAhead: YYCODETYPE, /* The look-ahead token */
+        stateno: YYACTIONTYPE, /* Current state number */
     ) -> YYACTIONTYPE {
         let mut iLookAhead = iLookAhead;
         let mut i: i32;
-        let stateno = self[0].stateno;
 
         if stateno > YY_MAX_SHIFT {
             return stateno;
@@ -635,7 +635,7 @@ impl yyParser {
         yyruleno: YYACTIONTYPE, /* Number of the rule by which to reduce */
         yyLookahead: YYCODETYPE,             /* Lookahead token, or YYNOCODE if none */
         yyLookaheadToken: ParseTOKENTYPE  /* Value of the lookahead token */
-    ) {
+    ) -> YYACTIONTYPE {
         let yygoto: YYCODETYPE; /* The next state */
         let yyact: YYACTIONTYPE; /* The next action */
         let yysize: i8; /* Amount to pop the stack */
@@ -700,6 +700,7 @@ impl yyParser {
             yymsp.major = yygoto;
         }
         self.yyTraceShift(yyact, "... then shift");
+        return yyact;
     }
 }
 
@@ -796,25 +797,28 @@ impl yyParser {
             yyendofinput = yymajor == 0;
         }
 
+        yyact = self[0].stateno;
         if cfg!(not(feature = "NDEBUG")) {
-            let stateno = self[0].stateno;
-            if stateno < YY_MIN_REDUCE {
-                debug!(target: TARGET, "Input '{}' in state {}", yyTokenName[yymajor as usize],stateno);
+            if yyact < YY_MIN_REDUCE {
+                debug!(target: TARGET, "Input '{}' in state {}",
+                        yyTokenName[yymajor as usize],yyact);
             } else {
-                debug!(target: TARGET, "Input '{}' with pending reduce {}", yyTokenName[yymajor as usize],stateno-YY_MIN_REDUCE);
+                debug!(target: TARGET, "Input '{}' with pending reduce {}",
+                        yyTokenName[yymajor as usize],yyact-YY_MIN_REDUCE);
             }
         }
 
         loop {
-            yyact = self.yy_find_shift_action(yymajor);
+            assert_eq!(yyact, self[0].stateno);
+            yyact = self.yy_find_shift_action(yymajor,yyact);
             if yyact >= YY_MIN_REDUCE {
-                self.yy_reduce(yyact - YY_MIN_REDUCE,yymajor,yyminor);
+                yyact = self.yy_reduce(yyact - YY_MIN_REDUCE,yymajor,yyminor);
             } else if yyact <= YY_MAX_SHIFTREDUCE {
                 self.yy_shift(yyact, yymajor, yyminor);
                 if cfg!(not(feature = "YYNOERRORRECOVERY")) {
                     self.yyerrcnt -= 1;
                 }
-                yymajor = YYNOCODE;
+                break;
             } else if yyact == YY_ACCEPT_ACTION {
                 self.yyidx_shift(-1);
                 self.yy_accept();
@@ -877,6 +881,8 @@ impl yyParser {
                     }
                     self.yyerrcnt = 3;
                     yyerrorhit = true;
+                    if yymajor==YYNOCODE { break; }
+                    yyact = self[0].stateno;
                 } else if cfg!(feature = "YYNOERRORRECOVERY") {
                     /* If the YYNOERRORRECOVERY macro is defined, then do not attempt to
                      ** do any kind of error recovery.  Instead, simply invoke the syntax
@@ -886,8 +892,7 @@ impl yyParser {
                      ** they intend to abandon the parse upon the first syntax error seen.
                      */
                     self.yy_syntax_error(yymajor, yyminor);
-                    yymajor = YYNOCODE;
-
+                    break;
                 } else {
                     /* YYERRORSYMBOL is not defined */
                     /* This is what we do if the grammar does not define ERROR:
@@ -909,10 +914,10 @@ impl yyParser {
                             self.yyerrcnt = -1;
                         }
                     }
-                    yymajor = YYNOCODE;
+                    break;
                 }
             }
-            if yymajor == YYNOCODE || self.yyidx <= 0 {
+            if self.yyidx <= 0 {
                 break;
             }
         }
