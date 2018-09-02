@@ -54,6 +54,7 @@ fn main() {
                     }
                     TokenType::Create => debug_assert!(b"CREATE".eq_ignore_ascii_case(token)),
                     TokenType::Cross => debug_assert!(b"CROSS".eq_ignore_ascii_case(token)),
+                    TokenType::Current => debug_assert!(b"CURRENT".eq_ignore_ascii_case(token)),
                     TokenType::CurrentDate => {
                         debug_assert!(b"CURRENT_DATE".eq_ignore_ascii_case(token))
                     }
@@ -73,6 +74,7 @@ fn main() {
                     TokenType::Desc => debug_assert!(b"DESC".eq_ignore_ascii_case(token)),
                     TokenType::Detach => debug_assert!(b"DETACH".eq_ignore_ascii_case(token)),
                     TokenType::Distinct => debug_assert!(b"DISTINCT".eq_ignore_ascii_case(token)),
+                    TokenType::Do => debug_assert!(b"DO".eq_ignore_ascii_case(token)),
                     TokenType::Drop => debug_assert!(b"DROP".eq_ignore_ascii_case(token)),
                     TokenType::Each => debug_assert!(b"EACH".eq_ignore_ascii_case(token)),
                     TokenType::Else => debug_assert!(b"ELSE".eq_ignore_ascii_case(token)),
@@ -83,6 +85,8 @@ fn main() {
                     TokenType::Exists => debug_assert!(b"EXISTS".eq_ignore_ascii_case(token)),
                     TokenType::Explain => debug_assert!(b"EXPLAIN".eq_ignore_ascii_case(token)),
                     TokenType::Fail => debug_assert!(b"FAIL".eq_ignore_ascii_case(token)),
+                    TokenType::Filter => debug_assert!(b"FILTER".eq_ignore_ascii_case(token)),
+                    TokenType::Following => debug_assert!(b"FOLLOWING".eq_ignore_ascii_case(token)),
                     TokenType::For => debug_assert!(b"FOR".eq_ignore_ascii_case(token)),
                     TokenType::Foreign => debug_assert!(b"FOREIGN".eq_ignore_ascii_case(token)),
                     TokenType::From => debug_assert!(b"FROM".eq_ignore_ascii_case(token)),
@@ -113,6 +117,7 @@ fn main() {
                     TokenType::Natural => debug_assert!(b"NATURAL".eq_ignore_ascii_case(token)),
                     TokenType::No => debug_assert!(b"NO".eq_ignore_ascii_case(token)),
                     TokenType::Not => debug_assert!(b"NOT".eq_ignore_ascii_case(token)),
+                    TokenType::Nothing => debug_assert!(b"NOTHING".eq_ignore_ascii_case(token)),
                     TokenType::NotNull => debug_assert!(b"NOTNULL".eq_ignore_ascii_case(token)),
                     TokenType::Null => debug_assert!(b"NULL".eq_ignore_ascii_case(token)),
                     TokenType::Of => debug_assert!(b"OF".eq_ignore_ascii_case(token)),
@@ -121,11 +126,15 @@ fn main() {
                     TokenType::Or => debug_assert!(b"OR".eq_ignore_ascii_case(token)),
                     TokenType::Order => debug_assert!(b"ORDER".eq_ignore_ascii_case(token)),
                     TokenType::Outer => debug_assert!(b"OUTER".eq_ignore_ascii_case(token)),
+                    TokenType::Over => debug_assert!(b"OVER".eq_ignore_ascii_case(token)),
+                    TokenType::Partition => debug_assert!(b"PARTITION".eq_ignore_ascii_case(token)),
                     TokenType::Plan => debug_assert!(b"PLAN".eq_ignore_ascii_case(token)),
                     TokenType::Pragma => debug_assert!(b"PRAGMA".eq_ignore_ascii_case(token)),
+                    TokenType::Preceding => debug_assert!(b"PRECEDING".eq_ignore_ascii_case(token)),
                     TokenType::Primary => debug_assert!(b"PRIMARY".eq_ignore_ascii_case(token)),
                     TokenType::Query => debug_assert!(b"QUERY".eq_ignore_ascii_case(token)),
                     TokenType::Raise => debug_assert!(b"RAISE".eq_ignore_ascii_case(token)),
+                    TokenType::Range => debug_assert!(b"RANGE".eq_ignore_ascii_case(token)),
                     TokenType::Recursive => debug_assert!(b"RECURSIVE".eq_ignore_ascii_case(token)),
                     TokenType::References => {
                         debug_assert!(b"REFERENCES".eq_ignore_ascii_case(token))
@@ -139,6 +148,7 @@ fn main() {
                     TokenType::Right => debug_assert!(b"RIGHT".eq_ignore_ascii_case(token)),
                     TokenType::Rollback => debug_assert!(b"ROLLBACK".eq_ignore_ascii_case(token)),
                     TokenType::Row => debug_assert!(b"ROW".eq_ignore_ascii_case(token)),
+                    TokenType::Rows => debug_assert!(b"ROWS".eq_ignore_ascii_case(token)),
                     TokenType::Savepoint => debug_assert!(b"SAVEPOINT".eq_ignore_ascii_case(token)),
                     TokenType::Select => debug_assert!(b"SELECT".eq_ignore_ascii_case(token)),
                     TokenType::Set => debug_assert!(b"SET".eq_ignore_ascii_case(token)),
@@ -154,6 +164,7 @@ fn main() {
                         debug_assert!(b"TRANSACTION".eq_ignore_ascii_case(token))
                     }
                     TokenType::Trigger => debug_assert!(b"TRIGGER".eq_ignore_ascii_case(token)),
+                    TokenType::Unbounded => debug_assert!(b"UNBOUNDED".eq_ignore_ascii_case(token)),
                     TokenType::Union => debug_assert!(b"UNION".eq_ignore_ascii_case(token)),
                     TokenType::Unique => debug_assert!(b"UNIQUE".eq_ignore_ascii_case(token)),
                     TokenType::Update => debug_assert!(b"UPDATE".eq_ignore_ascii_case(token)),
@@ -164,6 +175,7 @@ fn main() {
                     TokenType::Virtual => debug_assert!(b"VIRTUAL".eq_ignore_ascii_case(token)),
                     TokenType::When => debug_assert!(b"WHEN".eq_ignore_ascii_case(token)),
                     TokenType::Where => debug_assert!(b"WHERE".eq_ignore_ascii_case(token)),
+                    TokenType::Window => debug_assert!(b"WINDOW".eq_ignore_ascii_case(token)),
                     TokenType::With => debug_assert!(b"WITH".eq_ignore_ascii_case(token)),
                     TokenType::Without => debug_assert!(b"WITHOUT".eq_ignore_ascii_case(token)),
                     TokenType::BitAnd => debug_assert_eq!(b"&", token),
@@ -198,9 +210,9 @@ fn main() {
                         && token[0] == b'0'
                         && (token[1] == b'x' || token[1] == b'X')
                     {
-                        debug_assert!(
-                            i64::from_str_radix(str::from_utf8(&token[2..]).unwrap(), 16).is_ok()
-                        );
+                        if let Err(err) = i64::from_str_radix(str::from_utf8(&token[2..]).unwrap(), 16) {
+                            eprintln!("Err: {} in {}", err, arg);
+                        }
                     } else {
                         /*let raw = str::from_utf8(token).unwrap();
                         let res = raw.parse::<i64>();
