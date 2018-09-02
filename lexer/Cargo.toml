@@ -1,0 +1,21 @@
+[package]
+name = "scan-rs"
+version = "0.1.0"
+authors = ["gwenn"]
+description = "Streaming scanner"
+#documentation = "http://docs.rs/scan-rs"
+repository = "https://github.com/gwenn/lemon-rs"
+#readme = "README.md"
+#categories = ["parser-implementations"]
+keywords = ["scanner", "tokenizer"]
+license = "Unlicense/MIT"
+
+[badges]
+#travis-ci = { repository = "gwenn/scan-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+log = "0.4"
+memchr = "2.0"
+phf = "0.7"
+phf_macros = "0.7"

@@ -2,3 +2,4 @@ target
 rlemon
 *.h
 *.out
+Cargo.lock
