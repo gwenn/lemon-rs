@@ -451,11 +451,11 @@ impl yyParser {
         loop {
             i = i32::from(yy_shift_ofst[stateno as usize]);
             assert!(i >= 0);
-            assert!(i+i32::from(YYNTOKEN) <= yy_lookahead.len() as i32);
+            //assert!(i+i32::from(YYNTOKEN) <= yy_lookahead.len() as i32);
             assert_ne!(iLookAhead, YYNOCODE);
             assert!(iLookAhead < YYNTOKEN);
             i += i32::from(iLookAhead);
-            if yy_lookahead[i as usize] != iLookAhead {
+            if (i as usize) >= yy_lookahead.len() || yy_lookahead[i as usize] != iLookAhead {
                 if YYFALLBACK {
                     let mut iFallback: YYCODETYPE = 0; /* Fallback token */
                     if (iLookAhead as usize) < yyFallback.len() && {
@@ -480,6 +480,7 @@ impl yyParser {
                     let j = i - i32::from(iLookAhead + YYWILDCARD);
                     if (YY_SHIFT_MIN + YYWILDCARD >= 0 || j >= 0) &&
                         (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT || j < i32::from(YY_ACTTAB_COUNT)) &&
+                        (j as usize) < yy_lookahead.len() &&
                         yy_lookahead[j as usize] == YYWILDCARD &&
                         iLookAhead > 0
                     {
@@ -930,5 +931,18 @@ impl yyParser {
             }
         }
         return;
+    }
+
+/*
+** Return the fallback token corresponding to canonical token iToken, or
+** 0 if iToken has no fallback.
+*/
+    fn parse_fallback(i_token: YYCODETYPE) -> YYCODETYPE {
+        if YYFALLBACK {
+            if (i_token as usize) < yyFallback.len() {
+                return yyFallback[i_token as usize];
+            }
+        }
+        return 0;
     }
 }
