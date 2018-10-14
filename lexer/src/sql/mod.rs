@@ -10,6 +10,139 @@ mod error;
 pub use scan::Splitter;
 pub use sql::error::Error;
 
+pub fn parse(sql: &str) -> Result<Option<()>, Error> {
+    let lexer = Tokenizer::new();
+    let mut s = super::Scanner::new(sql.as_bytes(), lexer);
+    //let ctx = ;
+    //let mut parser = ;
+    let mut last_token_parsed = TokenType::TK_EOF;
+    let mut eof = false;
+    loop {
+        let (token, mut token_type) = match s.scan() {
+            Err(e) => {
+                return Err(e);
+            }
+            Ok(None) => {
+                eof = true;
+                break;
+            }
+            Ok(Some(tuple)) => tuple,
+        };
+        if token_type >= TokenType::TK_WINDOW {
+            debug_assert!(
+                token_type == TokenType::TK_OVER
+                    || token_type == TokenType::TK_FILTER
+                    || token_type == TokenType::TK_WINDOW
+            );
+        }
+        if token_type == TokenType::TK_WINDOW {
+            token_type = analyze_window_keyword();
+        } else if token_type == TokenType::TK_OVER {
+            token_type = analyze_over_keyword(last_token_parsed);
+        } else if token_type == TokenType::TK_FILTER {
+            token_type = analyze_filter_keyword(last_token_parsed);
+        }
+        //parser.sqlite3Parser(token_type, token);
+        last_token_parsed = token_type;
+        if
+        /*ctx.done()*/
+        true {
+            break;
+        }
+    }
+    if last_token_parsed == TokenType::TK_EOF {
+        return Ok(None); // empty input
+    }
+    /* Upon reaching the end of input, call the parser two more times
+    okens TK_SEMI and 0, in that order. */
+    if eof {
+        if last_token_parsed != TokenType::TK_SEMI {
+            //parser.sqlite3Parser(TokenType::TK_SEMI, &";");
+        }
+        //parser.sqlite3Parser(TokenType::TK_EOF, &"");
+    }
+    //parser.sqlite3ParserFinalize();
+    //assert ctx.stmt != null;
+    Ok(Some(()))
+}
+
+/*
+** Return the id of the next token in input.
+*/
+fn get_token() -> TokenType {
+    let mut t = TokenType::TK_ID; /* Token type to return */
+    /*while t == TokenType::TK_SPACE {
+        // FIXME
+    }*/
+    if t == TokenType::TK_ID
+        || t == TokenType::TK_STRING
+        || t == TokenType::TK_JOIN_KW
+        || t == TokenType::TK_WINDOW
+        || t == TokenType::TK_OVER
+    // FIXME || parser::sqlite3ParserFallback(t) == TokenType::TK_ID
+    {
+        t = TokenType::TK_ID;
+    }
+    t
+}
+
+/*
+ ** The following three functions are called immediately after the tokenizer
+ ** reads the keywords WINDOW, OVER and FILTER, respectively, to determine
+ ** whether the token should be treated as a keyword or an SQL identifier.
+ ** This cannot be handled by the usual lemon %fallback method, due to
+ ** the ambiguity in some constructions. e.g.
+ **
+ **   SELECT sum(x) OVER ...
+ **
+ ** In the above, "OVER" might be a keyword, or it might be an alias for the
+ ** sum(x) expression. If a "%fallback ID OVER" directive were added to
+ ** grammar, then SQLite would always treat "OVER" as an alias, making it
+ ** impossible to call a window-function without a FILTER clause.
+ **
+ ** WINDOW is treated as a keyword if:
+ **
+ **   * the following token is an identifier, or a keyword that can fallback
+ **     to being an identifier, and
+ **   * the token after than one is TK_AS.
+ **
+ ** OVER is a keyword if:
+ **
+ **   * the previous token was TK_RP, and
+ **   * the next token is either TK_LP or an identifier.
+ **
+ ** FILTER is a keyword if:
+ **
+ **   * the previous token was TK_RP, and
+ **   * the next token is TK_LP.
+ */
+fn analyze_window_keyword() -> TokenType {
+    let t = get_token();
+    if t != TokenType::TK_ID {
+        return TokenType::TK_ID;
+    };
+    let t = get_token();
+    if t != TokenType::TK_AS {
+        return TokenType::TK_ID;
+    };
+    TokenType::TK_WINDOW
+}
+fn analyze_over_keyword(last_token: TokenType) -> TokenType {
+    if last_token == TokenType::TK_RP {
+        let t = get_token();
+        if t == TokenType::TK_LP || t == TokenType::TK_ID {
+            return TokenType::TK_OVER;
+        }
+    }
+    TokenType::TK_ID
+}
+fn analyze_filter_keyword(last_token: TokenType) -> TokenType {
+    if last_token == TokenType::TK_RP && get_token() == TokenType::TK_LP {
+        return TokenType::TK_FILTER;
+    }
+    TokenType::TK_ID
+}
+
 static KEYWORDS: phf::Map<&[u8], TokenType> = phf_map! {
     b"ABORT" => TokenType::TK_ABORT,
     b"ACTION" => TokenType::TK_ACTION,

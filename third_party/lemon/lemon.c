@@ -4147,7 +4147,7 @@ void ReportTable(
     if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
     else                    prefix = "";
     fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
-    fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n"); lineno++;
+    fprintf(out,"#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]\n"); lineno++;
     fprintf(out,"#[repr(%s)]\n",
       minimum_size_type(0, lemp->nsymbol+1, &szCodeType)); lineno++;
     fprintf(out,"pub enum TokenType {\n"); lineno++;
@@ -4603,7 +4603,7 @@ void ReportHeader(struct lemon *lemp)
   out = file_open(lemp,".h","wb");
   if( out ){
     fprintf(out,"#[allow(non_camel_case_types)]\n");
-    fprintf(out,"#[derive(Clone, Debug, PartialEq, Eq)]\n");
+    fprintf(out,"#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]\n");
     fprintf(out,"#[repr(%s)]\n",
             minimum_size_type(0, lemp->nsymbol+1, 0));
     fprintf(out,"pub enum TokenType {\n");

@@ -4,7 +4,7 @@
 // Renamed manually.
 // To be keep in sync.
 #[allow(non_camel_case_types)]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 #[repr(u16)]
 pub enum TokenType {
     TK_EOF = 0,

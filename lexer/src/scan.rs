@@ -171,7 +171,7 @@ impl<R: Read, S: Splitter> BufRead for Scanner<R, S> {
             unsafe {
                 use std::ptr;
                 ptr::copy(
-                    self.buf.as_mut_ptr().offset(self.pos as isize),
+                    self.buf.as_mut_ptr().add(self.pos),
                     self.buf.as_mut_ptr(),
                     self.cap - self.pos,
                 );
