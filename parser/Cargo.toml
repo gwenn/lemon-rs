@@ -17,6 +17,7 @@ YYTRACKMAXSTACKDEPTH = []
 YYNOERRORRECOVERY = []
 YYSTACKDYNAMIC = []
 NDEBUG = []
+default = ["YYNOERRORRECOVERY"]
 
 [dependencies]
 # FIXME optional when NDEBUG

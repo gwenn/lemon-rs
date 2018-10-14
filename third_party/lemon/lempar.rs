@@ -198,7 +198,7 @@ pub struct yyParser {
     yyidx: usize, /* Index to top element of the stack */
     #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
     yyhwm: usize, /* High-water mark of the stack */
-    #[cfg(not(feature = "YYNOERRORRECOVERY"))]
+    //#[cfg(not(feature = "YYNOERRORRECOVERY"))]
     yyerrcnt: i32, /* Shifts left before out of the error */
 %%                               /* A place to hold %extra_argument */
     yystack: SmallVec<[yyStackEntry; YYSTACKDEPTH]>, /* The parser's stack */
@@ -331,7 +331,7 @@ impl yyParser {
             #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
             yyhwm: 0,
             yystack: SmallVec::new(),
-            #[cfg(not(feature = "YYNOERRORRECOVERY"))]
+            //#[cfg(not(feature = "YYNOERRORRECOVERY"))]
             yyerrcnt: -1,
 %%
         };
@@ -708,8 +708,8 @@ impl yyParser {
 /*
 ** The following code executes when the parse fails
 */
-#[cfg(not(feature = "YYNOERRORRECOVERY"))]
 impl yyParser {
+    #[cfg(not(feature = "YYNOERRORRECOVERY"))]
     fn yy_parse_failed(&mut self) {
         if cfg!(not(feature = "NDEBUG")) {
             error!(target: TARGET, "Fail!");
@@ -722,6 +722,9 @@ impl yyParser {
         /************ Begin %parse_failure code ***************************************/
 %%
         /************ End %parse_failure code *****************************************/
+    }
+    #[cfg(feature = "YYNOERRORRECOVERY")]
+    fn yy_parse_failed(&mut self) {
     }
 }
 
