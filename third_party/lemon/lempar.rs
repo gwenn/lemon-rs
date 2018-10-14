@@ -621,8 +621,8 @@ impl yyParser {
     fn yy_reduce(
         &mut self,
         yyruleno: YYACTIONTYPE, /* Number of the rule by which to reduce */
-        yyLookahead: YYCODETYPE,             /* Lookahead token, or YYNOCODE if none */
-        yyLookaheadToken: ParseTOKENTYPE  /* Value of the lookahead token */
+        _yy_lookahead: YYCODETYPE,             /* Lookahead token, or YYNOCODE if none */
+        _yy_lookahead_token: ParseTOKENTYPE  /* Value of the lookahead token */
     ) -> YYACTIONTYPE {
         let yygoto: YYCODETYPE; /* The next state */
         let yyact: YYACTIONTYPE; /* The next action */
