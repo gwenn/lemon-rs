@@ -1,8 +1,8 @@
 [package]
-name = "lemon-rs"
+name = "sqlite-parser"
 version = "0.0.1"
 authors = ["gwenn"]
-description = "LALR(1) parser generator for Rust based on Lemon"
+description = "SQL parser (as understood by SQLite)"
 #documentation = "http://docs.rs/lemon-rs"
 repository = "https://github.com/gwenn/lemon-rs"
 readme = "README.md"

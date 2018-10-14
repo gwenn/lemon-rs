@@ -1,8 +1,8 @@
 [package]
-name = "scan-rs"
+name = "sqlite-lexer"
 version = "0.1.0"
 authors = ["gwenn"]
-description = "Streaming scanner"
+description = "SQL lexer (as understood by SQLite)"
 #documentation = "http://docs.rs/scan-rs"
 repository = "https://github.com/gwenn/lemon-rs"
 #readme = "README.md"
@@ -19,3 +19,5 @@ log = "0.4"
 memchr = "2.0"
 phf = "0.7"
 phf_macros = "0.7"
+# In Lemon, the tokenizer calls the parser.
+sqlite-parser = { path = "../parser", version = "0.0.1" }

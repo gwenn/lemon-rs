@@ -6,6 +6,7 @@
 extern crate log;
 extern crate memchr;
 extern crate phf;
+extern crate sqlite_parser as parser;
 
 mod scan;
 pub mod sql;
