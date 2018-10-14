@@ -4545,7 +4545,7 @@ void ReportTable(
              && rp2->codeSuffix==rp->codeSuffix ){
         fprintf(out,"      %d => {/* ", rp2->iRule);
         writeRuleText(out, rp2);
-        fprintf(out," */ yytestcase(yyruleno==%d);\n", rp2->iRule); lineno++;
+        fprintf(out," */ debug_assert_eq!(yyruleno, %d);\n", rp2->iRule); lineno++;
         rp2->codeEmitted = 1;
       }
     }
@@ -4562,7 +4562,7 @@ void ReportTable(
     fprintf(out,"      /* (%d) ", rp->iRule);
     writeRuleText(out, rp);
     if( rp->doesReduce ){
-      fprintf(out, " */ yytestcase(yyruleno==%d);\n", rp->iRule); lineno++;
+      fprintf(out, " */ debug_assert_eq!(yyruleno, %d);\n", rp->iRule); lineno++;
     }else{
       fprintf(out, " (OPTIMIZED OUT) */ assert(yyruleno!=%d);\n",
               rp->iRule); lineno++;
