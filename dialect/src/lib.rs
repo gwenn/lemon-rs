@@ -6,8 +6,7 @@ extern crate phf;
 mod token;
 pub use token::TokenType;
 
-// FIXME do not expose this as `pub`:
-pub static KEYWORDS: phf::Map<&[u8], TokenType> = phf_map! {
+static KEYWORDS: phf::Map<&[u8], TokenType> = phf_map! {
     b"ABORT" => TokenType::TK_ABORT,
     b"ACTION" => TokenType::TK_ACTION,
     b"ADD" => TokenType::TK_ADD,
@@ -146,6 +145,30 @@ pub static KEYWORDS: phf::Map<&[u8], TokenType> = phf_map! {
     b"WITHOUT" => TokenType::TK_WITHOUT
 };
 pub const MAX_KEYWORD_LEN: usize = 17;
+
+pub fn is_keyword(name: &str) -> bool {
+    if name.len() < 2 || name.len() > MAX_KEYWORD_LEN || !name.is_ascii() {
+        return false;
+    }
+    if KEYWORDS.contains_key(name.as_bytes()) {
+        return true;
+    }
+    unimplemented!()
+}
+
+/// word must be uppercase
+pub fn keyword_token(word: &[u8]) -> Option<TokenType> {
+    KEYWORDS.get(word).cloned()
+}
+
+pub fn is_identifier(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    let bytes = name.as_bytes();
+    return is_identifier_start(bytes[0])
+        && (bytes.len() == 1 || bytes[1..].iter().all(|b| is_identifier_continue(*b)));
+}
 
 pub fn is_identifier_start(b: u8) -> bool {
     (b >= b'A' && b <= b'Z') || b == b'_' || (b >= b'a' && b <= b'z') || b > b'\x7F'

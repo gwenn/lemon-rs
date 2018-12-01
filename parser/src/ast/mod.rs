@@ -1,5 +1,6 @@
 //! Abstract Syntax Tree
 
+use dialect::{is_identifier, is_keyword};
 use std::fmt::{Display, Formatter, Result, Write};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -346,12 +347,41 @@ pub enum JoinOperator {
     },
 }
 
+impl Display for JoinOperator {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            JoinOperator::Comma => f.write_char(','),
+            JoinOperator::TypedJoin { natural, join_type } => {
+                if *natural {
+                    f.write_str(" NATURAL")?;
+                }
+                if let Some(ref join_type) = join_type {
+                    f.write_char(' ')?;
+                    join_type.fmt(f)?;
+                }
+                f.write_str(" JOIN")
+            }
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum JoinType {
     Left,
     LeftOuter,
     Inner,
     Cross,
+}
+
+impl Display for JoinType {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.write_str(match self {
+            JoinType::Left => "LEFT",
+            JoinType::LeftOuter => "LEFT OUTER",
+            JoinType::Inner => "INNER",
+            JoinType::Cross => "CROSS",
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -373,6 +403,22 @@ pub type Name = String; // TODO distinction between Name and "Name"/[Name]/`Name
 pub struct QualifiedName {
     pub db_name: Option<Name>,
     pub name: Name,
+    pub alias: Option<Name>,
+}
+
+impl Display for QualifiedName {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        if let Some(ref db_name) = self.db_name {
+            double_quote(db_name, f)?;
+            f.write_char('.')?;
+        }
+        double_quote(&self.name, f)?;
+        if let Some(ref alias) = self.alias {
+            f.write_str(" AS ")?;
+            double_quote(alias, f)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -461,6 +507,15 @@ pub enum SortOrder {
     Desc,
 }
 
+impl Display for SortOrder {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.write_str(match self {
+            SortOrder::Asc => "ASC",
+            SortOrder::Desc => "DESC",
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DefaultValue {
     Expr(Expr), // TODO
@@ -473,12 +528,52 @@ pub struct ForeignKeyClause {
     pub args: Vec<RefArg>,
 }
 
+impl Display for ForeignKeyClause {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        double_quote(&self.tbl_name, f)?;
+        f.write_str("DEFERRABLE")?;
+        if let Some(ref columns) = self.columns {
+            f.write_char('(')?;
+            comma(columns, f)?;
+            f.write_char(')')?;
+        }
+        for arg in self.args.iter() {
+            f.write_char(' ')?;
+            arg.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RefArg {
     OnDelete(RefAct),
     OnInsert(RefAct),
     OnUpdate(RefAct),
     Match(Name),
+}
+
+impl Display for RefArg {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            RefArg::OnDelete(ref action) => {
+                f.write_str("ON DELETE ")?;
+                action.fmt(f)
+            }
+            RefArg::OnInsert(ref action) => {
+                f.write_str("ON INSERT ")?;
+                action.fmt(f)
+            }
+            RefArg::OnUpdate(ref action) => {
+                f.write_str("ON UPDATE ")?;
+                action.fmt(f)
+            }
+            RefArg::Match(ref name) => {
+                f.write_str("MATCH ")?;
+                double_quote(name, f)
+            }
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -490,16 +585,51 @@ pub enum RefAct {
     NoAction,
 }
 
+impl Display for RefAct {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.write_str(match self {
+            RefAct::SetNull => "SET NULL",
+            RefAct::SetDefault => "SET DEFAULT",
+            RefAct::Cascade => "CASCADE",
+            RefAct::Restrict => "RESTRICT",
+            RefAct::NoAction => "NO ACTION",
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeferSubclause {
     pub deferrable: bool,
     pub init_deferred: Option<InitDeferredPred>,
 }
 
+impl Display for DeferSubclause {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        if !self.deferrable {
+            f.write_str("NOT ")?;
+        }
+        f.write_str("DEFERRABLE")?;
+        if let Some(init_deferred) = self.init_deferred {
+            f.write_char(' ')?;
+            init_deferred.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum InitDeferredPred {
     InitiallyDeferred,
     InitiallyImmediate, // default
+}
+
+impl Display for InitDeferredPred {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.write_str(match self {
+            InitDeferredPred::InitiallyDeferred => "INITIALLY DEFERRED",
+            InitDeferredPred::InitiallyImmediate => "INITIALLY IMMEDIATE",
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -509,11 +639,38 @@ pub struct IndexedColumn {
     pub order: Option<SortOrder>,
 }
 
+impl Display for IndexedColumn {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        double_quote(&self.col_name, f)?;
+        if let Some(ref collation_name) = self.collation_name {
+            f.write_str(" COLLATE ")?;
+            double_quote(collation_name, f)?;
+        }
+        if let Some(order) = self.order {
+            f.write_char(' ')?;
+            order.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Indexed {
     // idx name
     IndexedBy(Name),
     NotIndexed,
+}
+
+impl Display for Indexed {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            Indexed::IndexedBy(ref name) => {
+                f.write_str("INDEXED BY ")?;
+                double_quote(name, f)
+            }
+            Indexed::NotIndexed => f.write_str("NOT INDEXED"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -546,13 +703,23 @@ pub enum PragmaBody {
     Call(PragmaValue),
 }
 
-pub type PragmaValue = String; // TODO
+pub type PragmaValue = Expr; // TODO
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TriggerTime {
     Before, // default
     After,
     InsteadOf,
+}
+
+impl Display for TriggerTime {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.write_str(match self {
+            TriggerTime::Before => "BEFORE",
+            TriggerTime::After => "AFTER",
+            TriggerTime::InsteadOf => "INSTEAD OF",
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -578,7 +745,7 @@ impl Display for TriggerEvent {
                     } else {
                         f.write_str(", ")?;
                     }
-                    double_quote(f, name)?;
+                    double_quote(name, f)?;
                 }
                 Ok(())
             }
@@ -692,9 +859,40 @@ impl Display for TransactionType {
     }
 }
 
-fn double_quote(f: &mut Formatter, name: &str) -> Result {
+fn comma<I>(items: I, f: &mut Formatter) -> Result
+where
+    I: IntoIterator,
+    I::Item: Display,
+{
+    let iter = items.into_iter();
+    for (i, item) in iter.enumerate() {
+        if i != 0 {
+            f.write_str(", ")?;
+        }
+        item.fmt(f)?;
+    }
+    Ok(())
+}
+
+fn double_quote(name: &str, f: &mut Formatter) -> Result {
     if name.is_empty() {
         return f.write_str("\"\"");
     }
-    unimplemented!()
+    if is_identifier(name) {
+        // identifier must be quoted when they match a keyword...
+        if is_keyword(name) {
+            f.write_char('`')?;
+            f.write_str(name)?;
+            return f.write_char('`');
+        }
+        return f.write_str(name);
+    }
+    f.write_char('"')?;
+    for c in name.chars() {
+        if c == '"' {
+            f.write_char(c)?;
+        }
+        f.write_char(c)?;
+    }
+    f.write_char('"')
 }

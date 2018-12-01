@@ -23,6 +23,7 @@ default = ["YYNOERRORRECOVERY"]
 # FIXME optional when NDEBUG
 log = "0.4"
 smallvec = "0.6"
+sqlite-dialect = { path = "../dialect", version = "0.1.0" }
 
 #[build-dependencies]
 #gcc = "0.3"
