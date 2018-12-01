@@ -334,8 +334,8 @@ impl Splitter for Tokenizer {
                     }
                 } else if eof {
                     return Ok((Some((&data[..1], TokenType::TK_MINUS)), 1));
-                }
-            } /* else ask more data */
+                } // else ask more data
+            }
             b'(' => return Ok((Some((&data[..1], TokenType::TK_LP)), 1)),
             b')' => return Ok((Some((&data[..1], TokenType::TK_RP)), 1)),
             b';' => return Ok((Some((&data[..1], TokenType::TK_SEMI)), 1)),
@@ -376,8 +376,8 @@ impl Splitter for Tokenizer {
                     });
                 } else if eof {
                     return Ok((Some((&data[..1], TokenType::TK_EQ)), 1));
-                }
-            } /* else ask more data to fuse '==' or not */
+                } // else ask more data to fuse '==' or not
+            }
             b'<' => {
                 if let Some(b) = data.get(1) {
                     return Ok(match *b {
@@ -388,8 +388,8 @@ impl Splitter for Tokenizer {
                     });
                 } else if eof {
                     return Ok((Some((&data[..1], TokenType::TK_LT)), 1));
-                }
-            } /* else ask more data */
+                } // else ask more data
+            }
             b'>' => {
                 if let Some(b) = data.get(1) {
                     return Ok(match *b {
@@ -399,8 +399,8 @@ impl Splitter for Tokenizer {
                     });
                 } else if eof {
                     return Ok((Some((&data[..1], TokenType::TK_GT)), 1));
-                }
-            } /* else ask more data */
+                } // else ask more data
+            }
             b'!' => {
                 if let Some(b) = data.get(1) {
                     if *b == b'=' {
@@ -410,8 +410,8 @@ impl Splitter for Tokenizer {
                     }
                 } else if eof {
                     return Err(Error::ExpectedEqualsSign(None));
-                }
-            } /* else ask more data */
+                } // else ask more data
+            }
             b'|' => {
                 if let Some(b) = data.get(1) {
                     return Ok(if *b == b'|' {
@@ -421,8 +421,8 @@ impl Splitter for Tokenizer {
                     });
                 } else if eof {
                     return Ok((Some((&data[..1], TokenType::TK_BITOR)), 1));
-                }
-            } /* else ask more data */
+                } // else ask more data
+            }
             b',' => return Ok((Some((&data[..1], TokenType::TK_COMMA)), 1)),
             b'&' => return Ok((Some((&data[..1], TokenType::TK_BITAND)), 1)),
             b'~' => return Ok((Some((&data[..1], TokenType::TK_BITNOT)), 1)),
@@ -436,8 +436,8 @@ impl Splitter for Tokenizer {
                     }
                 } else if eof {
                     return Ok((Some((&data[..1], TokenType::TK_DOT)), 1));
-                }
-            } /* else ask more data */
+                } // else ask more data
+            }
             b'0'...b'9' => return number(data, eof),
             b'[' => {
                 if let Some(i) = memchr(b']', data) {
