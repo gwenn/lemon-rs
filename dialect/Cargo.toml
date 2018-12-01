@@ -1,13 +1,13 @@
 [package]
-name = "sqlite-lexer"
+name = "sqlite-dialect"
 version = "0.1.0"
 authors = ["gwenn"]
-description = "SQL lexer (as understood by SQLite)"
+description = "SQLite dialect"
 #documentation = "http://docs.rs/scan-rs"
 repository = "https://github.com/gwenn/lemon-rs"
 #readme = "README.md"
 categories = ["parser-implementations"]
-keywords = ["scanner", "tokenizer"]
+keywords = ["sqlite"]
 license = "Unlicense/MIT"
 
 [badges]
@@ -15,8 +15,5 @@ license = "Unlicense/MIT"
 maintenance = { status = "experimental" }
 
 [dependencies]
-log = "0.4"
-memchr = "2.0"
-sqlite-dialect = { path = "../dialect", version = "0.1.0" }
-# In Lemon, the tokenizer calls the parser.
-sqlite-parser = { path = "../parser", version = "0.0.1" }
+phf = "0.7"
+phf_macros = "0.7"

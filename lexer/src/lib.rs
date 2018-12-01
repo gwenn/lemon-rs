@@ -1,11 +1,9 @@
 #![feature(read_initializer)]
-#![feature(plugin)]
-#![plugin(phf_macros)]
 
 #[macro_use]
 extern crate log;
 extern crate memchr;
-extern crate phf;
+extern crate sqlite_dialect as dialect;
 extern crate sqlite_parser as parser;
 
 mod scan;

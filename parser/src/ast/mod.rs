@@ -1,5 +1,7 @@
 //! Abstract Syntax Tree
 
+use std::fmt::{Display, Formatter, Result, Write};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cmd {
     Explain(Stmt),
@@ -562,6 +564,28 @@ pub enum TriggerEvent {
     UpdateOf(Vec<Name>),
 }
 
+impl Display for TriggerEvent {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            TriggerEvent::Delete => f.write_str("DELETE"),
+            TriggerEvent::Insert => f.write_str("INSERT"),
+            TriggerEvent::Update => f.write_str("UPDATE"),
+            TriggerEvent::UpdateOf(ref col_names) => {
+                f.write_str("UPDATE OF")?;
+                for (i, name) in col_names.iter().enumerate() {
+                    if i == 0 {
+                        f.write_char(' ')?;
+                    } else {
+                        f.write_str(", ")?;
+                    }
+                    double_quote(f, name)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TriggerCmd {
     Update {
@@ -574,7 +598,7 @@ pub enum TriggerCmd {
         or_conflict: Option<ResolveType>,
         tbl_name: Name,
         col_names: Option<Vec<Name>>,
-        select: Select,
+        select: Select, // FIXME upsert: Upsert
     },
     Delete {
         tbl_name: Name,
@@ -590,6 +614,18 @@ pub enum ResolveType {
     Fail,
     Ignore,
     Replace,
+}
+
+impl Display for ResolveType {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.write_str(match self {
+            ResolveType::Rollback => "ROLLBACK",
+            ResolveType::Abort => "ABORT",
+            ResolveType::Fail => "FAIL",
+            ResolveType::Ignore => "IGNORE",
+            ResolveType::Replace => "REPLACE",
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -611,15 +647,54 @@ pub struct Type {
     pub size: Option<TypeSize>,
 }
 
+/*
+impl Display for Type {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self.size {
+            None => f.write_str(&self.name),
+            Some(ref size) => write!(f, "{}({})", double_quote(self.name), size),
+        }
+    }
+}
+*/
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeSize {
-    MaxSize(String),
-    TypeSize(String, String),
+    MaxSize(Box<Expr>),
+    TypeSize(Box<Expr>, Box<Expr>),
 }
+
+/*
+impl Display for TypeSize {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            TypeSize::MaxSize(size) => write!(f, "{}", size),
+            TypeSize::TypeSize(size1, size2) => write!(f, "{}, {}", size1, size2),
+        }
+    }
+}
+*/
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TransactionType {
     Deferred, // default
     Immediate,
     Exclusive,
+}
+
+impl Display for TransactionType {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.write_str(match self {
+            TransactionType::Deferred => "DEFERRED",
+            TransactionType::Immediate => "IMMEDIATE",
+            TransactionType::Exclusive => "EXCLUSIVE",
+        })
+    }
+}
+
+fn double_quote(f: &mut Formatter, name: &str) -> Result {
+    if name.is_empty() {
+        return f.write_str("\"\"");
+    }
+    unimplemented!()
 }
