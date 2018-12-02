@@ -125,6 +125,303 @@ pub enum Stmt {
     Vacuum(Option<Name>),
 }
 
+impl Display for Stmt {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            Stmt::AlterTable(tbl_name, body) => {
+                f.write_str("ALTER TABLE ")?;
+                tbl_name.fmt(f)?;
+                f.write_char(' ')?;
+                body.fmt(f)
+            }
+            Stmt::Analyze(obj_name) => {
+                f.write_str("ANALYZE")?;
+                if let Some(obj_name) = obj_name {
+                    f.write_char(' ')?;
+                    obj_name.fmt(f)?;
+                }
+                Ok(())
+            }
+            Stmt::Attach { expr, db_name, key } => {
+                f.write_str("ATTACH ")?;
+                expr.fmt(f)?;
+                f.write_str(" AS ")?;
+                db_name.fmt(f)?;
+                if let Some(key) = key {
+                    f.write_str(" KEY ")?;
+                    key.fmt(f)?;
+                }
+                Ok(())
+            }
+            Stmt::Begin(tx_type, tx_name) => {
+                f.write_str("BEGIN")?;
+                if let Some(tx_type) = tx_type {
+                    f.write_char(' ')?;
+                    tx_type.fmt(f)?;
+                }
+                if let Some(tx_name) = tx_name {
+                    f.write_str(" TRANSACTION ")?;
+                    tx_name.fmt(f)?;
+                }
+                Ok(())
+            }
+            Stmt::Commit(tx_name) => {
+                f.write_str("COMMIT ")?;
+                if let Some(tx_name) = tx_name {
+                    f.write_str(" TRANSACTION ")?;
+                    tx_name.fmt(f)?;
+                }
+                Ok(())
+            }
+            Stmt::CreateIndex {
+                unique,
+                if_not_exists,
+                idx_name,
+                tbl_name,
+                columns,
+                where_clause,
+            } => {
+                unimplemented!()
+            }
+            Stmt::CreateTable {
+                temporary,
+                if_not_exists,
+                tbl_name,
+                body,
+            } => {
+                unimplemented!()
+            }
+            Stmt::CreateTrigger {
+                temporary,
+                if_not_exists,
+                trigger_name,
+                time,
+                event,
+                tbl_name,
+                for_each_row,
+                when_clause,
+                commands,
+            } => {
+                unimplemented!()
+            }
+            Stmt::CreateView {
+                temporary,
+                if_not_exists,
+                view_name,
+                columns,
+                select,
+            } => {
+                unimplemented!()
+            }
+            Stmt::CreateVirtualTable {
+                if_not_exists,
+                tbl_name,
+                module_name,
+                args,
+            } => {
+                unimplemented!()
+            }
+            Stmt::Delete {
+                with,
+                tbl_name,
+                indexed,
+                where_clause,
+                order_by,
+                limit,
+            } => {
+                if let Some(with) = with {
+                    with.fmt(f)?;
+                    f.write_char(' ')?;
+                }
+                f.write_str("DELETE FROM ")?;
+                tbl_name.fmt(f)?;
+                if let Some(indexed) = indexed {
+                    f.write_char(' ')?;
+                    indexed.fmt(f)?;
+                }
+                if let Some(where_clause) = where_clause {
+                    f.write_str(" WHERE ")?;
+                    where_clause.fmt(f)?;
+                }
+                if let Some(order_by) = order_by {
+                    f.write_str(" ORDER BY ")?;
+                    comma(order_by, f)?;
+                }
+                if let Some(limit) = limit {
+                    f.write_char(' ')?;
+                    limit.fmt(f)?;
+                }
+                Ok(())
+            }
+            Stmt::Detach(expr) => {
+                f.write_str("DETACH ")?;
+                expr.fmt(f)
+            }
+            Stmt::DropIndex {
+                if_exists,
+                idx_name,
+            } => {
+                f.write_str("DROP INDEX ")?;
+                if *if_exists {
+                    f.write_str("IF EXISTS ")?;
+                }
+                idx_name.fmt(f)
+            }
+            Stmt::DropTable {
+                if_exists,
+                tbl_name,
+            } => {
+                f.write_str("DROP TABLE ")?;
+                if *if_exists {
+                    f.write_str("IF EXISTS ")?;
+                }
+                tbl_name.fmt(f)
+            }
+            Stmt::DropTrigger {
+                if_exists,
+                trigger_name,
+            } => {
+                f.write_str("DROP TRIGGER ")?;
+                if *if_exists {
+                    f.write_str("IF EXISTS ")?;
+                }
+                trigger_name.fmt(f)
+            }
+            Stmt::DropView {
+                if_exists,
+                view_name,
+            } => {
+                f.write_str("DROP VIEW ")?;
+                if *if_exists {
+                    f.write_str("IF EXISTS ")?;
+                }
+                view_name.fmt(f)
+            }
+            Stmt::Insert {
+                with,
+                or_conflict,
+                tbl_name,
+                columns,
+                body,
+            } => {
+                if let Some(with) = with {
+                    with.fmt(f)?;
+                    f.write_char(' ')?;
+                }
+                if let Some(ResolveType::Replace) = or_conflict {
+                    f.write_str("REPLACE")?;
+                } else {
+                    f.write_str("INSERT")?;
+                    if let Some(or_conflict) = or_conflict {
+                        f.write_str(" OR ")?;
+                        or_conflict.fmt(f)?;
+                    }
+                }
+                f.write_str(" INTO ")?;
+                tbl_name.fmt(f)?;
+                if let Some(columns) = columns {
+                    f.write_str(" (")?;
+                    comma(columns, f)?;
+                    f.write_char(')')?;
+                }
+                f.write_char(' ')?;
+                body.fmt(f)
+            }
+            Stmt::Pragma(name, value) => {
+                f.write_str("PRAGMA ")?;
+                name.fmt(f)?;
+                if let Some(value) = value {
+                    f.write_char('(')?;
+                    value.fmt(f)?;
+                    f.write_char(')')?;
+                }
+                Ok(())
+            }
+            Stmt::Reindex { obj_name } => {
+                f.write_str("REINDEX")?;
+                if let Some(obj_name) = obj_name {
+                    f.write_char(' ')?;
+                    obj_name.fmt(f)?;
+                }
+                Ok(())
+            }
+            Stmt::Release(name) => {
+                f.write_str("RELEASE ")?;
+                name.fmt(f)
+            }
+            Stmt::Rollback {
+                tx_name,
+                savepoint_name,
+            } => {
+                f.write_str("ROLLBACK")?;
+                if let Some(tx_name) = tx_name {
+                    f.write_str(" TRANSACTION ")?;
+                    tx_name.fmt(f)?;
+                }
+                if let Some(savepoint_name) = savepoint_name {
+                    f.write_str(" TO ")?;
+                    savepoint_name.fmt(f)?;
+                }
+                Ok(())
+            }
+            Stmt::Savepoint(name) => {
+                f.write_str("SAVEPOINT ")?;
+                name.fmt(f)
+            }
+            Stmt::Select(select) => select.fmt(f),
+            Stmt::Update {
+                with,
+                or_conflict,
+                tbl_name,
+                indexed,
+                sets,
+                where_clause,
+                order_by,
+                limit,
+            } => {
+                if let Some(with) = with {
+                    with.fmt(f)?;
+                    f.write_char(' ')?;
+                }
+                f.write_str("UPDATE ")?;
+                if let Some(or_conflict) = or_conflict {
+                    f.write_str("OR ")?;
+                    or_conflict.fmt(f)?;
+                    f.write_char(' ')?;
+                }
+                tbl_name.fmt(f)?;
+                if let Some(indexed) = indexed {
+                    f.write_char(' ')?;
+                    indexed.fmt(f)?;
+                }
+                f.write_str(" SET ")?;
+                comma(sets, f)?;
+                if let Some(where_clause) = where_clause {
+                    f.write_str(" WHERE ")?;
+                    where_clause.fmt(f)?;
+                }
+                if let Some(order_by) = order_by {
+                    f.write_str(" ORDER BY ")?;
+                    comma(order_by, f)?;
+                }
+                if let Some(limit) = limit {
+                    f.write_char(' ')?;
+                    limit.fmt(f)?;
+                }
+                Ok(())
+            }
+            Stmt::Vacuum(name) => {
+                f.write_str("VACUUM")?;
+                if let Some(ref name) = name {
+                    f.write_char(' ')?;
+                    name.fmt(f)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
     Between {
@@ -1572,6 +1869,72 @@ pub enum TriggerCmd {
         where_clause: Option<Expr>,
     },
     Select(Select),
+}
+
+impl Display for TriggerCmd {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            TriggerCmd::Update {
+                or_conflict,
+                tbl_name,
+                sets,
+                where_clause,
+            } => {
+                f.write_str("UPDATE ")?;
+                if let Some(or_conflict) = or_conflict {
+                    f.write_str("OR ")?;
+                    or_conflict.fmt(f)?;
+                    f.write_char(' ')?;
+                }
+                tbl_name.fmt(f)?;
+                f.write_str(" SET ")?;
+                comma(sets, f)?;
+                if let Some(where_clause) = where_clause {
+                    f.write_str(" WHERE ")?;
+                    where_clause.fmt(f)?;
+                }
+                Ok(())
+            }
+            TriggerCmd::Insert {
+                or_conflict,
+                tbl_name,
+                col_names,
+                select,
+            } => {
+                if let Some(ResolveType::Replace) = or_conflict {
+                    f.write_str("REPLACE")?;
+                } else {
+                    f.write_str("INSERT")?;
+                    if let Some(or_conflict) = or_conflict {
+                        f.write_str(" OR ")?;
+                        or_conflict.fmt(f)?;
+                    }
+                }
+                f.write_str(" INTO ")?;
+                tbl_name.fmt(f)?;
+                if let Some(col_names) = col_names {
+                    f.write_str(" (")?;
+                    comma(col_names, f)?;
+                    f.write_char(')')?;
+                }
+                f.write_char(' ')?;
+                select.fmt(f)
+            }
+            TriggerCmd::Delete {
+                tbl_name,
+                where_clause,
+            } => {
+                f.write_str("DELETE FROM ")?;
+                tbl_name.fmt(f)?;
+                if let Some(where_clause) = where_clause {
+                    f.write_str(" WHERE ")?;
+                    where_clause.fmt(f)?;
+                }
+                Ok(())
+            }
+            TriggerCmd::Select(select) => select.fmt(f),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
