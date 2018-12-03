@@ -10,6 +10,27 @@ pub enum Cmd {
     Stmt(Stmt),
 }
 
+impl Display for Cmd {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            Cmd::Explain(stmt) => {
+                f.write_str("EXPLAIN ")?;
+                stmt.fmt(f)?;
+                f.write_char(';')
+            }
+            Cmd::ExplainQueryPlan(stmt) => {
+                f.write_str("EXPLAIN QUERY PLAN ")?;
+                stmt.fmt(f)?;
+                f.write_char(';')
+            }
+            Cmd::Stmt(stmt) => {
+                stmt.fmt(f)?;
+                f.write_char(';')
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stmt {
     // table name, body
@@ -181,7 +202,25 @@ impl Display for Stmt {
                 columns,
                 where_clause,
             } => {
-                unimplemented!()
+                f.write_str("CREATE ")?;
+                if *unique {
+                    f.write_str("UNIQUE ")?;
+                }
+                f.write_str("INDEX ")?;
+                if *if_not_exists {
+                    f.write_str("IF NOT EXISTS ")?;
+                }
+                idx_name.fmt(f)?;
+                f.write_str(" ON ")?;
+                tbl_name.fmt(f)?;
+                f.write_char('(')?;
+                comma(columns, f)?;
+                f.write_char(')')?;
+                if let Some(where_clause) = where_clause {
+                    f.write_str(" WHERE ")?;
+                    where_clause.fmt(f)?;
+                }
+                Ok(())
             }
             Stmt::CreateTable {
                 temporary,
@@ -189,7 +228,16 @@ impl Display for Stmt {
                 tbl_name,
                 body,
             } => {
-                unimplemented!()
+                f.write_str("CREATE ")?;
+                if *temporary {
+                    f.write_str("TEMP ")?;
+                }
+                f.write_str("TABLE ")?;
+                if *if_not_exists {
+                    f.write_str("IF NOT EXISTS ")?;
+                }
+                tbl_name.fmt(f)?;
+                body.fmt(f)
             }
             Stmt::CreateTrigger {
                 temporary,
@@ -202,7 +250,39 @@ impl Display for Stmt {
                 when_clause,
                 commands,
             } => {
-                unimplemented!()
+                f.write_str("CREATE ")?;
+                if *temporary {
+                    f.write_str("TEMP ")?;
+                }
+                f.write_str("TRIGGER ")?;
+                if *if_not_exists {
+                    f.write_str("IF NOT EXISTS ")?;
+                }
+                trigger_name.fmt(f)?;
+                if let Some(time) = time {
+                    f.write_char(' ')?;
+                    time.fmt(f)?;
+                }
+                f.write_char(' ')?;
+                event.fmt(f)?;
+                f.write_str(" ON ")?;
+                tbl_name.fmt(f)?;
+                if *for_each_row {
+                    f.write_str(" FOR EACH ROW")?;
+                }
+                if let Some(when_clause) = when_clause {
+                    f.write_str(" WHEN ")?;
+                    when_clause.fmt(f)?;
+                }
+                f.write_str(" BEGIN\n")?;
+                for (i, command) in commands.iter().enumerate() {
+                    if i != 0 {
+                        f.write_char('\n')?;
+                    }
+                    command.fmt(f)?;
+                    f.write_char(';')?;
+                }
+                f.write_str("END")
             }
             Stmt::CreateView {
                 temporary,
@@ -211,7 +291,22 @@ impl Display for Stmt {
                 columns,
                 select,
             } => {
-                unimplemented!()
+                f.write_str("CREATE ")?;
+                if *temporary {
+                    f.write_str("TEMP ")?;
+                }
+                f.write_str("VIEW ")?;
+                if *if_not_exists {
+                    f.write_str("IF NOT EXISTS ")?;
+                }
+                view_name.fmt(f)?;
+                if let Some(columns) = columns {
+                    f.write_str(" (")?;
+                    comma(columns, f)?;
+                    f.write_char(')')?;
+                }
+                f.write_str(" AS ")?;
+                select.fmt(f)
             }
             Stmt::CreateVirtualTable {
                 if_not_exists,
@@ -219,7 +314,18 @@ impl Display for Stmt {
                 module_name,
                 args,
             } => {
-                unimplemented!()
+                f.write_str("CREATE VIRTUAL TABLE ")?;
+                if *if_not_exists {
+                    f.write_str("IF NOT EXISTS ")?;
+                }
+                tbl_name.fmt(f)?;
+                f.write_str(" USING ")?;
+                module_name.fmt(f)?;
+                f.write_char('(')?;
+                if let Some(args) = args {
+                    comma(args, f)?;
+                }
+                f.write_char(')')
             }
             Stmt::Delete {
                 with,
