@@ -556,14 +556,14 @@ pub enum Expr {
     Exists(Box<Select>),
     // call to a built-in function
     FunctionCall {
-        name: Name,
+        name: Name, // FIXME Id
         distinctness: Option<Distinctness>,
         args: Option<Vec<Box<Expr>>>,
     }, // TODO overClause
     // Function call expression with '*' as arg
-    FunctionCallStar(Name), // TODO overClause
+    FunctionCallStar(Name), // TODO overClause, FIXME Id
     // Identifier
-    Id(Name),
+    Id(Name), // FIXME Id
     InList {
         lhs: Box<Expr>,
         not: bool,
@@ -1135,7 +1135,7 @@ impl Display for ResultColumn {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum As {
     As(Name),
-    Elided(Name),
+    Elided(Name), // FIXME Ids
 }
 
 impl Display for As {
@@ -1317,6 +1317,10 @@ impl Display for GroupBy {
     }
 }
 
+// TODO identifier or one of several keywords or `INDEXED` (but not string)
+// TODO ids (identifier or string)
+
+/// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Name(String); // TODO distinction between Name and "Name"/[Name]/`Name`
 
@@ -1330,7 +1334,7 @@ impl Display for Name {
 pub struct QualifiedName {
     pub db_name: Option<Name>,
     pub name: Name,
-    pub alias: Option<Name>,
+    pub alias: Option<Name>, // FIXME restrict alias usage (fullname vs xfullname)
 }
 
 impl Display for QualifiedName {
@@ -1471,7 +1475,7 @@ pub enum ColumnConstraint {
     Check(Expr),
     Default(Expr),
     Collate {
-        collation_name: Name,
+        collation_name: Name, // FIXME Ids
     },
     ForeignKey {
         clause: ForeignKeyClause,
@@ -1672,7 +1676,6 @@ pub struct ForeignKeyClause {
 impl Display for ForeignKeyClause {
     fn fmt(&self, f: &mut Formatter) -> Result {
         self.tbl_name.fmt(f)?;
-        f.write_str("DEFERRABLE")?;
         if let Some(ref columns) = self.columns {
             f.write_char('(')?;
             comma(columns, f)?;
@@ -1776,7 +1779,7 @@ impl Display for InitDeferredPred {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IndexedColumn {
     pub col_name: Name,
-    pub collation_name: Option<Name>,
+    pub collation_name: Option<Name>, // FIXME Ids
     pub order: Option<SortOrder>,
 }
 
@@ -2103,7 +2106,7 @@ impl Display for CommonTableExpr {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Type {
-    pub name: String, // TODO Validate
+    pub name: String, // TODO Validate: Ids+
     pub size: Option<TypeSize>,
 }
 
