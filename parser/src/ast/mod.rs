@@ -437,9 +437,7 @@ impl Display for Stmt {
                 f.write_str("PRAGMA ")?;
                 name.fmt(f)?;
                 if let Some(value) = value {
-                    f.write_char('(')?;
                     value.fmt(f)?;
-                    f.write_char(')')?;
                 }
                 Ok(())
             }
@@ -800,7 +798,7 @@ impl Display for Expr {
                 sub_expr.fmt(f)
             }
             Expr::Variable(var) => match var.chars().next() {
-                Some(c) if c == '$' || c == '@' || c == ':' => f.write_str(var),
+                Some(c) if c == '$' || c == '@' || c == '#' || c == ':' => f.write_str(var),
                 Some(_) => {
                     f.write_char('?')?;
                     f.write_str(var)
@@ -1635,11 +1633,9 @@ impl Display for TableConstraint {
                 clause,
                 deref_clause,
             } => {
-                f.write_str("FOREIGN KEY ")?;
-                f.write_char('(')?;
+                f.write_str("FOREIGN KEY (")?;
                 comma(columns, f)?;
-                f.write_char(')')?;
-                f.write_str(" REFERENCES ")?;
+                f.write_str(") REFERENCES ")?;
                 clause.fmt(f)?;
                 if let Some(deref_clause) = deref_clause {
                     f.write_char(' ')?;
@@ -1944,16 +1940,8 @@ impl Display for TriggerEvent {
             TriggerEvent::Insert => f.write_str("INSERT"),
             TriggerEvent::Update => f.write_str("UPDATE"),
             TriggerEvent::UpdateOf(ref col_names) => {
-                f.write_str("UPDATE OF")?;
-                for (i, name) in col_names.iter().enumerate() {
-                    if i == 0 {
-                        f.write_char(' ')?;
-                    } else {
-                        f.write_str(", ")?;
-                    }
-                    name.fmt(f)?;
-                }
-                Ok(())
+                f.write_str("UPDATE OF ")?;
+                comma(col_names, f)
             }
         }
     }
@@ -2175,6 +2163,7 @@ where
     Ok(())
 }
 
+// TK_ID: [...] / `...` / "..." / some keywords / non keywords
 fn double_quote(name: &str, f: &mut Formatter) -> Result {
     if name.is_empty() {
         return f.write_str("\"\"");
@@ -2198,6 +2187,7 @@ fn double_quote(name: &str, f: &mut Formatter) -> Result {
     f.write_char('"')
 }
 
+// TK_STRING
 fn single_quote(name: &str, f: &mut Formatter) -> Result {
     f.write_char('\'')?;
     for c in name.chars() {
