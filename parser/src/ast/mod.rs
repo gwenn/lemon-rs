@@ -1850,14 +1850,21 @@ impl Display for Limit {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InsertBody {
-    Select(Select),
+    Select(Select, Option<Upsert>),
     DefaultValues,
 }
 
 impl Display for InsertBody {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match self {
-            InsertBody::Select(select) => select.fmt(f),
+            InsertBody::Select(select, upsert) => {
+                select.fmt(f)?;
+                if let Some(upsert) = upsert {
+                    f.write_char(' ')?;
+                    upsert.fmt(f)?;
+                }
+                Ok(())
+            }
             InsertBody::DefaultValues => f.write_str("DEFAULT VALUES"),
         }
     }
@@ -1959,7 +1966,8 @@ pub enum TriggerCmd {
         or_conflict: Option<ResolveType>,
         tbl_name: Name,
         col_names: Option<Vec<Name>>,
-        select: Select, // FIXME upsert: Upsert
+        select: Select,
+        upsert: Option<Upsert>,
     },
     Delete {
         tbl_name: Name,
@@ -1997,6 +2005,7 @@ impl Display for TriggerCmd {
                 tbl_name,
                 col_names,
                 select,
+                upsert,
             } => {
                 if let Some(ResolveType::Replace) = or_conflict {
                     f.write_str("REPLACE")?;
@@ -2015,7 +2024,12 @@ impl Display for TriggerCmd {
                     f.write_char(')')?;
                 }
                 f.write_char(' ')?;
-                select.fmt(f)
+                select.fmt(f)?;
+                if let Some(upsert) = upsert {
+                    f.write_char(' ')?;
+                    upsert.fmt(f)?;
+                }
+                Ok(())
             }
             TriggerCmd::Delete {
                 tbl_name,
@@ -2145,6 +2159,68 @@ impl Display for TransactionType {
             TransactionType::Immediate => "IMMEDIATE",
             TransactionType::Exclusive => "EXCLUSIVE",
         })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Upsert {
+    index: Option<UpsertIndex>,
+    do_clause: UpsertDo,
+}
+
+impl Display for Upsert {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.write_str("ON CONFLICT ")?;
+        if let Some(ref index) = self.index {
+            index.fmt(f)?;
+            f.write_char(' ')?;
+        }
+        self.do_clause.fmt(f)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpsertIndex {
+    targets: Vec<SortedColumn>,
+    where_clause: Option<Expr>,
+}
+
+impl Display for UpsertIndex {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.write_char('(')?;
+        comma(&self.targets, f)?;
+        f.write_char(')')?;
+        if let Some(ref where_clause) = self.where_clause {
+            f.write_str(" WHERE ")?;
+            where_clause.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UpsertDo {
+    Set {
+        sets: Vec<Set>,
+        where_clause: Option<Expr>,
+    },
+    Nothing,
+}
+
+impl Display for UpsertDo {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            UpsertDo::Set { sets, where_clause } => {
+                f.write_str("DO UPDATE SET ")?;
+                comma(sets, f)?;
+                if let Some(where_clause) = where_clause {
+                    f.write_str(" WHERE ")?;
+                    where_clause.fmt(f)?;
+                }
+                Ok(())
+            }
+            UpsertDo::Nothing => f.write_str("DO NOTHING"),
+        }
     }
 }
 
