@@ -299,7 +299,7 @@ impl Splitter for Tokenizer {
                     return Ok((Some((&data[..1], TokenType::TK_DOT)), 1));
                 } // else ask more data
             }
-            b'0'...b'9' => return number(data, eof),
+            b'0'..=b'9' => return number(data, eof),
             b'[' => {
                 if let Some(i) = memchr(b']', data) {
                     // do not include the '['/']' in the token
@@ -362,7 +362,7 @@ impl Splitter for Tokenizer {
     }
 }
 
-fn literal(data: &mut [u8], eof: bool, quote: u8) -> Result<(Option<Token>, usize), Error> {
+fn literal(data: &mut [u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert_eq!(data[0], quote);
     let tt = if quote == b'\'' {
         TokenType::TK_STRING
@@ -425,7 +425,7 @@ fn unescape_quotes(data: &mut [u8], quote: u8) -> &[u8] {
     &data[..j]
 }
 
-fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
+fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert!(data[0] == b'x' || data[0] == b'X');
     debug_assert_eq!(data[1], b'\'');
     if let Some((i, b)) = data
@@ -445,7 +445,7 @@ fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error>
     Ok((None, 0))
 }
 
-fn number(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
+fn number(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert!(data[0].is_ascii_digit());
     if data[0] == b'0' {
         if let Some(b) = data.get(1) {
@@ -480,7 +480,7 @@ fn number(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
     Ok((None, 0))
 }
 
-fn hex_integer(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
+fn hex_integer(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert_eq!(data[0], b'0');
     debug_assert!(data[1] == b'x' || data[1] == b'X');
     if let Some((i, b)) = data
@@ -505,7 +505,7 @@ fn hex_integer(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> 
     Ok((None, 0))
 }
 
-fn fractional_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token>, usize), Error> {
+fn fractional_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert_eq!(data[i], b'.');
     if let Some((i, b)) = data
         .iter()
@@ -526,7 +526,7 @@ fn fractional_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token>, u
     Ok((None, 0))
 }
 
-fn exponential_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token>, usize), Error> {
+fn exponential_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert!(data[i] == b'e' || data[i] == b'E');
     // data[i] == 'e'|'E'
     if let Some(b) = data.get(i + 1) {

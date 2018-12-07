@@ -1,7 +1,7 @@
 #![feature(read_initializer)]
 
-extern crate dialect;
-extern crate parser;
+use dialect;
+
 
 mod scan;
 pub mod sql;

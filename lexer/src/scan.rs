@@ -123,7 +123,7 @@ impl<R: Read, S: Splitter> Scanner<R, S> {
     /// Return the token as a byte slice.
     /// Return `None` when the end of the input is reached.
     /// Return any error that occurs while reading the input.
-    pub fn scan(&mut self) -> ScanResult<S::TokenType, S::Error> {
+    pub fn scan(&mut self) -> ScanResult<'_, S::TokenType, S::Error> {
         use std::mem;
         debug!(target: "scanner", "scan(line: {}, column: {})", self.line, self.column);
         // Loop until we have a token.
@@ -245,7 +245,7 @@ impl<R: Read, S: Splitter> Read for Scanner<R, S> {
 }
 
 impl<R: Read, S: Splitter> fmt::Debug for Scanner<R, S> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Scanner")
             .field("buf", &self.buf)
             .field("pos", &self.pos)

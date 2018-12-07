@@ -1,3 +1,3 @@
-extern crate dialect;
+use dialect;
 
 pub mod ast;

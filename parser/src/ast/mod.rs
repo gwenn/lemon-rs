@@ -11,7 +11,7 @@ pub enum Cmd {
 }
 
 impl Display for Cmd {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Cmd::Explain(stmt) => {
                 f.write_str("EXPLAIN ")?;
@@ -147,7 +147,7 @@ pub enum Stmt {
 }
 
 impl Display for Stmt {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Stmt::AlterTable(tbl_name, body) => {
                 f.write_str("ALTER TABLE ")?;
@@ -604,7 +604,7 @@ pub enum Expr {
 }
 
 impl Display for Expr {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Expr::Between {
                 lhs,
@@ -821,7 +821,7 @@ pub enum Literal {
 }
 
 impl Display for Literal {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Literal::Numeric(ref num) => f.write_str(num),
             Literal::String(ref str) => single_quote(str, f),
@@ -846,7 +846,7 @@ pub enum LikeOperator {
 }
 
 impl Display for LikeOperator {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             LikeOperator::Glob => "GLOB",
             LikeOperator::Like => "LIKE",
@@ -881,7 +881,7 @@ pub enum Operator {
 }
 
 impl Display for Operator {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             Operator::Add => "+",
             Operator::And => "AND",
@@ -920,7 +920,7 @@ pub enum UnaryOperator {
 }
 
 impl Display for UnaryOperator {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             UnaryOperator::BitwiseNot => "~",
             UnaryOperator::Negative => "-",
@@ -939,7 +939,7 @@ pub struct Select {
 }
 
 impl Display for Select {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if let Some(ref with) = self.with {
             with.fmt(f)?;
             f.write_char(' ')?;
@@ -964,7 +964,7 @@ pub struct SelectBody {
 }
 
 impl Display for SelectBody {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.select.fmt(f)?;
         if let Some(ref compounds) = self.compounds {
             for compound in compounds {
@@ -983,7 +983,7 @@ pub struct CompoundSelect {
 }
 
 impl Display for CompoundSelect {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.operator.fmt(f)?;
         f.write_char(' ')?;
         self.select.fmt(f)
@@ -999,7 +999,7 @@ pub enum CompoundOperator {
 }
 
 impl Display for CompoundOperator {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             CompoundOperator::Union => "UNION",
             CompoundOperator::UnionAll => "UNION ALL",
@@ -1022,7 +1022,7 @@ pub enum OneSelect {
 }
 
 impl Display for OneSelect {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             OneSelect::Select {
                 distinctness,
@@ -1075,7 +1075,7 @@ pub struct FromClause {
 }
 
 impl Display for FromClause {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.select.fmt(f)?;
         if let Some(ref joins) = self.joins {
             for join in joins {
@@ -1094,7 +1094,7 @@ pub enum Distinctness {
 }
 
 impl Display for Distinctness {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             Distinctness::Distinct => "DISTINCT",
             Distinctness::All => "ALL",
@@ -1111,7 +1111,7 @@ pub enum ResultColumn {
 }
 
 impl Display for ResultColumn {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             ResultColumn::Expr(expr, alias) => {
                 expr.fmt(f)?;
@@ -1137,7 +1137,7 @@ pub enum As {
 }
 
 impl Display for As {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             As::As(ref name) => {
                 f.write_str("AS ")?;
@@ -1156,7 +1156,7 @@ pub struct JoinedSelectTable {
 }
 
 impl Display for JoinedSelectTable {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.operator.fmt(f)?;
         f.write_char(' ')?;
         self.table.fmt(f)?;
@@ -1177,7 +1177,7 @@ pub enum SelectTable {
 }
 
 impl Display for SelectTable {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             SelectTable::Table(name, alias, indexed) => {
                 name.fmt(f)?;
@@ -1238,7 +1238,7 @@ pub enum JoinOperator {
 }
 
 impl Display for JoinOperator {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             JoinOperator::Comma => f.write_char(','),
             JoinOperator::TypedJoin { natural, join_type } => {
@@ -1264,7 +1264,7 @@ pub enum JoinType {
 }
 
 impl Display for JoinType {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             JoinType::Left => "LEFT",
             JoinType::LeftOuter => "LEFT OUTER",
@@ -1282,7 +1282,7 @@ pub enum JoinConstraint {
 }
 
 impl Display for JoinConstraint {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             JoinConstraint::On(expr) => {
                 f.write_str("ON ")?;
@@ -1304,7 +1304,7 @@ pub struct GroupBy {
 }
 
 impl Display for GroupBy {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("GROUP BY ")?;
         comma(&self.exprs, f)?;
         if let Some(ref having) = self.having {
@@ -1323,7 +1323,7 @@ impl Display for GroupBy {
 pub struct Name(String); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 impl Display for Name {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         double_quote(&self.0, f)
     }
 }
@@ -1336,7 +1336,7 @@ pub struct QualifiedName {
 }
 
 impl Display for QualifiedName {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if let Some(ref db_name) = self.db_name {
             db_name.fmt(f)?;
             f.write_char('.')?;
@@ -1359,7 +1359,7 @@ pub enum AlterTableBody {
 }
 
 impl Display for AlterTableBody {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             AlterTableBody::RenameTo(name) => {
                 f.write_str("RENAME TO ")?;
@@ -1390,7 +1390,7 @@ pub enum CreateTableBody {
 }
 
 impl Display for CreateTableBody {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             CreateTableBody::ColumnsAndConstraints {
                 columns,
@@ -1425,7 +1425,7 @@ pub struct ColumnDefinition {
 }
 
 impl Display for ColumnDefinition {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.col_name.fmt(f)?;
         if let Some(ref col_type) = self.col_type {
             f.write_char(' ')?;
@@ -1448,7 +1448,7 @@ pub struct NamedColumnConstraint {
 }
 
 impl Display for NamedColumnConstraint {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if let Some(ref name) = self.name {
             f.write_str("CONSTRAINT ")?;
             name.fmt(f)?;
@@ -1482,7 +1482,7 @@ pub enum ColumnConstraint {
 }
 
 impl Display for ColumnConstraint {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             ColumnConstraint::PrimaryKey {
                 order,
@@ -1561,7 +1561,7 @@ pub struct NamedTableConstraint {
 }
 
 impl Display for NamedTableConstraint {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if let Some(ref name) = self.name {
             f.write_str("CONSTRAINT ")?;
             name.fmt(f)?;
@@ -1591,7 +1591,7 @@ pub enum TableConstraint {
 }
 
 impl Display for TableConstraint {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             TableConstraint::PrimaryKey {
                 columns,
@@ -1654,7 +1654,7 @@ pub enum SortOrder {
 }
 
 impl Display for SortOrder {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             SortOrder::Asc => "ASC",
             SortOrder::Desc => "DESC",
@@ -1670,7 +1670,7 @@ pub struct ForeignKeyClause {
 }
 
 impl Display for ForeignKeyClause {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.tbl_name.fmt(f)?;
         if let Some(ref columns) = self.columns {
             f.write_char('(')?;
@@ -1694,7 +1694,7 @@ pub enum RefArg {
 }
 
 impl Display for RefArg {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             RefArg::OnDelete(ref action) => {
                 f.write_str("ON DELETE ")?;
@@ -1726,7 +1726,7 @@ pub enum RefAct {
 }
 
 impl Display for RefAct {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             RefAct::SetNull => "SET NULL",
             RefAct::SetDefault => "SET DEFAULT",
@@ -1744,7 +1744,7 @@ pub struct DeferSubclause {
 }
 
 impl Display for DeferSubclause {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if !self.deferrable {
             f.write_str("NOT ")?;
         }
@@ -1764,7 +1764,7 @@ pub enum InitDeferredPred {
 }
 
 impl Display for InitDeferredPred {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             InitDeferredPred::InitiallyDeferred => "INITIALLY DEFERRED",
             InitDeferredPred::InitiallyImmediate => "INITIALLY IMMEDIATE",
@@ -1780,7 +1780,7 @@ pub struct IndexedColumn {
 }
 
 impl Display for IndexedColumn {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.col_name.fmt(f)?;
         if let Some(ref collation_name) = self.collation_name {
             f.write_str(" COLLATE ")?;
@@ -1802,7 +1802,7 @@ pub enum Indexed {
 }
 
 impl Display for Indexed {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Indexed::IndexedBy(ref name) => {
                 f.write_str("INDEXED BY ")?;
@@ -1820,7 +1820,7 @@ pub struct SortedColumn {
 }
 
 impl Display for SortedColumn {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.expr.fmt(f)?;
         if let Some(ref order) = self.order {
             f.write_char(' ')?;
@@ -1837,7 +1837,7 @@ pub struct Limit {
 }
 
 impl Display for Limit {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("LIMIT ")?;
         self.expr.fmt(f)?;
         if let Some(ref offset) = self.offset {
@@ -1855,7 +1855,7 @@ pub enum InsertBody {
 }
 
 impl Display for InsertBody {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             InsertBody::Select(select, upsert) => {
                 select.fmt(f)?;
@@ -1877,7 +1877,7 @@ pub struct Set {
 }
 
 impl Display for Set {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if self.col_names.len() == 1 {
             comma(&self.col_names, f)?;
         } else {
@@ -1897,7 +1897,7 @@ pub enum PragmaBody {
 }
 
 impl Display for PragmaBody {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             PragmaBody::Equals(value) => {
                 f.write_str(" = ")?;
@@ -1922,7 +1922,7 @@ pub enum TriggerTime {
 }
 
 impl Display for TriggerTime {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             TriggerTime::Before => "BEFORE",
             TriggerTime::After => "AFTER",
@@ -1941,7 +1941,7 @@ pub enum TriggerEvent {
 }
 
 impl Display for TriggerEvent {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             TriggerEvent::Delete => f.write_str("DELETE"),
             TriggerEvent::Insert => f.write_str("INSERT"),
@@ -1977,7 +1977,7 @@ pub enum TriggerCmd {
 }
 
 impl Display for TriggerCmd {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             TriggerCmd::Update {
                 or_conflict,
@@ -2058,7 +2058,7 @@ pub enum ResolveType {
 }
 
 impl Display for ResolveType {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             ResolveType::Rollback => "ROLLBACK",
             ResolveType::Abort => "ABORT",
@@ -2076,7 +2076,7 @@ pub struct With {
 }
 
 impl Display for With {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("WITH ")?;
         if self.recursive {
             f.write_str("RECURSIVE ")?;
@@ -2093,7 +2093,7 @@ pub struct CommonTableExpr {
 }
 
 impl Display for CommonTableExpr {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.tbl_name.fmt(f)?;
         if let Some(ref columns) = self.columns {
             f.write_str(" (")?;
@@ -2113,7 +2113,7 @@ pub struct Type {
 }
 
 impl Display for Type {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self.size {
             None => f.write_str(&self.name),
             Some(ref size) => {
@@ -2133,7 +2133,7 @@ pub enum TypeSize {
 }
 
 impl Display for TypeSize {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             TypeSize::MaxSize(size) => size.fmt(f),
             TypeSize::TypeSize(size1, size2) => {
@@ -2153,7 +2153,7 @@ pub enum TransactionType {
 }
 
 impl Display for TransactionType {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
             TransactionType::Deferred => "DEFERRED",
             TransactionType::Immediate => "IMMEDIATE",
@@ -2169,7 +2169,7 @@ pub struct Upsert {
 }
 
 impl Display for Upsert {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("ON CONFLICT ")?;
         if let Some(ref index) = self.index {
             index.fmt(f)?;
@@ -2186,7 +2186,7 @@ pub struct UpsertIndex {
 }
 
 impl Display for UpsertIndex {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_char('(')?;
         comma(&self.targets, f)?;
         f.write_char(')')?;
@@ -2208,7 +2208,7 @@ pub enum UpsertDo {
 }
 
 impl Display for UpsertDo {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             UpsertDo::Set { sets, where_clause } => {
                 f.write_str("DO UPDATE SET ")?;
@@ -2224,7 +2224,7 @@ impl Display for UpsertDo {
     }
 }
 
-fn comma<I>(items: I, f: &mut Formatter) -> Result
+fn comma<I>(items: I, f: &mut Formatter<'_>) -> Result
 where
     I: IntoIterator,
     I::Item: Display,
@@ -2240,7 +2240,7 @@ where
 }
 
 // TK_ID: [...] / `...` / "..." / some keywords / non keywords
-fn double_quote(name: &str, f: &mut Formatter) -> Result {
+fn double_quote(name: &str, f: &mut Formatter<'_>) -> Result {
     if name.is_empty() {
         return f.write_str("\"\"");
     }
@@ -2264,7 +2264,7 @@ fn double_quote(name: &str, f: &mut Formatter) -> Result {
 }
 
 // TK_STRING
-fn single_quote(name: &str, f: &mut Formatter) -> Result {
+fn single_quote(name: &str, f: &mut Formatter<'_>) -> Result {
     f.write_char('\'')?;
     for c in name.chars() {
         if c == '\'' {

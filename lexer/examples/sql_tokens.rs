@@ -1,4 +1,4 @@
-extern crate sqlite_lexer as scan;
+use sqlite_lexer as scan;
 
 use crate::scan::sql::TokenType;
 use crate::scan::sql::Tokenizer;
