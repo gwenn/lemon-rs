@@ -9,4 +9,4 @@ extern crate sqlite_parser as parser;
 mod scan;
 pub mod sql;
 
-pub use scan::{ScanError, Scanner, Splitter};
+pub use crate::scan::{ScanError, Scanner, Splitter};

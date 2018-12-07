@@ -1,6 +1,7 @@
 [package]
 name = "sqlite-lexer"
 version = "0.1.0"
+edition = "2018"
 authors = ["gwenn"]
 description = "SQL lexer (as understood by SQLite)"
 #documentation = "http://docs.rs/scan-rs"

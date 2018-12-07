@@ -1,14 +1,14 @@
 //! Adaptation/port of [`SQLite` tokenizer](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/tokenize.c)
 use std::result::Result;
 
-pub use dialect::TokenType;
-use dialect::{is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN};
+pub use crate::dialect::TokenType;
+use crate::dialect::{is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN};
 use memchr::memchr;
 
 mod error;
 
-pub use scan::Splitter;
-pub use sql::error::Error;
+pub use crate::scan::Splitter;
+pub use crate::sql::error::Error;
 
 pub fn parse(sql: &str) -> Result<Option<()>, Error> {
     let lexer = Tokenizer::new();
@@ -18,7 +18,7 @@ pub fn parse(sql: &str) -> Result<Option<()>, Error> {
     let mut last_token_parsed = TokenType::TK_EOF;
     let mut eof = false;
     loop {
-        let (token, mut token_type) = match s.scan() {
+        let (_token, mut token_type) = match s.scan() {
             Err(e) => {
                 return Err(e);
             }
@@ -593,7 +593,7 @@ impl Tokenizer {
                 let upcase = if word.iter().all(|b| b.is_ascii_uppercase()) {
                     word
                 } else {
-                    let mut buffer = &mut self.uppercase_buffer[..word.len()];
+                    let buffer = &mut self.uppercase_buffer[..word.len()];
                     buffer.copy_from_slice(word);
                     buffer.make_ascii_uppercase();
                     buffer

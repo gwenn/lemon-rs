@@ -1,8 +1,8 @@
 extern crate sqlite_lexer as scan;
 
-use scan::sql::TokenType;
-use scan::sql::Tokenizer;
-use scan::Scanner;
+use crate::scan::sql::TokenType;
+use crate::scan::sql::Tokenizer;
+use crate::scan::Scanner;
 use std::env;
 use std::fs::File;
 use std::i64;

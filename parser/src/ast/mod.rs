@@ -1,6 +1,6 @@
 //! Abstract Syntax Tree
 
-use dialect::{is_identifier, is_keyword};
+use crate::dialect::{is_identifier, is_keyword};
 use std::fmt::{Display, Formatter, Result, Write};
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -4,7 +4,7 @@
 extern crate phf;
 
 mod token;
-pub use token::TokenType;
+pub use crate::token::TokenType;
 
 static KEYWORDS: phf::Map<&[u8], TokenType> = phf_map! {
     b"ABORT" => TokenType::TK_ABORT,
@@ -166,8 +166,8 @@ pub fn is_identifier(name: &str) -> bool {
         return false;
     }
     let bytes = name.as_bytes();
-    return is_identifier_start(bytes[0])
-        && (bytes.len() == 1 || bytes[1..].iter().all(|b| is_identifier_continue(*b)));
+    is_identifier_start(bytes[0])
+        && (bytes.len() == 1 || bytes[1..].iter().all(|b| is_identifier_continue(*b)))
 }
 
 pub fn is_identifier_start(b: u8) -> bool {

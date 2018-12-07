@@ -1,6 +1,7 @@
 [package]
 name = "sqlite-dialect"
 version = "0.1.0"
+edition = "2018"
 authors = ["gwenn"]
 description = "SQLite dialect"
 #documentation = "http://docs.rs/scan-rs"
