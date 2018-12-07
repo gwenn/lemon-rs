@@ -18,6 +18,6 @@ maintenance = { status = "experimental" }
 [dependencies]
 log = "0.4"
 memchr = "2.0"
-sqlite-dialect = { path = "../dialect", version = "0.1.0" }
+dialect = { path = "../dialect", package = "sqlite-dialect", version = "0.1.0" }
 # In Lemon, the tokenizer calls the parser.
-sqlite-parser = { path = "../parser", version = "0.0.1" }
+parser = { path = "../parser", package = "sqlite-parser", version = "0.0.1" }

@@ -1,10 +1,7 @@
 #![feature(read_initializer)]
 
-#[macro_use]
-extern crate log;
-extern crate memchr;
-extern crate sqlite_dialect as dialect;
-extern crate sqlite_parser as parser;
+extern crate dialect;
+extern crate parser;
 
 mod scan;
 pub mod sql;

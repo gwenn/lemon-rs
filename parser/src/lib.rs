@@ -1,3 +1,3 @@
-extern crate sqlite_dialect as dialect;
+extern crate dialect;
 
 pub mod ast;

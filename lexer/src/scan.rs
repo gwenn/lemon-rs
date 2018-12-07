@@ -1,4 +1,7 @@
 //! Adaptation/port of [Go scanner](http://tip.golang.org/pkg/bufio/#Scanner).
+
+use log::debug;
+
 use std::convert::From;
 use std::error::Error;
 use std::fmt;
@@ -120,7 +123,7 @@ impl<R: Read, S: Splitter> Scanner<R, S> {
     /// Return the token as a byte slice.
     /// Return `None` when the end of the input is reached.
     /// Return any error that occurs while reading the input.
-    pub fn scan<'input>(&'input mut self) -> ScanResult<'input, S::TokenType, S::Error> {
+    pub fn scan(&mut self) -> ScanResult<S::TokenType, S::Error> {
         use std::mem;
         debug!(target: "scanner", "scan(line: {}, column: {})", self.line, self.column);
         // Loop until we have a token.

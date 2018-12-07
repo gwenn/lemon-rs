@@ -145,6 +145,7 @@ fn analyze_filter_keyword(last_token: TokenType) -> TokenType {
 
 pub type Token<'input> = (&'input [u8], TokenType);
 
+#[derive(Default)]
 pub struct Tokenizer {
     uppercase_buffer: [u8; MAX_KEYWORD_LEN],
 }
@@ -314,7 +315,7 @@ impl Splitter for Tokenizer {
                         return Ok((Some((&data[1..=i], TokenType::TK_VARIABLE)), i + 1));
                     }
                     None if eof => {
-                        return Ok((Some((&data[1..], TokenType::TK_VARIABLE)), data.len()))
+                        return Ok((Some((&data[1..], TokenType::TK_VARIABLE)), data.len()));
                     }
                     _ => {
                         // else ask more data
@@ -361,11 +362,7 @@ impl Splitter for Tokenizer {
     }
 }
 
-fn literal<'input>(
-    data: &'input mut [u8],
-    eof: bool,
-    quote: u8,
-) -> Result<(Option<Token<'input>>, usize), Error> {
+fn literal(data: &mut [u8], eof: bool, quote: u8) -> Result<(Option<Token>, usize), Error> {
     debug_assert_eq!(data[0], quote);
     let tt = if quote == b'\'' {
         TokenType::TK_STRING
@@ -428,10 +425,7 @@ fn unescape_quotes(data: &mut [u8], quote: u8) -> &[u8] {
     &data[..j]
 }
 
-fn blob_literal<'input>(
-    data: &'input [u8],
-    eof: bool,
-) -> Result<(Option<Token<'input>>, usize), Error> {
+fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
     debug_assert!(data[0] == b'x' || data[0] == b'X');
     debug_assert_eq!(data[1], b'\'');
     if let Some((i, b)) = data
@@ -451,7 +445,7 @@ fn blob_literal<'input>(
     Ok((None, 0))
 }
 
-fn number<'input>(data: &'input [u8], eof: bool) -> Result<(Option<Token<'input>>, usize), Error> {
+fn number(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
     debug_assert!(data[0].is_ascii_digit());
     if data[0] == b'0' {
         if let Some(b) = data.get(1) {
@@ -486,10 +480,7 @@ fn number<'input>(data: &'input [u8], eof: bool) -> Result<(Option<Token<'input>
     Ok((None, 0))
 }
 
-fn hex_integer<'input>(
-    data: &'input [u8],
-    eof: bool,
-) -> Result<(Option<Token<'input>>, usize), Error> {
+fn hex_integer(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
     debug_assert_eq!(data[0], b'0');
     debug_assert!(data[1] == b'x' || data[1] == b'X');
     if let Some((i, b)) = data
@@ -514,11 +505,7 @@ fn hex_integer<'input>(
     Ok((None, 0))
 }
 
-fn fractional_part<'input>(
-    data: &'input [u8],
-    eof: bool,
-    i: usize,
-) -> Result<(Option<Token<'input>>, usize), Error> {
+fn fractional_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token>, usize), Error> {
     debug_assert_eq!(data[i], b'.');
     if let Some((i, b)) = data
         .iter()
@@ -539,11 +526,7 @@ fn fractional_part<'input>(
     Ok((None, 0))
 }
 
-fn exponential_part<'input>(
-    data: &'input [u8],
-    eof: bool,
-    i: usize,
-) -> Result<(Option<Token<'input>>, usize), Error> {
+fn exponential_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token>, usize), Error> {
     debug_assert!(data[i] == b'e' || data[i] == b'E');
     // data[i] == 'e'|'E'
     if let Some(b) = data.get(i + 1) {

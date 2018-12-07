@@ -7,11 +7,8 @@
 %left DIVIDE TIMES.
 
 %include {
-#[macro_use]
-extern crate log;
-extern crate smallvec;
 
-use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
+use log::{debug, error, log_enabled, Level, LevelFilter, Metadata, Record, SetLoggerError};
 
 pub struct Context {
     expr: Option<Expr>,

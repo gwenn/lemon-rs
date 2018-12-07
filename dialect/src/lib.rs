@@ -1,8 +1,6 @@
 #![feature(plugin)]
 #![plugin(phf_macros)]
 
-extern crate phf;
-
 mod token;
 pub use crate::token::TokenType;
 
