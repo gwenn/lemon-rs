@@ -4430,7 +4430,7 @@ void ReportTable(
   if( lemp->has_fallback ){
     int mx = lemp->nterminal - 1;
     while( mx>0 && lemp->symbols[mx]->fallback==0 ){ mx--; }
-    fprintf(out, "static yyFallback: [YYCODETYPE; %d] = [\n", mx); lineno++;
+    fprintf(out, "static yyFallback: [YYCODETYPE; %d] = [\n", mx+1); lineno++;
     lemp->tablesize += (mx+1)*szCodeType;
     for(i=0; i<=mx; i++){
       struct symbol *p = lemp->symbols[i];

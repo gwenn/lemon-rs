@@ -2,7 +2,6 @@
 
 use dialect;
 
-
 mod scan;
 pub mod sql;
 
