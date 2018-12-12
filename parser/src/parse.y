@@ -31,10 +31,10 @@
 // This code runs whenever there is a syntax error
 //
 %syntax_error {
-  if let Token::Eof = yyminor {
+  if TokenType::TK_EOF as u8 == _yymajor {
     error!(target: TARGET, "incomplete input");
   } else {
-    error!(target: TARGET, "near \"{:?}\": syntax error", yyminor);
+    error!(target: TARGET, "near {:?}, \"{:?}\": syntax error", _yymajor, yyminor);
   }
 }
 %stack_overflow {
@@ -49,7 +49,7 @@
 // code file that implements the parser.
 //
 %include {
-use dialect::Token;
+use dialect::{Token, TokenType};
 use log::{debug, error, log_enabled};
 
 } // end %include
@@ -75,10 +75,11 @@ cmdx ::= cmd.           { sqlite3FinishCoding(pParse); }
 /**
 cmd ::= BEGIN transtype(Y) trans_opt.  {sqlite3BeginTransaction(pParse, Y);}
 **/
-trans_opt ::= .
-trans_opt ::= TRANSACTION.
+%type trans_opt {Option<String>}
+trans_opt(A) ::= .               {A = None;}
+trans_opt(A) ::= TRANSACTION.    {A = None;}
+trans_opt(A) ::= TRANSACTION nm(X). {A = X; /*A-overwrites-X*/}
 /**
-trans_opt ::= TRANSACTION nm.
 %type transtype {int}
 transtype(A) ::= .             {A = TK_DEFERRED;}
 transtype(A) ::= DEFERRED(X).  {A = @X; /*A-overwrites-X*}
@@ -210,7 +211,6 @@ columnname(A) ::= nm(A) typetoken(Y). {sqlite3AddColumn(pParse,&A,&Y);}
 
 // The name of a column or table can be any of the following:
 //
-/**
 %type nm {Token}
 nm(A) ::= id(A).
 nm(A) ::= STRING(A).
@@ -220,6 +220,7 @@ nm(A) ::= JOIN_KW(A).
 // as can be found after the column name in a CREATE TABLE statement.
 // Multiple tokens are concatenated to form the value of the typetoken.
 //
+/**
 %type typetoken {Token}
 typetoken(A) ::= .   {A.n = 0; A.z = 0;}
 typetoken(A) ::= typename(A).
