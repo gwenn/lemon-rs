@@ -4537,18 +4537,19 @@ void ReportTable(
       /* No C code actions, so this will be part of the "default:" rule */
       continue;
     }
-    fprintf(out,"      %d => {/* ", rp->iRule);
+    fprintf(out,"      %d /* ", rp->iRule);
     writeRuleText(out, rp);
     fprintf(out, " */\n"); lineno++;
     for(rp2=rp->next; rp2; rp2=rp2->next){
       if( rp2->code==rp->code && rp2->codePrefix==rp->codePrefix
              && rp2->codeSuffix==rp->codeSuffix ){
-        fprintf(out,"      %d => {/* ", rp2->iRule);
+        fprintf(out,"     | %d /* ", rp2->iRule);
         writeRuleText(out, rp2);
-        fprintf(out," */ debug_assert_eq!(yyruleno, %d);\n", rp2->iRule); lineno++;
+        fprintf(out," */\n"); lineno++;
         rp2->codeEmitted = 1;
       }
     }
+    fprintf(out,"     => {\n"); lineno++;
     emit_code(out,rp,lemp,&lineno);
     fprintf(out,"        }\n"); lineno++;
     rp->codeEmitted = 1;

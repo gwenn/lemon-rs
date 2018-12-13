@@ -560,10 +560,10 @@ impl yyParser {
             } else {
                 debug!(
                     target: TARGET,
-                    "{} '{}', pending reduce {}",
+                    "{} '{}', pending reduce {:?}",
                     zTag,
                     yyTokenName[yytos.major as usize],
-                    yyNewState - YY_MIN_REDUCE
+                    yyNewState.checked_sub(YY_MIN_REDUCE)
                 );
             }
         }

@@ -1,8 +1,8 @@
 //! Adaptation/port of [`SQLite` tokenizer](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/tokenize.c)
 use std::result::Result;
 
+pub use crate::dialect::TokenType;
 use crate::dialect::{is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN};
-pub use crate::dialect::{Token, TokenType};
 use memchr::memchr;
 
 mod error;
@@ -42,7 +42,7 @@ pub fn parse(sql: &str) -> Result<Option<()>, Error> {
         } else if token_type == TokenType::TK_FILTER {
             token_type = analyze_filter_keyword(last_token_parsed);
         }
-        let token = token_type.into_token(value);
+        let _token = token_type.into_token(value);
         //parser.sqlite3Parser(token_type, token);
         last_token_parsed = token_type;
         if
@@ -143,6 +143,8 @@ fn analyze_filter_keyword(last_token: TokenType) -> TokenType {
     }
     TokenType::TK_ID
 }
+
+pub type Token<'input> = (&'input [u8], TokenType);
 
 #[derive(Default)]
 pub struct Tokenizer {

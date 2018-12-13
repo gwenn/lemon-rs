@@ -24,7 +24,7 @@ BEXE =
 # This is the default Makefile target.  The objects listed here
 # are what get build when you type just "make" with no arguments.
 #
-all: rlemon$(EXE) simple
+all: rlemon$(EXE) simple sqlite
 
 # Rules to build the LEMON compiler generator
 #
