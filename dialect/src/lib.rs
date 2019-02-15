@@ -1,6 +1,6 @@
-#![feature(plugin)]
-#![plugin(phf_macros)]
+#![feature(proc_macro_hygiene)]
 
+use phf::phf_map;
 use std::str;
 
 mod token;
