@@ -243,7 +243,9 @@ impl IndexMut<i8> for yyParser {
     }
 }
 
+#[cfg(not(feature = "NDEBUG"))]
 use log::Level::Debug;
+#[cfg(not(feature = "NDEBUG"))]
 static TARGET: &'static str = "Parse";
 
 
@@ -288,7 +290,7 @@ impl yyParser {
         let capacity = self.yystack.capacity();
         let additional = capacity + 100;
         self.yystack.reserve(additional);
-        if cfg!(not(feature = "NDEBUG")) {
+        #[cfg(not(feature = "NDEBUG"))] {
             debug!(
                 target: TARGET,
                 "Stack grows from {} to {} entries.",
@@ -333,7 +335,7 @@ impl yyParser {
         let yytos = self.yystack.pop().unwrap();
         self.yyidx -= 1;
         assert_eq!(self.yyidx+1, self.yystack.len());
-        if cfg!(not(feature = "NDEBUG")) {
+        #[cfg(not(feature = "NDEBUG"))] {
             debug!(
                 target: TARGET,
                 "Popping {}",
@@ -430,7 +432,7 @@ impl yyParser {
             return stateno;
         }
         assert!(stateno <= YY_SHIFT_COUNT);
-        if cfg!(feature = "YYCOVERAGE") {
+        #[cfg(feature = "YYCOVERAGE")] {
             //yycoverage[stateno][iLookAhead] = true;
         }
         loop {
@@ -448,7 +450,7 @@ impl yyParser {
                         iFallback
                     } != 0
                     {
-                        if cfg!(not(feature = "NDEBUG")) {
+                        #[cfg(not(feature = "NDEBUG"))] {
                             debug!(
                                 target: TARGET,
                                 "FALLBACK {} => {}",
@@ -469,7 +471,7 @@ impl yyParser {
                         yy_lookahead[j as usize] == YYWILDCARD &&
                         iLookAhead > 0
                     {
-                        if cfg!(not(feature = "NDEBUG")) {
+                        #[cfg(not(feature = "NDEBUG"))] {
                             debug!(
                                 target: TARGET,
                                 "WILDCARD {} => {}",
@@ -525,7 +527,7 @@ fn yy_find_reduce_action(
 impl yyParser {
     #[allow(non_snake_case)]
     fn yyStackOverflow(&mut self) {
-        if cfg!(not(feature = "NDEBUG")) {
+        #[cfg(not(feature = "NDEBUG"))] {
             error!(target: TARGET, "Stack Overflow!");
         }
         while self.yyidx > 0 {
@@ -545,7 +547,7 @@ impl yyParser {
 impl yyParser {
     #[allow(non_snake_case)]
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE, zTag: &str) {
-        if cfg!(not(feature = "NDEBUG")) {
+        #[cfg(not(feature = "NDEBUG"))] {
             let yytos = &self[0];
             if yyNewState < YYNSTATE {
                 debug!(
@@ -623,7 +625,8 @@ impl yyParser {
         let yygoto: YYCODETYPE; /* The next state */
         let yyact: YYACTIONTYPE; /* The next action */
         let yysize: i8; /* Amount to pop the stack */
-        if cfg!(not(feature = "NDEBUG")) && (yyruleno as usize) < yyRuleName.len() {
+#[cfg(not(feature = "NDEBUG"))] {
+        if (yyruleno as usize) < yyRuleName.len() {
             let yysize = yyRuleInfoNRhs[yyruleno as usize];
             if yysize != 0 {
                 debug!(
@@ -642,7 +645,7 @@ impl yyParser {
                 );
             }
         }
-
+}
         /* Check that the stack is large enough to grow by a single entry
          ** if the RHS of the rule is empty.  This ensures that there is room
          ** enough on the stack to push the LHS value */
@@ -694,7 +697,7 @@ impl yyParser {
 impl yyParser {
     #[cfg(not(feature = "YYNOERRORRECOVERY"))]
     fn yy_parse_failed(&mut self) {
-        if cfg!(not(feature = "NDEBUG")) {
+        #[cfg(not(feature = "NDEBUG"))] {
             error!(target: TARGET, "Fail!");
         }
         while self.yyidx > 0 {
@@ -731,7 +734,7 @@ impl yyParser {
 */
 impl yyParser {
     fn yy_accept(&mut self) {
-        if cfg!(not(feature = "NDEBUG")) {
+        #[cfg(not(feature = "NDEBUG"))] {
             debug!(target: TARGET, "Accept!");
         }
         if cfg!(not(feature = "YYNOERRORRECOVERY")) {
@@ -785,7 +788,7 @@ impl yyParser {
         }
 
         yyact = self[0].stateno;
-        if cfg!(not(feature = "NDEBUG")) {
+        #[cfg(not(feature = "NDEBUG"))] {
             if yyact < YY_MIN_REDUCE {
                 debug!(target: TARGET, "Input '{}' in state {}",
                         yyTokenName[yymajor as usize],yyact);
@@ -812,7 +815,7 @@ impl yyParser {
                 return;
             } else {
                 assert_eq!(yyact, YY_ERROR_ACTION);
-                if cfg!(not(feature = "NDEBUG")) {
+                #[cfg(not(feature = "NDEBUG"))] {
                     debug!(target: TARGET, "Syntax Error!");
                 }
                 if YYERRORSYMBOL > 0 {
@@ -840,7 +843,7 @@ impl yyParser {
                     }
                     let yymx = self[0].major;
                     if yymx == YYERRORSYMBOL || yyerrorhit {
-                        if cfg!(not(feature = "NDEBUG")) {
+                        #[cfg(not(feature = "NDEBUG"))] {
                             debug!(
                                 target: TARGET,
                                 "Discard input token {}",
@@ -908,7 +911,7 @@ impl yyParser {
                 break;
             }
         }
-        if cfg!(not(feature = "NDEBUG")) {
+        #[cfg(not(feature = "NDEBUG"))] {
             if log_enabled!(target: TARGET, Debug) {
                 let msg = self.yystack[1..self.yyidx + 1].iter()
                     .map(|entry| yyTokenName[entry.major as usize])
