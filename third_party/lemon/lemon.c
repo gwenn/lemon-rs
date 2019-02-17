@@ -4506,15 +4506,25 @@ void ReportTable(
   tplt_print(out,lemp,lemp->overflow,&lineno);
   tplt_xfer(lemp->name,in,out,&lineno);
 
-  /* Generate the table of rule information
+  /* Generate the tables of rule information.  yyRuleInfoLhs[] and
+  ** yyRuleInfoNRhs[].
   **
   ** Note: This code depends on the fact that rules are number
   ** sequentually beginning with 0.
   */
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
-  fprintf(out, "static yyRuleInfo: [yyRuleInfoEntry; %d] = [\n", lemp->nrule); lineno++;
+  fprintf(out, "static yyRuleInfoLhs: [YYCODETYPE; %d] = [\n", lemp->nrule); lineno++;
   for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){
-    fprintf(out,"    yyRuleInfoEntry{ lhs: %4d, nrhs: %4d }, /* (%d)",rp->lhs->index,-rp->nrhs,i);
+    fprintf(out,"    %4d, /* (%d)", rp->lhs->index, i);
+    rule_print(out, rp);
+    fprintf(out," */\n"); lineno++;
+  }
+  fprintf(out, "];\n"); lineno++;
+  tplt_xfer(lemp->name,in,out,&lineno);
+  fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
+  fprintf(out, "static yyRuleInfoNRhs: [i8; %d] = [\n", lemp->nrule); lineno++;
+  for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){
+    fprintf(out,"    %3d,  /* (%d)", -rp->nrhs, i);
     rule_print(out, rp);
     fprintf(out," */\n"); lineno++;
   }
@@ -4587,6 +4597,7 @@ void ReportTable(
   /* Append any addition code the user desires */
   tplt_print(out,lemp,lemp->extracode,&lineno);
 
+  acttab_free(pActtab);
   fclose(in);
   fclose(out);
   return;

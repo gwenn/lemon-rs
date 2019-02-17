@@ -597,14 +597,12 @@ impl yyParser {
     }
 }
 
-/* The following table contains information about every rule that
-** is used during the reduce.
-*/
-#[allow(non_camel_case_types)]
-struct yyRuleInfoEntry {
-    lhs: YYCODETYPE, /* Symbol on the left-hand side of the rule */
-    nrhs: i8,        /* Negative of the number of RHS symbols in the rule */
-}
+/* For rule J, yyRuleInfoLhs[J] contains the symbol on the left-hand side
+** of that rule */
+%%
+
+/* For rule J, yyRuleInfoNRhs[J] contains the negative of the number
+** of symbols on the right-hand side of that rule. */
 %%
 
 /*
@@ -628,7 +626,7 @@ impl yyParser {
         let yyact: YYACTIONTYPE; /* The next action */
         let yysize: i8; /* Amount to pop the stack */
         if cfg!(not(feature = "NDEBUG")) && (yyruleno as usize) < yyRuleName.len() {
-            let yysize = yyRuleInfo[yyruleno as usize].nrhs;
+            let yysize = yyRuleInfoNRhs[yyruleno as usize];
             if yysize != 0 {
                 debug!(
                 target: TARGET,
@@ -650,7 +648,7 @@ impl yyParser {
         /* Check that the stack is large enough to grow by a single entry
          ** if the RHS of the rule is empty.  This ensures that there is room
          ** enough on the stack to push the LHS value */
-        if yyRuleInfo[yyruleno as usize].nrhs == 0 {
+        if yyRuleInfoNRhs[yyruleno as usize] == 0 {
             self.yyhwm_incr();
             self.yy_grow_stack_for_push();
         }
@@ -669,9 +667,9 @@ impl yyParser {
 %%
 /********** End reduce actions ************************************************/
         };
-        assert!((yyruleno as usize) < yyRuleInfo.len());
-        yygoto = yyRuleInfo[yyruleno as usize].lhs;
-        yysize = yyRuleInfo[yyruleno as usize].nrhs;
+        assert!((yyruleno as usize) < yyRuleInfoLhs.len());
+        yygoto = yyRuleInfoLhs[yyruleno as usize];
+        yysize = yyRuleInfoNRhs[yyruleno as usize];
         yyact = yy_find_reduce_action(self[yysize].stateno, yygoto);
 
         /* There are no SHIFTREDUCE actions on nonterminals because the table
@@ -853,10 +851,10 @@ impl yyParser {
                         }
                         yymajor = YYNOCODE;
                     } else {
-                        while self.yyidx >= 0 && yymx != YYERRORSYMBOL && {
+                        while self.yyidx >= 0 && {
                             yyact = yy_find_reduce_action(self[0].stateno, YYERRORSYMBOL);
                             yyact
-                        } >= YY_MIN_REDUCE
+                        } > YY_MAX_SHIFTREDUCE
                         {
                             self.yy_pop_parser_stack();
                         }
