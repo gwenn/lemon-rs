@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2018"
 authors = ["gwenn"]
 description = "SQLite dialect"
-#documentation = "http://docs.rs/scan-rs"
+#documentation = "http://docs.rs/lemon-rs"
 repository = "https://github.com/gwenn/lemon-rs"
 #readme = "README.md"
 categories = ["parser-implementations"]
@@ -12,7 +12,7 @@ keywords = ["sqlite"]
 license = "Unlicense/MIT"
 
 [badges]
-#travis-ci = { repository = "gwenn/scan-rs" }
+#travis-ci = { repository = "gwenn/lemon-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]

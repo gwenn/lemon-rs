@@ -3965,6 +3965,7 @@ void print_stack_union(
   /* Print out the definition of YYTOKENTYPE and YYMINORTYPE */
   name = lemp->name ? lemp->name : "Parse";
   lineno = *plineno;
+  fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
   fprintf(out,"type %sTOKENTYPE = %s;\n",name,
     lemp->tokentype?lemp->tokentype:"void*");  lineno++; // FIXME
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;

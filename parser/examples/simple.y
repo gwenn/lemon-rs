@@ -107,6 +107,7 @@ fn init_logger() -> Result<(), SetLoggerError> {
 }
 
 %syntax_error {
+    let _ = yymajor;
     println!("near token {}: syntax error", yyminor);
 }
 

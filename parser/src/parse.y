@@ -26,15 +26,15 @@
 
 // An extra argument to the constructor for the parser, which is available
 // to all actions.
-%extra_context {Parse *pParse}
+//%extra_context {Parse *pParse} FIXME
 
 // This code runs whenever there is a syntax error
 //
 %syntax_error {
-  if TokenType::TK_EOF as u8 == _yymajor {
+  if TokenType::TK_EOF as u8 == yymajor {
     error!(target: TARGET, "incomplete input");
   } else {
-    error!(target: TARGET, "near {:?}, \"{:?}\": syntax error", _yymajor, yyminor);
+    error!(target: TARGET, "near {:?}, \"{:?}\": syntax error", yymajor, yyminor);
   }
 }
 %stack_overflow {

@@ -243,9 +243,7 @@ impl IndexMut<i8> for yyParser {
     }
 }
 
-#[cfg(not(feature = "NDEBUG"))]
 use log::Level::Debug;
-#[cfg(not(feature = "NDEBUG"))]
 static TARGET: &'static str = "Parse";
 
 
@@ -653,7 +651,7 @@ impl yyParser {
             self.yy_grow_stack_for_push();
         }
 
-        let yylhsminor;
+        let yylhsminor: YYMINORTYPE;
         match yyruleno {
   /* Beginning here are the reduction cases.  A typical example
   ** follows:
@@ -719,7 +717,7 @@ impl yyParser {
 impl yyParser {
     fn yy_syntax_error(
         &mut self,
-        _yymajor: YYCODETYPE,    /* The major type of the error token */
+        yymajor: YYCODETYPE,    /* The major type of the error token */
         yyminor: ParseTOKENTYPE, /* The minor type of the error token */
     ) {
         /************ Begin %syntax_error code ****************************************/
@@ -769,7 +767,7 @@ impl yyParser {
 */
 impl yyParser {
     #[allow(non_snake_case)]
-    fn Parse(
+    pub fn Parse(
         &mut self,
         yymajor: YYCODETYPE,     /* The major token code number */
         yyminor: ParseTOKENTYPE, /* The value for the token */
