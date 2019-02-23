@@ -38,44 +38,44 @@ fn main() {
 
     let r = Context { expr: None };
     let mut p = yyParser::new(r);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 5);
-    p.Parse(TokenType::PLUS as YYCODETYPE, 0);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 10);
-    p.Parse(TokenType::TIMES as YYCODETYPE, 0);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 4);
-    p.Parse(TokenType::EOF as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(5));
+    p.Parse(TokenType::PLUS as YYCODETYPE, None);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(10));
+    p.Parse(TokenType::TIMES as YYCODETYPE, None);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(4));
+    p.Parse(TokenType::EOF as YYCODETYPE, None);
     p.ParseFinalize();
     let s = format!("{:?}", p.ctx.expr);
     assert_eq!(s, "Some(Binary(Add, Number(5), Binary(Multiply, Number(10), Number(4))))");
 
     let r = Context { expr: None };
     let mut p = yyParser::new(r);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 15);
-    p.Parse(TokenType::DIVIDE as YYCODETYPE, 0);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 5);
-    p.Parse(TokenType::EOF as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(15));
+    p.Parse(TokenType::DIVIDE as YYCODETYPE, None);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(5));
+    p.Parse(TokenType::EOF as YYCODETYPE, None);
     p.ParseFinalize();
     let s = format!("{:?}", p.ctx.expr);
     assert_eq!(s, "Some(Binary(Divide, Number(15), Number(5)))");
 
     let r = Context { expr: None };
     let mut p = yyParser::new(r);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 50);
-    p.Parse(TokenType::PLUS as YYCODETYPE, 0);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 125);
-    p.Parse(TokenType::EOF as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(50));
+    p.Parse(TokenType::PLUS as YYCODETYPE, None);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(125));
+    p.Parse(TokenType::EOF as YYCODETYPE, None);
     p.ParseFinalize();
     let s = format!("{:?}", p.ctx.expr);
     assert_eq!(s, "Some(Binary(Add, Number(50), Number(125)))");
 
     let r = Context { expr: None };
     let mut p = yyParser::new(r);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 50);
-    p.Parse(TokenType::TIMES as YYCODETYPE, 0);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 125);
-    p.Parse(TokenType::PLUS as YYCODETYPE, 0);
-    p.Parse(TokenType::INTEGER as YYCODETYPE, 125);
-    p.Parse(TokenType::EOF as YYCODETYPE, 0);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(50));
+    p.Parse(TokenType::TIMES as YYCODETYPE, None);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(125));
+    p.Parse(TokenType::PLUS as YYCODETYPE, None);
+    p.Parse(TokenType::INTEGER as YYCODETYPE, Some(125));
+    p.Parse(TokenType::EOF as YYCODETYPE, None);
     p.ParseFinalize();
     let s = format!("{:?}", p.ctx.expr);
     assert_eq!(s, "Some(Binary(Add, Binary(Multiply, Number(50), Number(125)), Number(125)))");
@@ -108,7 +108,7 @@ fn init_logger() -> Result<(), SetLoggerError> {
 
 %syntax_error {
     let _ = yymajor;
-    println!("near token {}: syntax error", yyminor);
+    println!("near token {:?}: syntax error", yyminor);
 }
 
 program ::= expr(A). { self.ctx.expr = Some(A); }
@@ -119,4 +119,4 @@ expr(A) ::= expr(B) PLUS expr(C). { A = Expr::binary(Operator::Add, B, C); }
 expr(A) ::= expr(B) TIMES expr(C). { A = Expr::binary(Operator::Multiply, B, C); }
 expr(A) ::= expr(B) DIVIDE expr(C). { A = Expr::binary(Operator::Divide, B, C); }
 
-expr(A) ::= INTEGER(B). { A = Expr::Number(B); }
+expr(A) ::= INTEGER(B). { A = Expr::Number(B.unwrap()); }

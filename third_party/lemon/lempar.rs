@@ -579,7 +579,7 @@ impl yyParser {
         &mut self,
         yyNewState: YYACTIONTYPE, /* The new state to shift in */
         yyMajor: YYCODETYPE,      /* The major token to shift in */
-        yyMinor: ParseTOKENTYPE,  /* The minor token to shift in */
+        yyMinor: Option<ParseTOKENTYPE>,  /* The minor token to shift in */
     ) {
         let mut yyNewState = yyNewState;
         self.yyidx_shift(1);
@@ -620,7 +620,7 @@ impl yyParser {
         &mut self,
         yyruleno: YYACTIONTYPE, /* Number of the rule by which to reduce */
         _yy_lookahead: YYCODETYPE,             /* Lookahead token, or YYNOCODE if none */
-        _yy_lookahead_token: ParseTOKENTYPE  /* Value of the lookahead token */
+        _yy_lookahead_token: Option<&ParseTOKENTYPE>  /* Value of the lookahead token */
     ) -> YYACTIONTYPE {
         let yygoto: YYCODETYPE; /* The next state */
         let yyact: YYACTIONTYPE; /* The next action */
@@ -721,7 +721,7 @@ impl yyParser {
     fn yy_syntax_error(
         &mut self,
         yymajor: YYCODETYPE,    /* The major type of the error token */
-        yyminor: ParseTOKENTYPE, /* The minor type of the error token */
+        yyminor: Option<&ParseTOKENTYPE>, /* The minor type of the error token */
     ) {
         /************ Begin %syntax_error code ****************************************/
 %%
@@ -773,7 +773,7 @@ impl yyParser {
     pub fn Parse(
         &mut self,
         yymajor: YYCODETYPE,     /* The major token code number */
-        yyminor: ParseTOKENTYPE, /* The value for the token */
+        mut yyminor: Option<ParseTOKENTYPE>, /* The value for the token */
     ) {
         let mut yymajor = yymajor;
         let mut yyact: YYACTIONTYPE; /* The parser action. */
@@ -802,9 +802,9 @@ impl yyParser {
             assert_eq!(yyact, self[0].stateno);
             yyact = self.yy_find_shift_action(yymajor,yyact);
             if yyact >= YY_MIN_REDUCE {
-                yyact = self.yy_reduce(yyact - YY_MIN_REDUCE,yymajor,yyminor);
+                yyact = self.yy_reduce(yyact - YY_MIN_REDUCE,yymajor,yyminor.as_ref());
             } else if yyact <= YY_MAX_SHIFTREDUCE {
-                self.yy_shift(yyact, yymajor, yyminor);
+                self.yy_shift(yyact, yymajor, yyminor.take());
                 if cfg!(not(feature = "YYNOERRORRECOVERY")) {
                     self.yyerrcnt -= 1;
                 }
@@ -839,7 +839,7 @@ impl yyParser {
                      **
                      */
                     if self.yyerrcnt < 0 {
-                        self.yy_syntax_error(yymajor, yyminor);
+                        self.yy_syntax_error(yymajor, yyminor.as_ref());
                     }
                     let yymx = self[0].major;
                     if yymx == YYERRORSYMBOL || yyerrorhit {
@@ -866,7 +866,7 @@ impl yyParser {
                             }
                             yymajor = YYNOCODE;
                         } else if yymx != YYERRORSYMBOL {
-                            self.yy_shift(yyact, YYERRORSYMBOL, yyminor);
+                            self.yy_shift(yyact, YYERRORSYMBOL, yyminor.take());
                         }
                     }
                     self.yyerrcnt = 3;
@@ -881,7 +881,7 @@ impl yyParser {
                      ** Applications can set this macro (for example inside %include) if
                      ** they intend to abandon the parse upon the first syntax error seen.
                      */
-                    self.yy_syntax_error(yymajor, yyminor);
+                    self.yy_syntax_error(yymajor, yyminor.as_ref());
                     break;
                 } else {
                     /* YYERRORSYMBOL is not defined */
@@ -895,7 +895,7 @@ impl yyParser {
                      ** three input tokens have been successfully shifted.
                      */
                     if self.yyerrcnt <= 0 {
-                        self.yy_syntax_error(yymajor, yyminor);
+                        self.yy_syntax_error(yymajor, yyminor.as_ref());
                     }
                     self.yyerrcnt = 3;
                     if yyendofinput {
@@ -926,7 +926,7 @@ impl yyParser {
 ** Return the fallback token corresponding to canonical token iToken, or
 ** 0 if iToken has no fallback.
 */
-    fn parse_fallback(i_token: YYCODETYPE) -> YYCODETYPE {
+    pub fn parse_fallback(i_token: YYCODETYPE) -> YYCODETYPE {
         if YYFALLBACK {
             if (i_token as usize) < yyFallback.len() {
                 return yyFallback[i_token as usize];

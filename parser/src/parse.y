@@ -21,8 +21,8 @@
 // The type of the data attached to each token is Token.  This is also the
 // default type for non-terminals.
 //
-%token_type {Token}
-%default_type {Token}
+%token_type {String}
+%default_type {String}
 
 // An extra argument to the constructor for the parser, which is available
 // to all actions.
@@ -49,7 +49,7 @@
 // code file that implements the parser.
 //
 %include {
-use dialect::{Token, TokenType};
+use dialect::TokenType;
 use log::{debug, error, log_enabled};
 
 } // end %include
@@ -211,7 +211,7 @@ columnname(A) ::= nm(A) typetoken(Y). {sqlite3AddColumn(pParse,&A,&Y);}
 
 // The name of a column or table can be any of the following:
 //
-%type nm {Token}
+%type nm {String}
 nm(A) ::= id(A).
 nm(A) ::= STRING(A).
 nm(A) ::= JOIN_KW(A).
