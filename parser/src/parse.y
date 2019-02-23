@@ -22,7 +22,7 @@
 // default type for non-terminals.
 //
 %token_type {String}
-%default_type {String}
+%default_type {Option<String>}
 
 // An extra argument to the constructor for the parser, which is available
 // to all actions.
@@ -78,7 +78,7 @@ cmd ::= BEGIN transtype(Y) trans_opt.  {sqlite3BeginTransaction(pParse, Y);}
 %type trans_opt {Option<String>}
 trans_opt(A) ::= .               {A = None;}
 trans_opt(A) ::= TRANSACTION.    {A = None;}
-trans_opt(A) ::= TRANSACTION nm(X). {A = X; /*A-overwrites-X*/}
+trans_opt(A) ::= TRANSACTION nm(X). {A = Some(X); /*A-overwrites-X*/}
 /**
 %type transtype {int}
 transtype(A) ::= .             {A = TK_DEFERRED;}
@@ -212,9 +212,9 @@ columnname(A) ::= nm(A) typetoken(Y). {sqlite3AddColumn(pParse,&A,&Y);}
 // The name of a column or table can be any of the following:
 //
 %type nm {String}
-nm(A) ::= id(A).
-nm(A) ::= STRING(A).
-nm(A) ::= JOIN_KW(A).
+nm(A) ::= id(X). { A = X.unwrap(); }
+nm(A) ::= STRING(X). { A = X.unwrap(); }
+nm(A) ::= JOIN_KW(X). { A = X.unwrap(); }
 
 // A typetoken is really zero or more tokens that form a type name such
 // as can be found after the column name in a CREATE TABLE statement.
