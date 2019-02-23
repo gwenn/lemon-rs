@@ -29,6 +29,7 @@ https://www.codeproject.com/Articles/1056460/Generating-a-High-Speed-Parser-Part
 
 * RHS are moved. Maybe it is not a problem if they are always used once.
   Just add a check in lemon...
+* `%extra_argument` and `%extra_context` are not correctly used/supported.
 
 ## Raison d'être
 

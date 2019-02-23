@@ -1320,7 +1320,7 @@ impl Display for GroupBy {
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Name(String); // TODO distinction between Name and "Name"/[Name]/`Name`
+pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 impl Display for Name {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {

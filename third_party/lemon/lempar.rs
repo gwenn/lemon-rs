@@ -619,12 +619,14 @@ impl yyParser {
     fn yy_reduce(
         &mut self,
         yyruleno: YYACTIONTYPE, /* Number of the rule by which to reduce */
-        _yy_lookahead: YYCODETYPE,             /* Lookahead token, or YYNOCODE if none */
-        _yy_lookahead_token: Option<&ParseTOKENTYPE>  /* Value of the lookahead token */
+        yy_look_ahead: YYCODETYPE,             /* Lookahead token, or YYNOCODE if none */
+        yy_lookahead_token: Option<&ParseTOKENTYPE>,  /* Value of the lookahead token */
     ) -> YYACTIONTYPE {
         let yygoto: YYCODETYPE; /* The next state */
         let yyact: YYACTIONTYPE; /* The next action */
         let yysize: i8; /* Amount to pop the stack */
+        let _ = yy_look_ahead;
+        let _ = yy_lookahead_token;
 #[cfg(not(feature = "NDEBUG"))] {
         if (yyruleno as usize) < yyRuleName.len() {
             let yysize = yyRuleInfoNRhs[yyruleno as usize];

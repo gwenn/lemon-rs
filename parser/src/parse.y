@@ -26,7 +26,7 @@
 
 // An extra argument to the constructor for the parser, which is available
 // to all actions.
-//%extra_context {Parse *pParse} FIXME
+%extra_argument {ctx: Context}
 
 // This code runs whenever there is a syntax error
 //
@@ -49,6 +49,8 @@
 // code file that implements the parser.
 //
 %include {
+use crate::ast::{Name, Stmt, TransactionType};
+use crate::Context;
 use dialect::TokenType;
 use log::{debug, error, log_enabled};
 
@@ -72,19 +74,19 @@ cmdx ::= cmd.           { sqlite3FinishCoding(pParse); }
 ///////////////////// Begin and end transactions. ////////////////////////////
 //
 
-/**
-cmd ::= BEGIN transtype(Y) trans_opt.  {sqlite3BeginTransaction(pParse, Y);}
-**/
-%type trans_opt {Option<String>}
+cmd ::= BEGIN transtype(Y) trans_opt(X).  {
+  self.ctx.stmt = Some(Stmt::Begin(Y, X));
+}
+%type trans_opt {Option<Name>}
 trans_opt(A) ::= .               {A = None;}
 trans_opt(A) ::= TRANSACTION.    {A = None;}
 trans_opt(A) ::= TRANSACTION nm(X). {A = Some(X); /*A-overwrites-X*/}
+%type transtype {Option<TransactionType>}
+transtype(A) ::= .             {A = None;}
+transtype(A) ::= DEFERRED.  {A = Some(TransactionType::Deferred);}
+transtype(A) ::= IMMEDIATE. {A = Some(TransactionType::Immediate);}
+transtype(A) ::= EXCLUSIVE. {A = Some(TransactionType::Exclusive);}
 /**
-%type transtype {int}
-transtype(A) ::= .             {A = TK_DEFERRED;}
-transtype(A) ::= DEFERRED(X).  {A = @X; /*A-overwrites-X*}
-transtype(A) ::= IMMEDIATE(X). {A = @X; /*A-overwrites-X*}
-transtype(A) ::= EXCLUSIVE(X). {A = @X; /*A-overwrites-X*}
 cmd ::= COMMIT|END(X) trans_opt.   {sqlite3EndTransaction(pParse,@X);}
 cmd ::= ROLLBACK(X) trans_opt.     {sqlite3EndTransaction(pParse,@X);}
 
@@ -211,10 +213,10 @@ columnname(A) ::= nm(A) typetoken(Y). {sqlite3AddColumn(pParse,&A,&Y);}
 
 // The name of a column or table can be any of the following:
 //
-%type nm {String}
-nm(A) ::= id(X). { A = X.unwrap(); }
-nm(A) ::= STRING(X). { A = X.unwrap(); }
-nm(A) ::= JOIN_KW(X). { A = X.unwrap(); }
+%type nm {Name}
+nm(A) ::= id(X). { A = Name(X.unwrap()); }
+nm(A) ::= STRING(X). { A = Name(X.unwrap()); }
+nm(A) ::= JOIN_KW(X). { A = Name(X.unwrap()); }
 
 // A typetoken is really zero or more tokens that form a type name such
 // as can be found after the column name in a CREATE TABLE statement.
