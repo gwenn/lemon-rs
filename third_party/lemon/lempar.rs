@@ -465,8 +465,8 @@ impl yyParser {
                 }
                 if YYWILDCARD > 0 {
                     let j = i - i32::from(iLookAhead + YYWILDCARD);
-                    if (YY_SHIFT_MIN + YYWILDCARD >= 0 || j >= 0) &&
-                        (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT || j < i32::from(YY_ACTTAB_COUNT)) &&
+                    if (YY_SHIFT_MIN + (YYWILDCARD as YY_SHIFT_TYPE) >= 0 || j >= 0) &&
+                        (YY_SHIFT_MAX + (YYWILDCARD as YY_SHIFT_TYPE) < YY_ACTTAB_COUNT.into() || j < i32::from(YY_ACTTAB_COUNT)) &&
                         (j as usize) < yy_lookahead.len() &&
                         yy_lookahead[j as usize] == YYWILDCARD &&
                         iLookAhead > 0

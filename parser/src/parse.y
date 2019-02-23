@@ -49,7 +49,7 @@
 // code file that implements the parser.
 //
 %include {
-use crate::ast::{Name, Stmt, TransactionType};
+use crate::ast::{Name, QualifiedName, Stmt, TransactionType};
 use crate::Context;
 use dialect::TokenType;
 use log::{debug, error, log_enabled};
@@ -74,9 +74,7 @@ cmdx ::= cmd.           { sqlite3FinishCoding(pParse); }
 ///////////////////// Begin and end transactions. ////////////////////////////
 //
 
-cmd ::= BEGIN transtype(Y) trans_opt(X).  {
-  self.ctx.stmt = Some(Stmt::Begin(Y, X));
-}
+cmd ::= BEGIN transtype(Y) trans_opt(X).  {self.ctx.stmt = Some(Stmt::Begin(Y, X));}
 %type trans_opt {Option<Name>}
 trans_opt(A) ::= .               {A = None;}
 trans_opt(A) ::= TRANSACTION.    {A = None;}
@@ -86,22 +84,20 @@ transtype(A) ::= .             {A = None;}
 transtype(A) ::= DEFERRED.  {A = Some(TransactionType::Deferred);}
 transtype(A) ::= IMMEDIATE. {A = Some(TransactionType::Immediate);}
 transtype(A) ::= EXCLUSIVE. {A = Some(TransactionType::Exclusive);}
-/**
-cmd ::= COMMIT|END(X) trans_opt.   {sqlite3EndTransaction(pParse,@X);}
-cmd ::= ROLLBACK(X) trans_opt.     {sqlite3EndTransaction(pParse,@X);}
+cmd ::= COMMIT|END trans_opt(X).   {self.ctx.stmt = Some(Stmt::Commit(X));}
+cmd ::= ROLLBACK trans_opt(X).     {self.ctx.stmt = Some(Stmt::Rollback{tx_name: X, savepoint_name: None});}
 
 savepoint_opt ::= SAVEPOINT.
 savepoint_opt ::= .
 cmd ::= SAVEPOINT nm(X). {
-  sqlite3Savepoint(pParse, SAVEPOINT_BEGIN, &X);
+  self.ctx.stmt = Some(Stmt::Savepoint(X));
 }
 cmd ::= RELEASE savepoint_opt nm(X). {
-  sqlite3Savepoint(pParse, SAVEPOINT_RELEASE, &X);
+  self.ctx.stmt = Some(Stmt::Release(X));
 }
-cmd ::= ROLLBACK trans_opt TO savepoint_opt nm(X). {
-  sqlite3Savepoint(pParse, SAVEPOINT_ROLLBACK, &X);
+cmd ::= ROLLBACK trans_opt(Y) TO savepoint_opt nm(X). {
+  self.ctx.stmt = Some(Stmt::Rollback{tx_name: Y, savepoint_name: Some(X)});
 }
-**/
 
 ///////////////////// The CREATE TABLE statement ////////////////////////////
 //
@@ -369,14 +365,12 @@ resolvetype(A) ::= REPLACE.                  {A = OE_Replace;}
 
 ////////////////////////// The DROP TABLE /////////////////////////////////////
 //
-/**
 cmd ::= DROP TABLE ifexists(E) fullname(X). {
-  sqlite3DropTable(pParse, X, 0, E);
+  self.ctx.stmt = Some(Stmt::DropTable{ if_exists: E, tbl_name: X});
 }
-%type ifexists {int}
-ifexists(A) ::= IF EXISTS.   {A = 1;}
-ifexists(A) ::= .            {A = 0;}
-**/
+%type ifexists {bool}
+ifexists(A) ::= IF EXISTS.   {A = true;}
+ifexists(A) ::= .            {A = false;}
 
 ///////////////////// The CREATE VIEW statement /////////////////////////////
 //
@@ -386,10 +380,10 @@ cmd ::= createkw(X) temp(T) VIEW ifnotexists(E) nm(Y) dbnm(Z) eidlist_opt(C)
           AS select(S). {
   sqlite3CreateView(pParse, &X, &Y, &Z, C, S, T, E);
 }
-cmd ::= DROP VIEW ifexists(E) fullname(X). {
-  sqlite3DropTable(pParse, X, 1, E);
-}
 **/
+cmd ::= DROP VIEW ifexists(E) fullname(X). {
+  self.ctx.stmt = Some(Stmt::DropView{ if_exists: E, view_name: X });
+}
 %endif  SQLITE_OMIT_VIEW
 
 //////////////////////// The SELECT statement /////////////////////////////////
@@ -611,32 +605,29 @@ seltablist(A) ::= stl_prefix(A) nm(Y) dbnm(D) LP exprlist(E) RP as(Z)
   }
 %endif  SQLITE_OMIT_SUBQUERY
 
-%type dbnm {Token}
-dbnm(A) ::= .          {A.z=0; A.n=0;}
-dbnm(A) ::= DOT nm(X). {A = X;}
+%type dbnm {Option<String>}
+dbnm(A) ::= .          {A = None;}
+dbnm(A) ::= DOT nm(X). {A = Some(X);}
+**/
 
-%type fullname {SrcList*}
+%type fullname {QualifiedName}
 fullname(A) ::= nm(X).  {
-  A = sqlite3SrcListAppend(pParse->db,0,&X,0);
-  if( IN_RENAME_OBJECT && A ) sqlite3RenameTokenMap(pParse, A->a[0].zName, &X);
+  A = QualifiedName::single(X);
 }
 fullname(A) ::= nm(X) DOT nm(Y). {
-  A = sqlite3SrcListAppend(pParse->db,0,&X,&Y);
-  if( IN_RENAME_OBJECT && A ) sqlite3RenameTokenMap(pParse, A->a[0].zName, &Y);
+  A = QualifiedName::fullname(X, Y);
 }
-
-%type xfullname {SrcList*}
+/**
+%type xfullname {QualifiedName}
 xfullname(A) ::= nm(X).
-   {A = sqlite3SrcListAppend(pParse->db,0,&X,0); /*A-overwrites-X*}
+   {A = QualifiedName::single(X); /*A-overwrites-X*}
 xfullname(A) ::= nm(X) DOT nm(Y).
-   {A = sqlite3SrcListAppend(pParse->db,0,&X,&Y); /*A-overwrites-X*}
+   {A = QualifiedName::fullname(X, Y); /*A-overwrites-X*}
 xfullname(A) ::= nm(X) DOT nm(Y) AS nm(Z).  {
-   A = sqlite3SrcListAppend(pParse->db,0,&X,&Y); /*A-overwrites-X*
-   if( A ) A->a[0].zAlias = sqlite3NameFromToken(pParse->db, &Z);
+   A = QualifiedName::xfullname(X, Y, Z); /*A-overwrites-X*
 }
 xfullname(A) ::= nm(X) AS nm(Z). {
-   A = sqlite3SrcListAppend(pParse->db,0,&X,0); /*A-overwrites-X*
-   if( A ) A->a[0].zAlias = sqlite3NameFromToken(pParse->db, &Z);
+   A = QualifiedName::alias(X, Z); /*A-overwrites-X*
 }
 
 %type joinop {int}
@@ -1227,18 +1218,14 @@ collate(C) ::= COLLATE ids.   {C = 1;}
 
 ///////////////////////////// The DROP INDEX command /////////////////////////
 //
-/**
-cmd ::= DROP INDEX ifexists(E) fullname(X).   {sqlite3DropIndex(pParse, X, E);}
-**/
+cmd ::= DROP INDEX ifexists(E) fullname(X).   {self.ctx.stmt = Some(Stmt::DropIndex{if_exists: E, idx_name: X});}
 
 ///////////////////////////// The VACUUM command /////////////////////////////
 //
 %ifndef SQLITE_OMIT_VACUUM
 %ifndef SQLITE_OMIT_ATTACH
-/**
-cmd ::= VACUUM.                {sqlite3Vacuum(pParse,0);}
-cmd ::= VACUUM nm(X).          {sqlite3Vacuum(pParse,&X);}
-**/
+cmd ::= VACUUM.                {self.ctx.stmt = Some(Stmt::Vacuum(None));}
+cmd ::= VACUUM nm(X).          {self.ctx.stmt = Some(Stmt::Vacuum(Some(X)));}
 %endif  SQLITE_OMIT_ATTACH
 %endif  SQLITE_OMIT_VACUUM
 
@@ -1388,11 +1375,9 @@ raisetype(A) ::= FAIL.      {A = OE_Fail;}
 
 ////////////////////////  DROP TRIGGER statement //////////////////////////////
 %ifndef SQLITE_OMIT_TRIGGER
-/**
 cmd ::= DROP TRIGGER ifexists(NOERR) fullname(X). {
-  sqlite3DropTrigger(pParse,X,NOERR);
+  self.ctx.stmt = Some(Stmt::DropTrigger{ if_exists: NOERR, trigger_name: X});
 }
-**/
 %endif  !SQLITE_OMIT_TRIGGER
 
 //////////////////////// ATTACH DATABASE file AS name /////////////////////////
@@ -1416,18 +1401,14 @@ database_kw_opt ::= .
 
 ////////////////////////// REINDEX collation //////////////////////////////////
 %ifndef SQLITE_OMIT_REINDEX
-/**
-cmd ::= REINDEX.                {sqlite3Reindex(pParse, 0, 0);}
-cmd ::= REINDEX nm(X) dbnm(Y).  {sqlite3Reindex(pParse, &X, &Y);}
-**/
+cmd ::= REINDEX.                {self.ctx.stmt = Some(Stmt::Reindex { obj_name: None });}
+cmd ::= REINDEX fullname(X).  {self.ctx.stmt = Some(Stmt::Reindex { obj_name: Some(X) });}
 %endif  SQLITE_OMIT_REINDEX
 
 /////////////////////////////////// ANALYZE ///////////////////////////////////
 %ifndef SQLITE_OMIT_ANALYZE
-/**
-cmd ::= ANALYZE.                {sqlite3Analyze(pParse, 0, 0);}
-cmd ::= ANALYZE nm(X) dbnm(Y).  {sqlite3Analyze(pParse, &X, &Y);}
-**/
+cmd ::= ANALYZE.                {self.ctx.stmt = Some(Stmt::Analyze(None));}
+cmd ::= ANALYZE fullname(X).  {self.ctx.stmt = Some(Stmt::Analyze(Some(X)));}
 %endif
 
 //////////////////////// ALTER TABLE table ... ////////////////////////////////

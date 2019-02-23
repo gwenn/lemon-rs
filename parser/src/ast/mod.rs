@@ -1335,6 +1335,21 @@ pub struct QualifiedName {
     pub alias: Option<Name>, // FIXME restrict alias usage (fullname vs xfullname)
 }
 
+impl QualifiedName {
+    pub fn single(name: Name) -> Self {
+        QualifiedName {db_name: None, name: name, alias: None}
+    }
+    pub fn fullname(db_name: Name, name: Name) -> Self {
+        QualifiedName {db_name: Some(db_name), name: name, alias: None}
+    }
+    pub fn xfullname(db_name: Name, name: Name, alias: Name) -> Self {
+        QualifiedName {db_name: Some(db_name), name: name, alias: Some(alias)}
+    }
+    pub fn alias(name: Name, alias: Name) -> Self {
+        QualifiedName {db_name: None, name: name, alias: Some(alias)}
+    }
+}
+
 impl Display for QualifiedName {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if let Some(ref db_name) = self.db_name {
