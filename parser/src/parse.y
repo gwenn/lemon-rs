@@ -49,7 +49,7 @@
 // code file that implements the parser.
 //
 %include {
-use crate::ast::{Name, QualifiedName, Stmt, TransactionType};
+use crate::ast::{Expr, Literal, Name, PragmaBody, QualifiedName, Stmt, TransactionType, UnaryOperator};
 use crate::Context;
 use dialect::TokenType;
 use log::{debug, error, log_enabled};
@@ -1232,26 +1232,27 @@ cmd ::= VACUUM nm(X).          {self.ctx.stmt = Some(Stmt::Vacuum(Some(X)));}
 ///////////////////////////// The PRAGMA command /////////////////////////////
 //
 %ifndef SQLITE_OMIT_PRAGMA
-/**
-cmd ::= PRAGMA nm(X) dbnm(Z).                {sqlite3Pragma(pParse,&X,&Z,0,0);}
-cmd ::= PRAGMA nm(X) dbnm(Z) EQ nmnum(Y).    {sqlite3Pragma(pParse,&X,&Z,&Y,0);}
-cmd ::= PRAGMA nm(X) dbnm(Z) LP nmnum(Y) RP. {sqlite3Pragma(pParse,&X,&Z,&Y,0);}
-cmd ::= PRAGMA nm(X) dbnm(Z) EQ minus_num(Y). 
-                                             {sqlite3Pragma(pParse,&X,&Z,&Y,1);}
-cmd ::= PRAGMA nm(X) dbnm(Z) LP minus_num(Y) RP.
-                                             {sqlite3Pragma(pParse,&X,&Z,&Y,1);}
+cmd ::= PRAGMA fullname(X).                {self.ctx.stmt = Some(Stmt::Pragma(X, None));}
+cmd ::= PRAGMA fullname(X) EQ nmnum(Y).    {self.ctx.stmt = Some(Stmt::Pragma(X, Some(PragmaBody::Equals(Y))));}
+cmd ::= PRAGMA fullname(X) LP nmnum(Y) RP. {self.ctx.stmt = Some(Stmt::Pragma(X, Some(PragmaBody::Call(Y))));}
+cmd ::= PRAGMA fullname(X) EQ minus_num(Y).
+                                             {self.ctx.stmt = Some(Stmt::Pragma(X, Some(PragmaBody::Equals(Y))));}
+cmd ::= PRAGMA fullname(X) LP minus_num(Y) RP.
+                                             {self.ctx.stmt = Some(Stmt::Pragma(X, Some(PragmaBody::Call(Y))));}
 
+%type nmnum {Expr}
 nmnum(A) ::= plus_num(A).
-nmnum(A) ::= nm(A).
-nmnum(A) ::= ON(A).
-nmnum(A) ::= DELETE(A).
-nmnum(A) ::= DEFAULT(A).
+nmnum(A) ::= nm(X). {A = Expr::Id(X);}
+nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
+nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
+nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
 %endif SQLITE_OMIT_PRAGMA
 %token_class number INTEGER|FLOAT.
-plus_num(A) ::= PLUS number(X).       {A = X;}
-plus_num(A) ::= number(A).
-minus_num(A) ::= MINUS number(X).     {A = X;}
-**/
+%type plus_num {Expr}
+plus_num(A) ::= PLUS number(X).       {A = Expr::Unary(UnaryOperator::Positive, Box::new(Expr::Literal(Literal::Numeric(X.unwrap()))));}
+plus_num(A) ::= number(X).            {A = Expr::Literal(Literal::Numeric(X.unwrap()));}
+%type minus_num {Expr}
+minus_num(A) ::= MINUS number(X).     {A = Expr::Unary(UnaryOperator::Negative, Box::new(Expr::Literal(Literal::Numeric(X.unwrap()))));}
 //////////////////////////// The CREATE TRIGGER command /////////////////////
 
 %ifndef SQLITE_OMIT_TRIGGER
