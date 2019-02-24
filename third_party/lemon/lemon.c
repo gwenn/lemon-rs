@@ -3673,7 +3673,7 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
     }
   }
   if( lhsdirect ){
-    sprintf(zLhs, "self[%d].minor",1-rp->nrhs);
+    sprintf(zLhs, "self[%d]",1-rp->nrhs);
   }else{
     rc = 1;
     sprintf(zLhs, "yylhsminor");
@@ -3732,7 +3732,7 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
     if( lhsaccess ){
       if( cp[0] == '=' ){
       }else if ( !ISSPACE(*cp) ){
-        append_str(".yy%d()",0,rp->lhs->dtnum,0); // FIXME
+        append_str(".yy%d_ref()",0,rp->lhs->dtnum,0);
         lhsaccess = 0;
       }
     }
@@ -3742,10 +3742,17 @@ PRIVATE int translate_code(struct lemon *lemp, struct rule *rp){
         lhswrite = 0;
       }
     }
-    append_str(cp, 1, 0, 0);
     if( lhsaccess ){
       if( cp[0] == '=' ){
         lhswrite = cp[1] != '=';
+        if( lhswrite && lhsdirect ) {
+          append_str(".minor",0,0,0);
+        }
+      }
+    }
+    append_str(cp, 1, 0, 0);
+    if( lhsaccess ){
+      if( cp[0] == '=' ){
         lhsaccess = 0;
         if( lhswrite ) {
           append_str(" YYMINORTYPE::yy%d(",0,rp->lhs->dtnum,0);
@@ -4009,6 +4016,14 @@ void print_stack_union(
     if( types[i]==0 ) continue;
     fprintf(out,"    fn yy%d(self) -> %s {\n",i+1,types[i]); lineno++;
     fprintf(out,"        if let YYMINORTYPE::yy%d(v) = self.minor {\n",i+1); lineno++;
+    fprintf(out,"            v\n"); lineno++;
+    fprintf(out,"        } else {\n"); lineno++;
+    fprintf(out,"            unreachable!()\n"); lineno++;
+    fprintf(out,"        }\n"); lineno++;
+    fprintf(out,"    }\n"); lineno++;
+    fprintf(out,"    #[allow(dead_code)]\n"); lineno++;
+    fprintf(out,"    fn yy%d_ref(&mut self) -> &mut %s {\n",i+1,types[i]); lineno++;
+    fprintf(out,"        if let YYMINORTYPE::yy%d(ref mut v) = self.minor {\n",i+1); lineno++;
     fprintf(out,"            v\n"); lineno++;
     fprintf(out,"        } else {\n"); lineno++;
     fprintf(out,"            unreachable!()\n"); lineno++;
