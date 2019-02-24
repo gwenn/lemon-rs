@@ -440,7 +440,7 @@ impl yyParser {
             assert!(i >= 0);
             //assert!(i+i32::from(YYNTOKEN) <= yy_lookahead.len() as i32);
             assert_ne!(iLookAhead, YYNOCODE);
-            assert!(iLookAhead < YYNTOKEN);
+            assert!((iLookAhead as YYACTIONTYPE) < YYNTOKEN);
             i += i32::from(iLookAhead);
             if (i as usize) >= yy_lookahead.len() || yy_lookahead[i as usize] != iLookAhead {
                 if YYFALLBACK {

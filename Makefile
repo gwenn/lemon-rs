@@ -39,7 +39,7 @@ simple: rlemon$(BEXE) $(TOP)/parser/examples/simple.y $(TOP)/third_party/lemon/l
 # Rules to build sqlite parser
 #
 sqlite: rlemon$(BEXE) $(TOP)/parser/src/parse.y $(TOP)/third_party/lemon/lempar.rs
-	./rlemon$(BEXE) -T$(TOP)/third_party/lemon/lempar.rs $(TOP)/parser/src/parse.y
+	./rlemon$(BEXE) -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT -T$(TOP)/third_party/lemon/lempar.rs $(TOP)/parser/src/parse.y
 
 clean:
 	-rm -f rlemon$(BEXE)

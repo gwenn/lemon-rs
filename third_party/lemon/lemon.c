@@ -4355,8 +4355,7 @@ void ReportTable(
   fprintf(out, "#[allow(non_camel_case_types)]\n"); lineno++;
   fprintf(out, "type YY_SHIFT_TYPE = %s;\n",
        minimum_size_type(mnTknOfst, lemp->nterminal+lemp->nactiontab, &sz)); lineno++;
-  fprintf(out, "const YY_SHIFT_COUNT: %s =    %d;\n",
-       minimum_size_type(0, n-1, 0), n-1); lineno++;
+  fprintf(out, "const YY_SHIFT_COUNT: YYACTIONTYPE =    %d;\n", n-1); lineno++;
   fprintf(out, "const YY_SHIFT_MIN: YY_SHIFT_TYPE =      %d;\n", mnTknOfst); lineno++;
   fprintf(out, "const YY_SHIFT_MAX: YY_SHIFT_TYPE =      %d;\n", mxTknOfst); lineno++;
   fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
@@ -4385,8 +4384,7 @@ void ReportTable(
        minimum_size_type(mnNtOfst-1, mxNtOfst, &sz)); lineno++;
   n = lemp->nxstate;
   while( n>0 && lemp->sorted[n-1]->iNtOfst==NO_OFFSET ) n--;
-  fprintf(out, "const YY_REDUCE_COUNT: %s = %d;\n",
-       minimum_size_type(0, n-1, 0), n-1); lineno++;
+  fprintf(out, "const YY_REDUCE_COUNT: YYACTIONTYPE = %d;\n", n-1); lineno++;
   fprintf(out, "//const YY_REDUCE_MIN: YY_REDUCE_TYPE =   %d;\n", mnNtOfst); lineno++;
   fprintf(out, "//const YY_REDUCE_MAX: YY_REDUCE_TYPE =   %d;\n", mxNtOfst); lineno++;
   fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;

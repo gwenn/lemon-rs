@@ -49,7 +49,7 @@
 // code file that implements the parser.
 //
 %include {
-use crate::ast::{Expr, Literal, Name, PragmaBody, QualifiedName, Stmt, TransactionType, UnaryOperator};
+use crate::ast::*;
 use crate::Context;
 use dialect::TokenType;
 use log::{debug, error, log_enabled};
@@ -106,11 +106,13 @@ cmd ::= create_table create_table_args.
 create_table ::= createkw temp(T) TABLE ifnotexists(E) nm(Y) dbnm(Z). {
    sqlite3StartTable(pParse,&Y,&Z,T,0,0,E);
 }
-createkw(A) ::= CREATE(A).  {disableLookaside(pParse);}
+**/
+createkw(A) ::= CREATE(A).
 
-%type ifnotexists {int}
-ifnotexists(A) ::= .              {A = 0;}
-ifnotexists(A) ::= IF NOT EXISTS. {A = 1;}
+%type ifnotexists {bool}
+ifnotexists(A) ::= .              {A = false;}
+ifnotexists(A) ::= IF NOT EXISTS. {A = true;}
+/**
 %type temp {int}
 %ifndef SQLITE_OMIT_TEMPDB
 temp(A) ::= TEMP.  {A = 1;}
@@ -617,19 +619,20 @@ fullname(A) ::= nm(X).  {
 fullname(A) ::= nm(X) DOT nm(Y). {
   A = QualifiedName::fullname(X, Y);
 }
-/**
+
 %type xfullname {QualifiedName}
 xfullname(A) ::= nm(X).
-   {A = QualifiedName::single(X); /*A-overwrites-X*}
+   {A = QualifiedName::single(X); /*A-overwrites-X*/}
 xfullname(A) ::= nm(X) DOT nm(Y).
-   {A = QualifiedName::fullname(X, Y); /*A-overwrites-X*}
+   {A = QualifiedName::fullname(X, Y); /*A-overwrites-X*/}
 xfullname(A) ::= nm(X) DOT nm(Y) AS nm(Z).  {
-   A = QualifiedName::xfullname(X, Y, Z); /*A-overwrites-X*
+   A = QualifiedName::xfullname(X, Y, Z); /*A-overwrites-X*/
 }
 xfullname(A) ::= nm(X) AS nm(Z). {
-   A = QualifiedName::alias(X, Z); /*A-overwrites-X*
+   A = QualifiedName::alias(X, Z); /*A-overwrites-X*/
 }
 
+/**
 %type joinop {int}
 joinop(X) ::= COMMA|JOIN.              { X = JT_INNER; }
 joinop(X) ::= JOIN_KW(A) JOIN.
@@ -659,6 +662,7 @@ joinop(X) ::= JOIN_KW(A) nm(B) nm(C) JOIN.
 %type on_opt {Expr*}
 on_opt(N) ::= ON expr(E).  {N = E;}
 on_opt(N) ::= .     [OR]   {N = 0;}
+**/
 
 // Note that this block abuses the Token type just a little. If there is
 // no "INDEXED BY" clause, the returned token is empty (z==0 && n==0). If
@@ -670,41 +674,42 @@ on_opt(N) ::= .     [OR]   {N = 0;}
 // normally illegal. The sqlite3SrcListIndexedBy() function 
 // recognizes and interprets this as a special case.
 //
-%type indexed_opt {Token}
-indexed_opt(A) ::= .                 {A.z=0; A.n=0;}
-indexed_opt(A) ::= INDEXED BY nm(X). {A = X;}
-indexed_opt(A) ::= NOT INDEXED.      {A.z=0; A.n=1;}
+%type indexed_opt {Option<Indexed>}
+indexed_opt(A) ::= .                 {A = None;}
+indexed_opt(A) ::= INDEXED BY nm(X). {A = Some(Indexed::IndexedBy(X));}
+indexed_opt(A) ::= NOT INDEXED.      {A = Some(Indexed::NotIndexed);}
 
+/**
 %type using_opt {IdList*}
 using_opt(U) ::= USING LP idlist(L) RP.  {U = L;}
 using_opt(U) ::= .                        {U = 0;}
+**/
 
-
-%type orderby_opt {ExprList*}
+%type orderby_opt {Option<Vec<SortedColumn>>}
 
 // the sortlist non-terminal stores a list of expression where each
 // expression is optionally followed by ASC or DESC to indicate the
 // sort order.
 //
-%type sortlist {ExprList*}
+%type sortlist {Vec<SortedColumn>}
 
-orderby_opt(A) ::= .                          {A = 0;}
-orderby_opt(A) ::= ORDER BY sortlist(X).      {A = X;}
+orderby_opt(A) ::= .                          {A = None;}
+orderby_opt(A) ::= ORDER BY sortlist(X).      {A = Some(X);}
 sortlist(A) ::= sortlist(A) COMMA expr(Y) sortorder(Z). {
-  A = sqlite3ExprListAppend(pParse,A,Y);
-  sqlite3ExprListSetSortOrder(A,Z);
+  let sc = SortedColumn { expr: Y, order: Z };
+  A.push(sc);
 }
 sortlist(A) ::= expr(Y) sortorder(Z). {
-  A = sqlite3ExprListAppend(pParse,0,Y); /*A-overwrites-Y*
-  sqlite3ExprListSetSortOrder(A,Z);
+  A = vec![SortedColumn { expr: Y, order: Z }]; /*A-overwrites-Y*/
 }
 
-%type sortorder {int}
+%type sortorder {Option<SortOrder>}
 
-sortorder(A) ::= ASC.           {A = SQLITE_SO_ASC;}
-sortorder(A) ::= DESC.          {A = SQLITE_SO_DESC;}
-sortorder(A) ::= .              {A = SQLITE_SO_UNDEFINED;}
+sortorder(A) ::= ASC.           {A = Some(SortOrder::Asc);}
+sortorder(A) ::= DESC.          {A = Some(SortOrder::Desc);}
+sortorder(A) ::= .              {A = None;}
 
+/**
 %type groupby_opt {ExprList*}
 groupby_opt(A) ::= .                      {A = 0;}
 groupby_opt(A) ::= GROUP BY nexprlist(X). {A = X;}
@@ -712,8 +717,9 @@ groupby_opt(A) ::= GROUP BY nexprlist(X). {A = X;}
 %type having_opt {Expr*}
 having_opt(A) ::= .                {A = 0;}
 having_opt(A) ::= HAVING expr(X).  {A = X;}
+**/
 
-%type limit_opt {Expr*}
+%type limit_opt {Option<Limit>}
 
 // The destructor for limit_opt will never fire in the current grammar.
 // The limit_opt non-terminal only occurs at the end of a single production
@@ -723,37 +729,32 @@ having_opt(A) ::= HAVING expr(X).  {A = X;}
 // except as a transient.  So there is never anything to destroy.
 //
 //%destructor limit_opt {sqlite3ExprDelete(pParse->db, $$);}
-limit_opt(A) ::= .       {A = 0;}
+limit_opt(A) ::= .       {A = None;}
 limit_opt(A) ::= LIMIT expr(X).
-                         {A = sqlite3PExpr(pParse,TK_LIMIT,X,0);}
+                         {A = Some(Limit{ expr: X, offset: None });}
 limit_opt(A) ::= LIMIT expr(X) OFFSET expr(Y). 
-                         {A = sqlite3PExpr(pParse,TK_LIMIT,X,Y);}
+                         {A = Some(Limit{ expr: X, offset: Some(Y) });}
 limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y). 
-                         {A = sqlite3PExpr(pParse,TK_LIMIT,Y,X);}
-**/
+                         {A = Some(Limit{ expr: X, offset: Some(Y) });}
 
 /////////////////////////// The DELETE statement /////////////////////////////
 //
-/**
 %ifdef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
-cmd ::= with DELETE FROM xfullname(X) indexed_opt(I) where_opt(W)
+cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt(W)
         orderby_opt(O) limit_opt(L). {
-  sqlite3SrcListIndexedBy(pParse, X, &I);
-  sqlite3DeleteFrom(pParse,X,W,O,L);
+  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W, order_by: O, limit: L });
 }
 %endif
 %ifndef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
-cmd ::= with DELETE FROM xfullname(X) indexed_opt(I) where_opt(W). {
-  sqlite3SrcListIndexedBy(pParse, X, &I);
-  sqlite3DeleteFrom(pParse,X,W,0,0);
+cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt(W). {
+  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W, order_by: None, limit: None });
 }
 %endif
 
-%type where_opt {Expr*}
+%type where_opt {Option<Expr>}
 
-where_opt(A) ::= .                    {A = 0;}
-where_opt(A) ::= WHERE expr(X).       {A = X;}
-**/
+where_opt(A) ::= .                    {A = None;}
+where_opt(A) ::= WHERE expr(X).       {A = Some(X);}
 
 ////////////////////////// The UPDATE command ////////////////////////////////
 //
@@ -839,14 +840,14 @@ idlist(A) ::= nm(Y).
 /////////////////////////// Expression Processing /////////////////////////////
 //
 
-/**
-%type expr {Expr*}
-%type term {Expr*}
+%type expr {Expr}
+%type term {Expr}
 
 %include {
 }
 
 expr(A) ::= term(A).
+/**
 expr(A) ::= LP expr(X) RP. {A = X;}
 expr(A) ::= id(X).          {A=tokenExpr(pParse,TK_ID,X); /*A-overwrites-X*}
 expr(A) ::= JOIN_KW(X).     {A=tokenExpr(pParse,TK_ID,X); /*A-overwrites-X*}
@@ -870,11 +871,14 @@ expr(A) ::= nm(X) DOT nm(Y) DOT nm(Z). {
   }
   A = sqlite3PExpr(pParse, TK_DOT, temp1, temp4);
 }
-term(A) ::= NULL|FLOAT|BLOB(X). {A=tokenExpr(pParse,@X,X); /*A-overwrites-X*}
-term(A) ::= STRING(X).          {A=tokenExpr(pParse,@X,X); /*A-overwrites-X*}
-term(A) ::= INTEGER(X). {
-  A = sqlite3ExprAlloc(pParse->db, TK_INTEGER, &X, 1);
+**/
+term(A) ::= NULL. {A=Expr::Literal(Literal::Null); /*A-overwrites-X*/}
+term(A) ::= BLOB(X). {A=Expr::Literal(Literal::Blob(X.unwrap())); /*A-overwrites-X*/}
+term(A) ::= STRING(X).          {A=Expr::Literal(Literal::String(X.unwrap())); /*A-overwrites-X*/}
+term(A) ::= FLOAT|INTEGER(X). {
+  A = Expr::Literal(Literal::Numeric(X.unwrap())); /*A-overwrites-X*/
 }
+/**
 expr(A) ::= VARIABLE(X).     {
   if( !(X.z[0]=='#' && sqlite3Isdigit(X.z[1])) ){
     u32 n = X.n;
@@ -1383,21 +1387,19 @@ cmd ::= DROP TRIGGER ifexists(NOERR) fullname(X). {
 
 //////////////////////// ATTACH DATABASE file AS name /////////////////////////
 %ifndef SQLITE_OMIT_ATTACH
-/**
 cmd ::= ATTACH database_kw_opt expr(F) AS expr(D) key_opt(K). {
-  sqlite3Attach(pParse, F, D, K);
+  self.ctx.stmt = Some(Stmt::Attach{ expr: F, db_name: D, key: K });
 }
 cmd ::= DETACH database_kw_opt expr(D). {
-  sqlite3Detach(pParse, D);
+  self.ctx.stmt = Some(Stmt::Detach(D));
 }
 
-%type key_opt {Expr*}
-key_opt(A) ::= .                     { A = 0; }
-key_opt(A) ::= KEY expr(X).          { A = X; }
+%type key_opt {Option<Expr>}
+key_opt(A) ::= .                     { A = None; }
+key_opt(A) ::= KEY expr(X).          { A = Some(X); }
 
 database_kw_opt ::= DATABASE.
 database_kw_opt ::= .
-**/
 %endif SQLITE_OMIT_ATTACH
 
 ////////////////////////// REINDEX collation //////////////////////////////////
@@ -1414,10 +1416,10 @@ cmd ::= ANALYZE fullname(X).  {self.ctx.stmt = Some(Stmt::Analyze(Some(X)));}
 
 //////////////////////// ALTER TABLE table ... ////////////////////////////////
 %ifndef SQLITE_OMIT_ALTERTABLE
-/**
 cmd ::= ALTER TABLE fullname(X) RENAME TO nm(Z). {
-  sqlite3AlterRenameTable(pParse,X,&Z);
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameTo(Z)));
 }
+/**
 cmd ::= ALTER TABLE add_column_fullname
         ADD kwcolumn_opt columnname(Y) carglist. {
   Y.n = (int)(pParse->sLastToken.z-Y.z) + pParse->sLastToken.n;
@@ -1427,25 +1429,27 @@ add_column_fullname ::= fullname(X). {
   disableLookaside(pParse);
   sqlite3AlterBeginAddColumn(pParse, X);
 }
+**/
 cmd ::= ALTER TABLE fullname(X) RENAME kwcolumn_opt nm(Y) TO nm(Z). {
-  sqlite3AlterRenameColumn(pParse, X, &Y, &Z);
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameColumn{ old: Y, new: Z }));
 }
 
 kwcolumn_opt ::= .
 kwcolumn_opt ::= COLUMNKW.
-
-**/
 %endif  SQLITE_OMIT_ALTERTABLE
 
 //////////////////////// CREATE VIRTUAL TABLE ... /////////////////////////////
 %ifndef SQLITE_OMIT_VIRTUALTABLE
+cmd ::= create_vtab(X).                       {self.ctx.stmt = Some(X);}
 /**
-cmd ::= create_vtab.                       {sqlite3VtabFinishParse(pParse,0);}
 cmd ::= create_vtab LP vtabarglist RP(X).  {sqlite3VtabFinishParse(pParse,&X);}
-create_vtab ::= createkw VIRTUAL TABLE ifnotexists(E)
-                nm(X) dbnm(Y) USING nm(Z). {
-    sqlite3VtabBeginParse(pParse, &X, &Y, &Z, E);
+**/
+%type create_vtab {Stmt}
+create_vtab(A) ::= createkw VIRTUAL TABLE ifnotexists(E)
+                fullname(X) USING nm(Z). {
+    A = Stmt::CreateVirtualTable{ if_not_exists: E, tbl_name: X, module_name: Z, args: None };
 }
+/**
 vtabarglist ::= vtabarg.
 vtabarglist ::= vtabarglist COMMA vtabarg.
 vtabarg ::= .                       {sqlite3VtabArgInit(pParse);}
@@ -1461,11 +1465,12 @@ anylist ::= anylist ANY.
 
 
 //////////////////////// COMMON TABLE EXPRESSIONS ////////////////////////////
+%type with {Option<With>}
 /**
-%type wqlist {With*}
-
-with ::= .
+%type wqlist {Vec<CommonTableExpr>}
 **/
+
+with(A) ::= . { A = None; }
 %ifndef SQLITE_OMIT_CTE
 /**
 with ::= WITH wqlist(W).              { sqlite3WithPush(pParse, W, 1); }
