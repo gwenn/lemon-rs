@@ -1337,16 +1337,32 @@ pub struct QualifiedName {
 
 impl QualifiedName {
     pub fn single(name: Name) -> Self {
-        QualifiedName {db_name: None, name: name, alias: None}
+        QualifiedName {
+            db_name: None,
+            name: name,
+            alias: None,
+        }
     }
     pub fn fullname(db_name: Name, name: Name) -> Self {
-        QualifiedName {db_name: Some(db_name), name: name, alias: None}
+        QualifiedName {
+            db_name: Some(db_name),
+            name: name,
+            alias: None,
+        }
     }
     pub fn xfullname(db_name: Name, name: Name, alias: Name) -> Self {
-        QualifiedName {db_name: Some(db_name), name: name, alias: Some(alias)}
+        QualifiedName {
+            db_name: Some(db_name),
+            name: name,
+            alias: Some(alias),
+        }
     }
     pub fn alias(name: Name, alias: Name) -> Self {
-        QualifiedName {db_name: None, name: name, alias: Some(alias)}
+        QualifiedName {
+            db_name: None,
+            name: name,
+            alias: Some(alias),
+        }
     }
 }
 
