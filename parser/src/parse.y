@@ -353,17 +353,19 @@ defer_subclause_opt(A) ::= defer_subclause(A).
 // The following is a non-standard extension that allows us to declare the
 // default behavior when there is a constraint conflict.
 //
-%type onconf {int}
-%type orconf {int}
-%type resolvetype {int}
-onconf(A) ::= .                              {A = OE_Default;}
-onconf(A) ::= ON CONFLICT resolvetype(X).    {A = X;}
-orconf(A) ::= .                              {A = OE_Default;}
-orconf(A) ::= OR resolvetype(X).             {A = X;}
-resolvetype(A) ::= raisetype(A).
-resolvetype(A) ::= IGNORE.                   {A = OE_Ignore;}
-resolvetype(A) ::= REPLACE.                  {A = OE_Replace;}
+%type onconf {Option<ResolveType>}
 **/
+%type orconf {Option<ResolveType>}
+%type resolvetype {ResolveType}
+/**
+onconf(A) ::= .                              {A = None;}
+onconf(A) ::= ON CONFLICT resolvetype(X).    {A = Some(X);}
+**/
+orconf(A) ::= .                              {A = None;}
+orconf(A) ::= OR resolvetype(X).             {A = Some(X);}
+resolvetype(A) ::= raisetype(A).
+resolvetype(A) ::= IGNORE.                   {A = ResolveType::Ignore;}
+resolvetype(A) ::= REPLACE.                  {A = ResolveType::Replace;}
 
 ////////////////////////// The DROP TABLE /////////////////////////////////////
 //
@@ -742,12 +744,14 @@ limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y).
 %ifdef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
 cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt(W)
         orderby_opt(O) limit_opt(L). {
-  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W, order_by: O, limit: L });
+  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W,
+                                     order_by: O, limit: L });
 }
 %endif
 %ifndef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
 cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt(W). {
-  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W, order_by: None, limit: None });
+  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W,
+                                     order_by: None, limit: None });
 }
 %endif
 
@@ -758,41 +762,37 @@ where_opt(A) ::= WHERE expr(X).       {A = Some(X);}
 
 ////////////////////////// The UPDATE command ////////////////////////////////
 //
-/**
 %ifdef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
-cmd ::= with UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y)
+cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y)
         where_opt(W) orderby_opt(O) limit_opt(L).  {
-  sqlite3SrcListIndexedBy(pParse, X, &I);
-  sqlite3ExprListCheckLength(pParse,Y,"set list"); 
-  sqlite3Update(pParse,X,Y,W,R,O,L,0);
+  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y,
+                                      where_clause: W, order_by: O, limit: L });
 }
 %endif
 %ifndef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
-cmd ::= with UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y)
+cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y)
         where_opt(W).  {
-  sqlite3SrcListIndexedBy(pParse, X, &I);
-  sqlite3ExprListCheckLength(pParse,Y,"set list"); 
-  sqlite3Update(pParse,X,Y,W,R,0,0,0);
+  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y,
+                                      where_clause: W, order_by: None, limit: None });
 }
 %endif
 
-%type setlist {ExprList*}
+%type setlist {Vec<Set>}
 
 setlist(A) ::= setlist(A) COMMA nm(X) EQ expr(Y). {
-  A = sqlite3ExprListAppend(pParse, A, Y);
-  sqlite3ExprListSetName(pParse, A, &X, 1);
+  let s = Set{ col_names: vec![X], expr: Y };
+  A.push(s);
 }
 setlist(A) ::= setlist(A) COMMA LP idlist(X) RP EQ expr(Y). {
-  A = sqlite3ExprListAppendVector(pParse, A, X, Y);
+  let s = Set{ col_names: X, expr: Y };
+  A.push(s);
 }
 setlist(A) ::= nm(X) EQ expr(Y). {
-  A = sqlite3ExprListAppend(pParse, 0, Y);
-  sqlite3ExprListSetName(pParse, A, &X, 1);
+  A = vec![Set{ col_names: vec![X], expr: Y }];
 }
 setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
-  A = sqlite3ExprListAppendVector(pParse, 0, X, Y);
+  A = vec![Set{ col_names: X, expr: Y }];
 }
-**/
 
 ////////////////////////// The INSERT command /////////////////////////////////
 //
@@ -827,15 +827,16 @@ insert_cmd(A) ::= INSERT orconf(R).   {A = R;}
 insert_cmd(A) ::= REPLACE.            {A = OE_Replace;}
 
 %type idlist_opt {IdList*}
-%type idlist {IdList*}
-
+**/
+%type idlist {Vec<Name>}
+/**
 idlist_opt(A) ::= .                       {A = 0;}
 idlist_opt(A) ::= LP idlist(X) RP.    {A = X;}
-idlist(A) ::= idlist(A) COMMA nm(Y).
-    {A = sqlite3IdListAppend(pParse,A,&Y);}
-idlist(A) ::= nm(Y).
-    {A = sqlite3IdListAppend(pParse,0,&Y); /*A-overwrites-Y*}
 **/
+idlist(A) ::= idlist(A) COMMA nm(Y).
+    {let id = Y; A.push(id);}
+idlist(A) ::= nm(Y).
+    {A = vec![Y]; /*A-overwrites-Y*/}
 
 /////////////////////////// Expression Processing /////////////////////////////
 //
@@ -1370,12 +1371,10 @@ expr(A) ::= RAISE LP raisetype(T) COMMA nm(Z) RP.  {
 **/
 %endif  !SQLITE_OMIT_TRIGGER
 
-/**
-%type raisetype {int}
-raisetype(A) ::= ROLLBACK.  {A = OE_Rollback;}
-raisetype(A) ::= ABORT.     {A = OE_Abort;}
-raisetype(A) ::= FAIL.      {A = OE_Fail;}
-**/
+%type raisetype {ResolveType}
+raisetype(A) ::= ROLLBACK.  {A = ResolveType::Rollback;}
+raisetype(A) ::= ABORT.     {A = ResolveType::Abort;}
+raisetype(A) ::= FAIL.      {A = ResolveType::Fail;}
 
 
 ////////////////////////  DROP TRIGGER statement //////////////////////////////
