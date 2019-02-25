@@ -1163,23 +1163,15 @@ paren_exprlist(A) ::= LP exprlist(X) RP.  {A = X;}
 
 ///////////////////////////// The CREATE INDEX command ///////////////////////
 //
-/**
-cmd ::= createkw(S) uniqueflag(U) INDEX ifnotexists(NE) nm(X) dbnm(D)
+cmd ::= createkw uniqueflag(U) INDEX ifnotexists(NE) fullname(X)
         ON nm(Y) LP sortlist(Z) RP where_opt(W). {
-  sqlite3CreateIndex(pParse, &X, &D, 
-                     sqlite3SrcListAppend(pParse->db,0,&Y,0), Z, U,
-                      &S, W, SQLITE_SO_ASC, NE, SQLITE_IDXTYPE_APPDEF);
-  if( IN_RENAME_OBJECT && pParse->pNewIndex ){
-    sqlite3RenameTokenMap(pParse, pParse->pNewIndex->zName, &Y);
-  }
+  self.ctx.stmt = Some(Stmt::CreateIndex { unique: U, if_not_exists: NE, idx_name: X,
+                                            tbl_name: Y, columns: Z, where_clause: W });
 }
-**/
 
-/**
-%type uniqueflag {int}
-uniqueflag(A) ::= UNIQUE.  {A = OE_Abort;}
-uniqueflag(A) ::= .        {A = OE_None;}
-**/
+%type uniqueflag {bool}
+uniqueflag(A) ::= UNIQUE.  {A = true;}
+uniqueflag(A) ::= .        {A = false;}
 
 
 // The eidlist non-terminal (Expression Id List) generates an ExprList
