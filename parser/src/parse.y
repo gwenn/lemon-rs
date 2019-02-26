@@ -392,227 +392,155 @@ cmd ::= DROP VIEW ifexists(E) fullname(X). {
 
 //////////////////////// The SELECT statement /////////////////////////////////
 //
-/**
 cmd ::= select(X).  {
-  SelectDest dest = {SRT_Output, 0, 0, 0, 0, 0};
-  sqlite3Select(pParse, X, &dest);
-  sqlite3SelectDelete(pParse->db, X);
+  self.ctx.stmt = Some(Stmt::Select(X));
 }
 
-%type select {Select*}
-%type selectnowith {Select*}
-%type oneselect {Select*}
-**/
+%type select {Select}
+%type selectnowith {SelectBody}
+%type oneselect {OneSelect}
 
 %include {
 }
 
 %ifndef SQLITE_OMIT_CTE
-/**
-select(A) ::= WITH wqlist(W) selectnowith(X). {
-  Select *p = X;
-  if( p ){
-    p->pWith = W;
-    parserDoubleLinkSelect(pParse, p);
-  }else{
-    sqlite3WithDelete(pParse->db, W);
-  }
-  A = p;
+select(A) ::= WITH wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
+  A = Select{ with: Some(With { recursive: false, ctes: W }), body: X, order_by: Z, limit: L };
 }
-select(A) ::= WITH RECURSIVE wqlist(W) selectnowith(X). {
-  Select *p = X;
-  if( p ){
-    p->pWith = W;
-    parserDoubleLinkSelect(pParse, p);
-  }else{
-    sqlite3WithDelete(pParse->db, W);
-  }
-  A = p;
+select(A) ::= WITH RECURSIVE wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
+  A = Select{ with: Some(With { recursive: true, ctes: W }), body: X, order_by: Z, limit: L };
 }
-**/
 %endif /* SQLITE_OMIT_CTE */
-/**
-select(A) ::= selectnowith(X). {
-  Select *p = X;
-  if( p ){
-    parserDoubleLinkSelect(pParse, p);
-  }
-  A = p; /*A-overwrites-X*
+select(A) ::= selectnowith(X) orderby_opt(Z) limit_opt(L). {
+  A = Select{ with: None, body: X, order_by: Z, limit: L }; /*A-overwrites-X*/
 }
 
-selectnowith(A) ::= oneselect(A).
+selectnowith(A) ::= oneselect(X). {
+  A = SelectBody{ select: X, compounds: None };
+}
 %ifndef SQLITE_OMIT_COMPOUND_SELECT
 selectnowith(A) ::= selectnowith(A) multiselect_op(Y) oneselect(Z).  {
-  Select *pRhs = Z;
-  Select *pLhs = A;
-  if( pRhs && pRhs->pPrior ){
-    SrcList *pFrom;
-    Token x;
-    x.n = 0;
-    parserDoubleLinkSelect(pParse, pRhs);
-    pFrom = sqlite3SrcListAppendFromTerm(pParse,0,0,0,&x,pRhs,0,0);
-    pRhs = sqlite3SelectNew(pParse,0,pFrom,0,0,0,0,0,0);
-  }
-  if( pRhs ){
-    pRhs->op = (u8)Y;
-    pRhs->pPrior = pLhs;
-    if( ALWAYS(pLhs) ) pLhs->selFlags &= ~SF_MultiValue;
-    pRhs->selFlags &= ~SF_MultiValue;
-    if( Y!=TK_ALL ) pParse->hasCompound = 1;
-  }else{
-    sqlite3SelectDelete(pParse->db, pLhs);
-  }
-  A = pRhs;
+  let cs = CompoundSelect{ operator: Y, select: Z };
+  A.push(cs);
 }
-%type multiselect_op {int}
-multiselect_op(A) ::= UNION(OP).             {A = @OP; /*A-overwrites-OP*}
-multiselect_op(A) ::= UNION ALL.             {A = TK_ALL;}
-multiselect_op(A) ::= EXCEPT|INTERSECT(OP).  {A = @OP; /*A-overwrites-OP*}
+%type multiselect_op {CompoundOperator}
+multiselect_op(A) ::= UNION.             {A = CompoundOperator::Union;}
+multiselect_op(A) ::= UNION ALL.         {A = CompoundOperator::UnionAll;}
+multiselect_op(A) ::= EXCEPT.            {A = CompoundOperator::Except;}
+multiselect_op(A) ::= INTERSECT.         {A = CompoundOperator::Intersect;}
 %endif SQLITE_OMIT_COMPOUND_SELECT
 
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
-                 groupby_opt(P) having_opt(Q)
-                 orderby_opt(Z) limit_opt(L). {
-  A = sqlite3SelectNew(pParse,W,X,Y,P,Q,Z,D,L);
+                 groupby_opt(P). {
+  A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y,
+                         group_by: P };
     }
 %ifndef SQLITE_OMIT_WINDOWFUNC
+/**
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
-                 groupby_opt(P) having_opt(Q) window_clause(R)
-                 orderby_opt(Z) limit_opt(L). {
-  A = sqlite3SelectNew(pParse,W,X,Y,P,Q,Z,D,L);
-  if( A ){
-    A->pWinDefn = R;
-  }else{
-    sqlite3WindowListDelete(pParse->db, R);
-  }
+                 groupby_opt(P) window_clause(R). {
+  A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y,
+                         group_by: P, window_clause: Some(R) };
 }
+**/
 %endif
 
 
-oneselect(A) ::= values(A).
+oneselect(A) ::= values(X). { A = OneSelect::Values(X); }
 
-%type values {Select*}
+%type values {Vec<Vec<Expr>>}
 values(A) ::= VALUES LP nexprlist(X) RP. {
-  A = sqlite3SelectNew(pParse,X,0,0,0,0,0,SF_Values,0);
+  A = vec![X];
 }
 values(A) ::= values(A) COMMA LP nexprlist(Y) RP. {
-  Select *pRight, *pLeft = A;
-  pRight = sqlite3SelectNew(pParse,Y,0,0,0,0,0,SF_Values|SF_MultiValue,0);
-  if( ALWAYS(pLeft) ) pLeft->selFlags &= ~SF_MultiValue;
-  if( pRight ){
-    pRight->op = TK_ALL;
-    pRight->pPrior = pLeft;
-    A = pRight;
-  }else{
-    A = pLeft;
-  }
+  let exprs = Y;
+  A.push(exprs);
 }
 
 // The "distinct" nonterminal is true (1) if the DISTINCT keyword is
 // present and false (0) if it is not.
 //
-%type distinct {int}
-distinct(A) ::= DISTINCT.   {A = SF_Distinct;}
-distinct(A) ::= ALL.        {A = SF_All;}
-distinct(A) ::= .           {A = 0;}
+%type distinct {Option<Distinctness>}
+distinct(A) ::= DISTINCT.   {A = Some(Distinctness::Distinct);}
+distinct(A) ::= ALL.        {A = Some(Distinctness::All);}
+distinct(A) ::= .           {A = None;}
 
 // selcollist is a list of expressions that are to become the return
 // values of the SELECT statement.  The "*" in statements like
 // "SELECT * FROM ..." is encoded as a special expression with an
 // opcode of TK_ASTERISK.
 //
-%type selcollist {ExprList*}
-%type sclp {ExprList*}
+%type selcollist {Vec<ResultColumn>}
+%type sclp {Vec<ResultColumn>}
 sclp(A) ::= selcollist(A) COMMA.
-sclp(A) ::= .                                {A = 0;}
-selcollist(A) ::= sclp(A) scanpt(B) expr(X) scanpt(Z) as(Y).     {
-   A = sqlite3ExprListAppend(pParse, A, X);
-   if( Y.n>0 ) sqlite3ExprListSetName(pParse, A, &Y, 1);
-   sqlite3ExprListSetSpan(pParse,A,B,Z);
+sclp(A) ::= .                                {A = Vec::<ResultColumn>::new();}
+selcollist(A) ::= sclp(A) expr(X) as(Y).     {
+  let rc = ResultColumn::Expr(X, Y);
+  A.push(rc);
 }
-selcollist(A) ::= sclp(A) scanpt STAR. {
-  Expr *p = sqlite3Expr(pParse->db, TK_ASTERISK, 0);
-  A = sqlite3ExprListAppend(pParse, A, p);
+selcollist(A) ::= sclp(A) STAR. {
+  let rc = ResultColumn::Star;
+  A.push(rc);
 }
-selcollist(A) ::= sclp(A) scanpt nm(X) DOT STAR. {
-  Expr *pRight = sqlite3PExpr(pParse, TK_ASTERISK, 0, 0);
-  Expr *pLeft = sqlite3ExprAlloc(pParse->db, TK_ID, &X, 1);
-  Expr *pDot = sqlite3PExpr(pParse, TK_DOT, pLeft, pRight);
-  A = sqlite3ExprListAppend(pParse,A, pDot);
+selcollist(A) ::= sclp(A) nm(X) DOT STAR. {
+  let rc = ResultColumn::TableStar(X);
+  A.push(rc);
 }
 
 // An option "AS <id>" phrase that can follow one of the expressions that
 // define the result set, or one of the tables in the FROM clause.
 //
-%type as {Token}
-as(X) ::= AS nm(Y).    {X = Y;}
-as(X) ::= ids(X).
-as(X) ::= .            {X.n = 0; X.z = 0;}
+%type as {Option<As>}
+as(X) ::= AS nm(Y).    {X = Some(As::As(Y));}
+as(X) ::= ids(Y).      {X = Some(As::Elided(Name(Y.unwrap())));}
+as(X) ::= .            {X = None;}
 
 
-%type seltablist {SrcList*}
-%type stl_prefix {SrcList*}
-%type from {SrcList*}
+%type seltablist {FromClause}
+%type stl_prefix {FromClause}
+%type from {Option<FromClause>}
 
 // A complete FROM clause.
 //
-from(A) ::= .                {A = sqlite3DbMallocZero(pParse->db, sizeof(*A));}
+from(A) ::= .                {A = None;}
 from(A) ::= FROM seltablist(X). {
-  A = X;
-  sqlite3SrcListShiftJoinType(A);
+  A = Some(X);
 }
 
 // "seltablist" is a "Select Table List" - the content of the FROM clause
 // in a SELECT statement.  "stl_prefix" is a prefix of this list.
 //
 stl_prefix(A) ::= seltablist(A) joinop(Y).    {
-   if( ALWAYS(A && A->nSrc>0) ) A->a[A->nSrc-1].fg.jointype = (u8)Y;
+   let op = Y;
+   A.push_op(op);
 }
-stl_prefix(A) ::= .                           {A = 0;}
-seltablist(A) ::= stl_prefix(A) nm(Y) dbnm(D) as(Z) indexed_opt(I)
+stl_prefix(A) ::= .                           {A = FromClause::empty();}
+seltablist(A) ::= stl_prefix(A) fullname(Y) as(Z) indexed_opt(I)
                   on_opt(N) using_opt(U). {
-  A = sqlite3SrcListAppendFromTerm(pParse,A,&Y,&D,&Z,0,N,U);
-  sqlite3SrcListIndexedBy(pParse, A, &I);
+    let st = SelectTable::Table(Y, Z, I);
+    let jc = JoinConstraint::from(N, U);
+    A.push(st, jc);
 }
-seltablist(A) ::= stl_prefix(A) nm(Y) dbnm(D) LP exprlist(E) RP as(Z)
+seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z)
                   on_opt(N) using_opt(U). {
-  A = sqlite3SrcListAppendFromTerm(pParse,A,&Y,&D,&Z,0,N,U);
-  sqlite3SrcListFuncArgs(pParse, A, E);
+    let st = SelectTable::TableCall(Y, E, Z);
+    let jc = JoinConstraint::from(N, U);
+    A.push(st, jc);
 }
 %ifndef SQLITE_OMIT_SUBQUERY
   seltablist(A) ::= stl_prefix(A) LP select(S) RP
                     as(Z) on_opt(N) using_opt(U). {
-    A = sqlite3SrcListAppendFromTerm(pParse,A,0,0,&Z,S,N,U);
+    let st = SelectTable::Select(S, Z);
+    let jc = JoinConstraint::from(N, U);
+    A.push(st, jc);
   }
   seltablist(A) ::= stl_prefix(A) LP seltablist(F) RP
                     as(Z) on_opt(N) using_opt(U). {
-    if( A==0 && Z.n==0 && N==0 && U==0 ){
-      A = F;
-    }else if( F->nSrc==1 ){
-      A = sqlite3SrcListAppendFromTerm(pParse,A,0,0,&Z,0,N,U);
-      if( A ){
-        struct SrcList_item *pNew = &A->a[A->nSrc-1];
-        struct SrcList_item *pOld = F->a;
-        pNew->zName = pOld->zName;
-        pNew->zDatabase = pOld->zDatabase;
-        pNew->pSelect = pOld->pSelect;
-        pOld->zName = pOld->zDatabase = 0;
-        pOld->pSelect = 0;
-      }
-      sqlite3SrcListDelete(pParse->db, F);
-    }else{
-      Select *pSubquery;
-      sqlite3SrcListShiftJoinType(F);
-      pSubquery = sqlite3SelectNew(pParse,0,F,0,0,0,0,SF_NestedFrom,0);
-      A = sqlite3SrcListAppendFromTerm(pParse,A,0,0,&Z,pSubquery,N,U);
-    }
+    let st = SelectTable::Sub(F, Z);
+    let jc = JoinConstraint::from(N, U);
+    A.push(st, jc);
   }
 %endif  SQLITE_OMIT_SUBQUERY
-
-%type dbnm {Option<String>}
-dbnm(A) ::= .          {A = None;}
-dbnm(A) ::= DOT nm(X). {A = Some(X);}
-**/
 
 %type fullname {QualifiedName}
 fullname(A) ::= nm(X).  {
@@ -634,15 +562,15 @@ xfullname(A) ::= nm(X) AS nm(Z). {
    A = QualifiedName::alias(X, Z); /*A-overwrites-X*/
 }
 
-/**
-%type joinop {int}
-joinop(X) ::= COMMA|JOIN.              { X = JT_INNER; }
+%type joinop {JoinOperator}
+joinop(X) ::= COMMA.              { X = JoinOperator::Comma; }
+joinop(X) ::= JOIN.              { X = JoinOperator::TypedJoin{ natural: false, join_type: None }; }
 joinop(X) ::= JOIN_KW(A) JOIN.
-                  {X = sqlite3JoinType(pParse,&A,0,0);  /*X-overwrites-A*}
+                  {X = JoinOperator::from_single(A);  /*X-overwrites-A*/}
 joinop(X) ::= JOIN_KW(A) nm(B) JOIN.
-                  {X = sqlite3JoinType(pParse,&A,&B,0); /*X-overwrites-A*}
+                  {X = JoinOperator::from_couple(A, B); /*X-overwrites-A*/}
 joinop(X) ::= JOIN_KW(A) nm(B) nm(C) JOIN.
-                  {X = sqlite3JoinType(pParse,&A,&B,&C);/*X-overwrites-A*}
+                  {X = JoinOperator::from_triple(A, B, C);/*X-overwrites-A*/}
 
 // There is a parsing abiguity in an upsert statement that uses a
 // SELECT on the RHS of a the INSERT:
@@ -661,10 +589,9 @@ joinop(X) ::= JOIN_KW(A) nm(B) nm(C) JOIN.
 // The [AND] and [OR] precedence marks in the rules for on_opt cause the
 // ON in this context to always be interpreted as belonging to the JOIN.
 //
-%type on_opt {Expr*}
-on_opt(N) ::= ON expr(E).  {N = E;}
-on_opt(N) ::= .     [OR]   {N = 0;}
-**/
+%type on_opt {Option<Expr>}
+on_opt(N) ::= ON expr(E).  {N = Some(E);}
+on_opt(N) ::= .     [OR]   {N = None;}
 
 // Note that this block abuses the Token type just a little. If there is
 // no "INDEXED BY" clause, the returned token is empty (z==0 && n==0). If
@@ -681,11 +608,9 @@ indexed_opt(A) ::= .                 {A = None;}
 indexed_opt(A) ::= INDEXED BY nm(X). {A = Some(Indexed::IndexedBy(X));}
 indexed_opt(A) ::= NOT INDEXED.      {A = Some(Indexed::NotIndexed);}
 
-/**
-%type using_opt {IdList*}
-using_opt(U) ::= USING LP idlist(L) RP.  {U = L;}
-using_opt(U) ::= .                        {U = 0;}
-**/
+%type using_opt {Option<Vec<Name>>}
+using_opt(U) ::= USING LP idlist(L) RP.  {U = Some(L);}
+using_opt(U) ::= .                        {U = None;}
 
 %type orderby_opt {Option<Vec<SortedColumn>>}
 
@@ -711,15 +636,13 @@ sortorder(A) ::= ASC.           {A = Some(SortOrder::Asc);}
 sortorder(A) ::= DESC.          {A = Some(SortOrder::Desc);}
 sortorder(A) ::= .              {A = None;}
 
-/**
-%type groupby_opt {ExprList*}
-groupby_opt(A) ::= .                      {A = 0;}
-groupby_opt(A) ::= GROUP BY nexprlist(X). {A = X;}
+%type groupby_opt {Option<GroupBy>}
+groupby_opt(A) ::= .                      {A = None;}
+groupby_opt(A) ::= GROUP BY nexprlist(X) having_opt(Y). {A = Some(GroupBy{ exprs: X, having: Y });}
 
-%type having_opt {Expr*}
-having_opt(A) ::= .                {A = 0;}
-having_opt(A) ::= HAVING expr(X).  {A = X;}
-**/
+%type having_opt {Option<Expr>}
+having_opt(A) ::= .                {A = None;}
+having_opt(A) ::= HAVING expr(X).  {A = Some(X);}
 
 %type limit_opt {Option<Limit>}
 
@@ -1138,17 +1061,15 @@ case_operand(A) ::= expr(X).            {A = X; /*A-overwrites-X*}
 case_operand(A) ::= .                   {A = 0;}
 **/
 
-/**
-%type exprlist {ExprList*}
-%type nexprlist {ExprList*}
+%type exprlist {Option<Vec<Expr>>}
+%type nexprlist {Vec<Expr>}
 
-exprlist(A) ::= nexprlist(A).
-exprlist(A) ::= .                            {A = 0;}
+exprlist(A) ::= nexprlist(X).                {A = Some(X);}
+exprlist(A) ::= .                            {A = None;}
 nexprlist(A) ::= nexprlist(A) COMMA expr(Y).
-    {A = sqlite3ExprListAppend(pParse,A,Y);}
+    { let expr = Y; A.push(expr);}
 nexprlist(A) ::= expr(Y).
-    {A = sqlite3ExprListAppend(pParse,0,Y); /*A-overwrites-Y*}
-**/
+    {A = vec![Y]; /*A-overwrites-Y*/}
 
 %ifndef SQLITE_OMIT_SUBQUERY
 /* A paren_exprlist is an optional expression list contained inside
@@ -1189,28 +1110,25 @@ uniqueflag(A) ::= .        {A = false;}
 // (busted) old databases, we need to continue parsing them when loading
 // historical schemas.
 //
-/**
-%type eidlist {ExprList*}
-%type eidlist_opt {ExprList*}
+%type eidlist {Vec<IndexedColumn>}
+%type eidlist_opt {Option<Vec<IndexedColumn>>}
 
 %include {
 } // end %include
 
-eidlist_opt(A) ::= .                         {A = 0;}
-eidlist_opt(A) ::= LP eidlist(X) RP.         {A = X;}
+eidlist_opt(A) ::= .                         {A = None;}
+eidlist_opt(A) ::= LP eidlist(X) RP.         {A = Some(X);}
 eidlist(A) ::= eidlist(A) COMMA nm(Y) collate(C) sortorder(Z).  {
-  A = parserAddExprIdListTerm(pParse, A, &Y, C, Z);
+  let ic = IndexedColumn{ col_name: Y, collation_name: C, order: Z };
+  A.push(ic);
 }
 eidlist(A) ::= nm(Y) collate(C) sortorder(Z). {
-  A = parserAddExprIdListTerm(pParse, 0, &Y, C, Z); /*A-overwrites-Y*
+  A = vec![IndexedColumn{ col_name: Y, collation_name: C, order: Z }]; /*A-overwrites-Y*/
 }
-**/
 
-/**
-%type collate {int}
-collate(C) ::= .              {C = 0;}
-collate(C) ::= COLLATE ids.   {C = 1;}
-**/
+%type collate {Option<Name>}
+collate(C) ::= .              {C = None;}
+collate(C) ::= COLLATE ids(X).   {C = Some(Name(X.unwrap()));}
 
 
 ///////////////////////////// The DROP INDEX command /////////////////////////
@@ -1457,23 +1375,20 @@ anylist ::= anylist ANY.
 
 //////////////////////// COMMON TABLE EXPRESSIONS ////////////////////////////
 %type with {Option<With>}
-/**
 %type wqlist {Vec<CommonTableExpr>}
-**/
 
 with(A) ::= . { A = None; }
 %ifndef SQLITE_OMIT_CTE
-/**
-with ::= WITH wqlist(W).              { sqlite3WithPush(pParse, W, 1); }
-with ::= WITH RECURSIVE wqlist(W).    { sqlite3WithPush(pParse, W, 1); }
+with(A) ::= WITH wqlist(W).              { A = Some(With{ recursive: false, ctes: W }); }
+with(A) ::= WITH RECURSIVE wqlist(W).    { A = Some(With{ recursive: true, ctes: W }); }
 
 wqlist(A) ::= nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
-  A = sqlite3WithAdd(pParse, 0, &X, Y, Z); /*A-overwrites-X*
+  A = vec![CommonTableExpr{ tbl_name: X, columns: Y, select: Z }]; /*A-overwrites-X*/
 }
 wqlist(A) ::= wqlist(A) COMMA nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
-  A = sqlite3WithAdd(pParse, A, &X, Y, Z);
+  let cte = CommonTableExpr{ tbl_name: X, columns: Y, select: Z };
+  A.push(cte);
 }
-**/
 %endif  SQLITE_OMIT_CTE
 
 //////////////////////// WINDOW FUNCTION EXPRESSIONS /////////////////////////

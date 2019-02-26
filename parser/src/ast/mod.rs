@@ -1,6 +1,6 @@
 //! Abstract Syntax Tree
 
-use crate::dialect::{is_identifier, is_keyword};
+use crate::dialect::{is_identifier, is_keyword, Token};
 use std::fmt::{Display, Formatter, Result, Write};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -963,6 +963,16 @@ pub struct SelectBody {
     pub compounds: Option<Vec<CompoundSelect>>,
 }
 
+impl SelectBody {
+    pub(crate) fn push(&mut self, cs: CompoundSelect) {
+        if let Some(ref mut v) = self.compounds {
+            v.push(cs);
+        } else {
+            self.compounds = Some(vec![cs]);
+        }
+    }
+}
+
 impl Display for SelectBody {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.select.fmt(f)?;
@@ -1068,15 +1078,52 @@ impl Display for OneSelect {
     }
 }
 
+// https://sqlite.org/syntax/join-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FromClause {
-    pub select: Box<SelectTable>,
+    pub select: Option<Box<SelectTable>>, // FIXME mandatory
     pub joins: Option<Vec<JoinedSelectTable>>,
+    op: Option<JoinOperator>, // FIXME transient
+}
+
+impl FromClause {
+    pub(crate) fn empty() -> FromClause {
+        FromClause {
+            select: None,
+            joins: None,
+            op: None,
+        }
+    }
+
+    pub(crate) fn push(&mut self, table: SelectTable, jc: Option<JoinConstraint>) {
+        let op = self.op.take();
+        if let Some(op) = op {
+            let jst = JoinedSelectTable {
+                operator: op,
+                table: table,
+                constraint: jc,
+            };
+            if let Some(ref mut joins) = self.joins {
+                joins.push(jst);
+            } else {
+                self.joins = Some(vec![jst]);
+            }
+        } else {
+            debug_assert!(jc.is_none());
+            debug_assert!(self.select.is_none());
+            debug_assert!(self.joins.is_none());
+            self.select = Some(Box::new(table));
+        }
+    }
+
+    pub(crate) fn push_op(&mut self, op: JoinOperator) {
+        self.op = Some(op);
+    }
 }
 
 impl Display for FromClause {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        self.select.fmt(f)?;
+        self.select.as_ref().unwrap().fmt(f)?;
         if let Some(ref joins) = self.joins {
             for join in joins {
                 f.write_char(' ')?;
@@ -1148,6 +1195,7 @@ impl Display for As {
     }
 }
 
+// https://sqlite.org/syntax/join-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JoinedSelectTable {
     pub operator: JoinOperator,
@@ -1168,6 +1216,7 @@ impl Display for JoinedSelectTable {
     }
 }
 
+// https://sqlite.org/syntax/table-or-subquery.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SelectTable {
     Table(QualifiedName, Option<As>, Option<Indexed>),
@@ -1237,6 +1286,84 @@ pub enum JoinOperator {
     },
 }
 
+// https://sqlite.org/syntax/join-operator.html
+impl JoinOperator {
+    pub(crate) fn from_single(token: Token) -> JoinOperator {
+        if let Some(ref jt) = token {
+            if "INNER".eq_ignore_ascii_case(jt) {
+                JoinOperator::TypedJoin {
+                    natural: false,
+                    join_type: Some(JoinType::Inner),
+                }
+            } else if "LEFT".eq_ignore_ascii_case(jt) {
+                JoinOperator::TypedJoin {
+                    natural: false,
+                    join_type: Some(JoinType::Left),
+                }
+            } else if "CROSS".eq_ignore_ascii_case(jt) {
+                JoinOperator::TypedJoin {
+                    natural: false,
+                    join_type: Some(JoinType::Cross),
+                }
+            } else if "NATURAL".eq_ignore_ascii_case(jt) {
+                JoinOperator::TypedJoin {
+                    natural: true,
+                    join_type: None,
+                }
+            } else {
+                unreachable!() // FIXME do not panic
+            }
+        } else {
+            unreachable!()
+        }
+    }
+    pub(crate) fn from_couple(token: Token, name: Name) -> JoinOperator {
+        if let Some(ref jt) = token {
+            if "NATURAL".eq_ignore_ascii_case(jt) {
+                let join_type = if "INNER".eq_ignore_ascii_case(&name.0) {
+                    JoinType::Inner
+                } else if "LEFT".eq_ignore_ascii_case(&name.0) {
+                    JoinType::Left
+                } else if "CROSS".eq_ignore_ascii_case(&name.0) {
+                    JoinType::Cross
+                } else {
+                    unreachable!() // FIXME do not panic
+                };
+                JoinOperator::TypedJoin {
+                    natural: true,
+                    join_type: Some(join_type),
+                }
+            } else if "LEFT".eq_ignore_ascii_case(jt) && "OUTER".eq_ignore_ascii_case(&name.0) {
+                JoinOperator::TypedJoin {
+                    natural: false,
+                    join_type: Some(JoinType::LeftOuter),
+                }
+            } else {
+                unreachable!() // FIXME do not panic
+            }
+        } else {
+            unreachable!()
+        }
+    }
+    pub(crate) fn from_triple(token: Token, n1: Name, n2: Name) -> JoinOperator {
+        if let Some(ref jt) = token {
+            if "NATURAL".eq_ignore_ascii_case(jt)
+                && "LEFT".eq_ignore_ascii_case(&n1.0)
+                && "OUTER".eq_ignore_ascii_case(&n2.0)
+            {
+                JoinOperator::TypedJoin {
+                    natural: true,
+                    join_type: Some(JoinType::LeftOuter),
+                }
+            } else {
+                unreachable!() // FIXME do not panic
+            }
+        } else {
+            unreachable!()
+        }
+    }
+}
+
 impl Display for JoinOperator {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
@@ -1279,6 +1406,19 @@ pub enum JoinConstraint {
     On(Expr),
     // col names
     Using(Vec<Name>),
+}
+
+impl JoinConstraint {
+    pub(crate) fn from(on: Option<Expr>, using: Option<Vec<Name>>) -> Option<JoinConstraint> {
+        if let Some(expr) = on {
+            debug_assert!(using.is_none());
+            Some(JoinConstraint::On(expr))
+        } else if let Some(names) = using {
+            Some(JoinConstraint::Using(names))
+        } else {
+            None
+        }
+    }
 }
 
 impl Display for JoinConstraint {
