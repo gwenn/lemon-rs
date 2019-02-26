@@ -112,12 +112,13 @@ createkw(A) ::= CREATE(A).
 %type ifnotexists {bool}
 ifnotexists(A) ::= .              {A = false;}
 ifnotexists(A) ::= IF NOT EXISTS. {A = true;}
-/**
-%type temp {int}
+%type temp {bool}
 %ifndef SQLITE_OMIT_TEMPDB
-temp(A) ::= TEMP.  {A = 1;}
+temp(A) ::= TEMP.  {A = true;}
 %endif  SQLITE_OMIT_TEMPDB
-temp(A) ::= .      {A = 0;}
+temp(A) ::= .      {A = false;}
+
+/**
 create_table_args ::= LP columnlist conslist_opt(X) RP(E) table_options(F). {
   sqlite3EndTable(pParse,&X,&E,F,0);
 }
@@ -379,12 +380,11 @@ ifexists(A) ::= .            {A = false;}
 ///////////////////// The CREATE VIEW statement /////////////////////////////
 //
 %ifndef SQLITE_OMIT_VIEW
-/**
-cmd ::= createkw(X) temp(T) VIEW ifnotexists(E) nm(Y) dbnm(Z) eidlist_opt(C)
+cmd ::= createkw temp(T) VIEW ifnotexists(E) fullname(Y) eidlist_opt(C)
           AS select(S). {
-  sqlite3CreateView(pParse, &X, &Y, &Z, C, S, T, E);
+  self.ctx.stmt = Some(Stmt::CreateView{ temporary: T, if_not_exists: E, view_name: Y, columns: C,
+                                         select: S });
 }
-**/
 cmd ::= DROP VIEW ifexists(E) fullname(X). {
   self.ctx.stmt = Some(Stmt::DropView{ if_exists: E, view_name: X });
 }
