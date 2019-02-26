@@ -719,43 +719,46 @@ setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
 
 ////////////////////////// The INSERT command /////////////////////////////////
 //
-/**
-cmd ::= with insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
+cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
         upsert(U). {
-  sqlite3Insert(pParse, X, S, F, R, U);
+  let body = InsertBody::Select(S, U);
+  self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
+                                     body: body });
 }
-cmd ::= with insert_cmd(R) INTO xfullname(X) idlist_opt(F) DEFAULT VALUES.
+cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) DEFAULT VALUES.
 {
-  sqlite3Insert(pParse, X, 0, F, R, 0);
+  let body = InsertBody::DefaultValues;
+  self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
+                                     body: body });
 }
 
-%type upsert {Upsert*}
+%type upsert {Option<Upsert>}
 
 // Because upsert only occurs at the tip end of the INSERT rule for cmd,
 // there is never a case where the value of the upsert pointer will not
 // be destroyed by the cmd action.  So comment-out the destructor to
 // avoid unreachable code.
 //%destructor upsert {sqlite3UpsertDelete(pParse->db,$$);}
-upsert(A) ::= . { A = 0; }
+upsert(A) ::= . { A = None; }
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW)
               DO UPDATE SET setlist(Z) where_opt(W).
-              { A = sqlite3UpsertNew(pParse->db,T,TW,Z,W);}
+              { let index = UpsertIndex{ targets: T, where_clause: TW };
+                let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
+                A = Some(Upsert{ index: Some(index), do_clause: do_clause });}
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING.
-              { A = sqlite3UpsertNew(pParse->db,T,TW,0,0); }
+              { let index = UpsertIndex{ targets: T, where_clause: TW };
+                A = Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing }); }
 upsert(A) ::= ON CONFLICT DO NOTHING.
-              { A = sqlite3UpsertNew(pParse->db,0,0,0,0); }
+              { A = Some(Upsert{ index: None, do_clause: UpsertDo::Nothing }); }
 
-%type insert_cmd {int}
+%type insert_cmd {Option<ResolveType>}
 insert_cmd(A) ::= INSERT orconf(R).   {A = R;}
-insert_cmd(A) ::= REPLACE.            {A = OE_Replace;}
+insert_cmd(A) ::= REPLACE.            {A = Some(ResolveType::Replace);}
 
-%type idlist_opt {IdList*}
-**/
+%type idlist_opt {Option<Vec<Name>>}
 %type idlist {Vec<Name>}
-/**
-idlist_opt(A) ::= .                       {A = 0;}
-idlist_opt(A) ::= LP idlist(X) RP.    {A = X;}
-**/
+idlist_opt(A) ::= .                       {A = None;}
+idlist_opt(A) ::= LP idlist(X) RP.    {A = Some(X);}
 idlist(A) ::= idlist(A) COMMA nm(Y).
     {let id = Y; A.push(id);}
 idlist(A) ::= nm(Y).

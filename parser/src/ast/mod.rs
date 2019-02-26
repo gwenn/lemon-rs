@@ -2335,8 +2335,8 @@ impl Display for TransactionType {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Upsert {
-    index: Option<UpsertIndex>,
-    do_clause: UpsertDo,
+    pub index: Option<UpsertIndex>,
+    pub do_clause: UpsertDo,
 }
 
 impl Display for Upsert {
@@ -2352,8 +2352,8 @@ impl Display for Upsert {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertIndex {
-    targets: Vec<SortedColumn>,
-    where_clause: Option<Expr>,
+    pub targets: Vec<SortedColumn>,
+    pub where_clause: Option<Expr>,
 }
 
 impl Display for UpsertIndex {
