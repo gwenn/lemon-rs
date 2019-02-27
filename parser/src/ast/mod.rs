@@ -554,14 +554,14 @@ pub enum Expr {
     Exists(Box<Select>),
     // call to a built-in function
     FunctionCall {
-        name: Name, // FIXME Id
+        name: Id,
         distinctness: Option<Distinctness>,
         args: Option<Vec<Box<Expr>>>,
     }, // TODO overClause
     // Function call expression with '*' as arg
-    FunctionCallStar(Name), // TODO overClause, FIXME Id
+    FunctionCallStar(Id), // TODO overClause
     // Identifier
-    Id(Name), // FIXME Id
+    Id(Id),
     InList {
         lhs: Box<Expr>,
         not: bool,
@@ -588,6 +588,7 @@ pub enum Expr {
     },
     // Literal expression
     Literal(Literal),
+    Name(Name),
     // "NOT NULL" or "NOTNULL"
     NotNull(Box<Expr>),
     // Parenthesized subexpression
@@ -601,6 +602,12 @@ pub enum Expr {
     Unary(UnaryOperator, Box<Expr>),
     // Parameters
     Variable(String),
+}
+
+impl Expr {
+    pub fn parenthesized(x: Expr) -> Expr {
+        Expr::Parenthesized(vec![Box::new(x)])
+    }
 }
 
 impl Display for Expr {
@@ -694,7 +701,7 @@ impl Display for Expr {
                 name.fmt(f)?;
                 f.write_str("(*)")
             }
-            Expr::Id(name) => name.fmt(f),
+            Expr::Id(id) => id.fmt(f),
             Expr::InList { lhs, not, rhs } => {
                 lhs.fmt(f)?;
                 if *not {
@@ -760,6 +767,7 @@ impl Display for Expr {
                 Ok(())
             }
             Expr::Literal(lit) => lit.fmt(f),
+            Expr::Name(name) => name.fmt(f),
             Expr::NotNull(sub_expr) => {
                 sub_expr.fmt(f)?;
                 f.write_str(" NOTNULL")
@@ -1455,12 +1463,35 @@ impl Display for GroupBy {
     }
 }
 
-// TODO identifier or one of several keywords or `INDEXED` (but not string)
+/// identifier or one of several keywords or `INDEXED` (but not string)
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Id(pub String);
+
+impl From<Token> for Id {
+    // FIXME TryFrom
+    fn from(token: Token) -> Id {
+        Id(token.unwrap())
+    }
+}
+
+impl Display for Id {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        self.0.fmt(f)
+    }
+}
+
 // TODO ids (identifier or string)
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
+
+impl From<Token> for Name {
+    // FIXME TryFrom
+    fn from(token: Token) -> Name {
+        Name(token.unwrap())
+    }
+}
 
 impl Display for Name {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
@@ -1643,6 +1674,7 @@ pub enum ColumnConstraint {
     Unique(Option<ResolveType>),
     Check(Expr),
     Default(Expr),
+    Defer(DeferSubclause), // FIXME
     Collate {
         collation_name: Name, // FIXME Ids
     },
@@ -1705,6 +1737,7 @@ impl Display for ColumnConstraint {
                 f.write_str("DEFAULT ")?;
                 expr.fmt(f)
             }
+            ColumnConstraint::Defer(deref_clause) => deref_clause.fmt(f),
             ColumnConstraint::Collate { collation_name } => {
                 f.write_str("COLLATE ")?;
                 collation_name.fmt(f)

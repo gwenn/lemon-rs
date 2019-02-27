@@ -138,8 +138,9 @@ table_options(A) ::= WITHOUT nm(X). {
 }
 columnlist ::= columnlist COMMA columnname carglist.
 columnlist ::= columnname carglist.
-columnname(A) ::= nm(A) typetoken(Y). {sqlite3AddColumn(pParse,&A,&Y);}
 **/
+%type columnname {(Name, Option<Type>)}
+columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 
 // Declare some tokens early in order to influence their values, to 
 // improve performance and reduce the executable size.  The goal here is
@@ -213,27 +214,27 @@ columnname(A) ::= nm(A) typetoken(Y). {sqlite3AddColumn(pParse,&A,&Y);}
 // The name of a column or table can be any of the following:
 //
 %type nm {Name}
-nm(A) ::= id(X). { A = Name(X.unwrap()); }
-nm(A) ::= STRING(X). { A = Name(X.unwrap()); }
-nm(A) ::= JOIN_KW(X). { A = Name(X.unwrap()); }
+nm(A) ::= id(X). { A = Name::from(X); }
+nm(A) ::= STRING(X). { A = Name::from(X); }
+nm(A) ::= JOIN_KW(X). { A = Name::from(X); }
 
 // A typetoken is really zero or more tokens that form a type name such
 // as can be found after the column name in a CREATE TABLE statement.
 // Multiple tokens are concatenated to form the value of the typetoken.
 //
-/**
-%type typetoken {Token}
-typetoken(A) ::= .   {A.n = 0; A.z = 0;}
-typetoken(A) ::= typename(A).
-typetoken(A) ::= typename(A) LP signed RP(Y). {
-  A.n = (int)(&Y.z[Y.n] - A.z);
+%type typetoken {Option<Type>}
+typetoken(A) ::= .   {A = None;}
+typetoken(A) ::= typename(X). {A = Some(Type{ name: X, size: None });}
+typetoken(A) ::= typename(X) LP signed(Y) RP. {
+  A = Some(Type{ name: X, size: Some(TypeSize::MaxSize(Box::new(Y))) });
 }
-typetoken(A) ::= typename(A) LP signed COMMA signed RP(Y). {
-  A.n = (int)(&Y.z[Y.n] - A.z);
+typetoken(A) ::= typename(X) LP signed(Y) COMMA signed(Z) RP. {
+  A = Some(Type{ name: X, size: Some(TypeSize::TypeSize(Box::new(Y), Box::new(Z))) });
 }
-%type typename {Token}
-typename(A) ::= ids(A).
-typename(A) ::= typename(A) ids(Y). {A.n=Y.n+(int)(Y.z-A.z);}
+%type typename {String}
+typename(A) ::= ids(X). {A=X.unwrap();}
+typename(A) ::= typename(A) ids(Y). {let ids=Y.unwrap(); A.push(' '); A.push_str(&ids);}
+%type signed {Expr}
 signed ::= plus_num.
 signed ::= minus_num.
 
@@ -250,84 +251,118 @@ signed ::= minus_num.
 // whitespace on either end of the text, but that can be removed in
 // post-processing, if needed.
 //
-%type scanpt {const char*}
-scanpt(A) ::= . {
-  assert( yyLookahead!=YYNOCODE );
-  A = yyLookaheadToken.z;
-}
 
 // "carglist" is a list of additional constraints that come after the
 // column name and column type in a CREATE TABLE statement.
 //
-carglist ::= carglist ccons.
-carglist ::= .
-ccons ::= CONSTRAINT nm(X).           {pParse->constraintName = X;}
-ccons ::= DEFAULT scanpt(A) term(X) scanpt(Z).
-                            {sqlite3AddDefaultValue(pParse,X,A,Z);}
-ccons ::= DEFAULT LP(A) expr(X) RP(Z).
-                            {sqlite3AddDefaultValue(pParse,X,A.z+1,Z.z);}
-ccons ::= DEFAULT PLUS(A) term(X) scanpt(Z).
-                            {sqlite3AddDefaultValue(pParse,X,A.z,Z);}
-ccons ::= DEFAULT MINUS(A) term(X) scanpt(Z).      {
-  Expr *p = sqlite3PExpr(pParse, TK_UMINUS, X, 0);
-  sqlite3AddDefaultValue(pParse,p,A.z,Z);
+%type carglist {Vec<NamedColumnConstraint>}
+carglist(A) ::= carglist(A) ccons(X). {let cc = X; A.push(cc);}
+carglist(A) ::= .                     {A = vec![];}
+%type ccons {NamedColumnConstraint}
+ccons ::= CONSTRAINT nm(X).           { self.ctx.constraint_name = Some(X);}
+ccons(A) ::= DEFAULT term(X). {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::Default(X);
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
 }
-ccons ::= DEFAULT scanpt id(X).       {
-  Expr *p = tokenExpr(pParse, TK_STRING, X);
-  if( p ){
-    sqlite3ExprIdToTrueFalse(p);
-    testcase( p->op==TK_TRUEFALSE && sqlite3ExprTruthValue(p) );
-  }
-  sqlite3AddDefaultValue(pParse,p,X.z,X.z+X.n);
+ccons(A) ::= DEFAULT LP expr(X) RP. {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::Default(Expr::parenthesized(X));
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
+ccons(A) ::= DEFAULT PLUS term(X). {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Positive, Box::new(X)));
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
+ccons(A) ::= DEFAULT MINUS term(X).      {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Negative, Box::new(X)));
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
+ccons(A) ::= DEFAULT id(X).       {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::Default(Expr::Id(Id::from(X)));
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
 }
 
 // In addition to the type name, we also care about the primary key and
 // UNIQUE constraints.
 //
-ccons ::= NULL onconf.
-ccons ::= NOT NULL onconf(R).    {sqlite3AddNotNull(pParse, R);}
-ccons ::= PRIMARY KEY sortorder(Z) onconf(R) autoinc(I).
-                                 {sqlite3AddPrimaryKey(pParse,0,R,I,Z);}
-ccons ::= UNIQUE onconf(R).      {sqlite3CreateIndex(pParse,0,0,0,0,R,0,0,0,0,
-                                   SQLITE_IDXTYPE_UNIQUE);}
-ccons ::= CHECK LP expr(X) RP.   {sqlite3AddCheckConstraint(pParse,X);}
-ccons ::= REFERENCES nm(T) eidlist_opt(TA) refargs(R).
-                                 {sqlite3CreateForeignKey(pParse,0,&T,TA,R);}
-ccons ::= defer_subclause(D).    {sqlite3DeferForeignKey(pParse,D);}
-ccons ::= COLLATE ids(C).        {sqlite3AddCollateType(pParse, &C);}
+ccons(A) ::= NULL onconf(R). {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::NotNull{ nullable: true, conflict_clause: R};
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
+ccons(A) ::= NOT NULL onconf(R).    {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::NotNull{ nullable: false, conflict_clause: R};
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
+ccons(A) ::= PRIMARY KEY sortorder(Z) onconf(R) autoinc(I). {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::PrimaryKey{ order: Z, conflict_clause: R, auto_increment: I };
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
+ccons(A) ::= UNIQUE onconf(R).      {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::Unique(R);
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
+ccons(A) ::= CHECK LP expr(X) RP.   {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::Check(X);
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
+ccons(A) ::= REFERENCES nm(T) eidlist_opt(TA) refargs(R). {
+  let name = self.ctx.constraint_name();
+  let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
+  let constraint = ColumnConstraint::ForeignKey{ clause: clause, deref_clause: None }; // FIXME deref_clause
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
+ccons(A) ::= defer_subclause(D).    {
+  let constraint = ColumnConstraint::Defer(D);
+  A = NamedColumnConstraint{ name: None, constraint: constraint };
+}
+ccons(A) ::= COLLATE ids(C).        {
+  let name = self.ctx.constraint_name();
+  let constraint = ColumnConstraint::Collate{ collation_name: Name::from(C) };
+  A = NamedColumnConstraint{ name: name, constraint: constraint };
+}
 
 // The optional AUTOINCREMENT keyword
-%type autoinc {int}
-autoinc(X) ::= .          {X = 0;}
-autoinc(X) ::= AUTOINCR.  {X = 1;}
+%type autoinc {bool}
+autoinc(X) ::= .          {X = false;}
+autoinc(X) ::= AUTOINCR.  {X = true;}
 
 // The next group of rules parses the arguments to a REFERENCES clause
 // that determine if the referential integrity checking is deferred or
 // or immediate and which determine what action to take if a ref-integ
 // check fails.
 //
-%type refargs {int}
-refargs(A) ::= .                  { A = OE_None*0x0101; /* EV: R-19803-45884 *}
-refargs(A) ::= refargs(A) refarg(Y). { A = (A & ~Y.mask) | Y.value; }
-%type refarg {struct {int value; int mask;}}
-refarg(A) ::= MATCH nm.              { A.value = 0;     A.mask = 0x000000; }
-refarg(A) ::= ON INSERT refact.      { A.value = 0;     A.mask = 0x000000; }
-refarg(A) ::= ON DELETE refact(X).   { A.value = X;     A.mask = 0x0000ff; }
-refarg(A) ::= ON UPDATE refact(X).   { A.value = X<<8;  A.mask = 0x00ff00; }
-%type refact {int}
-refact(A) ::= SET NULL.              { A = OE_SetNull;  /* EV: R-33326-45252 *}
-refact(A) ::= SET DEFAULT.           { A = OE_SetDflt;  /* EV: R-33326-45252 *}
-refact(A) ::= CASCADE.               { A = OE_Cascade;  /* EV: R-33326-45252 *}
-refact(A) ::= RESTRICT.              { A = OE_Restrict; /* EV: R-33326-45252 *}
-refact(A) ::= NO ACTION.             { A = OE_None;     /* EV: R-33326-45252 *}
-%type defer_subclause {int}
-defer_subclause(A) ::= NOT DEFERRABLE init_deferred_pred_opt.     {A = 0;}
-defer_subclause(A) ::= DEFERRABLE init_deferred_pred_opt(X).      {A = X;}
-%type init_deferred_pred_opt {int}
-init_deferred_pred_opt(A) ::= .                       {A = 0;}
-init_deferred_pred_opt(A) ::= INITIALLY DEFERRED.     {A = 1;}
-init_deferred_pred_opt(A) ::= INITIALLY IMMEDIATE.    {A = 0;}
+%type refargs {Vec<RefArg>}
+refargs(A) ::= .                  { A = vec![]; /* EV: R-19803-45884 */}
+refargs(A) ::= refargs(A) refarg(Y). { let ra = Y; A.push(ra); }
+%type refarg {RefArg}
+refarg(A) ::= MATCH nm(X).              { A = RefArg::Match(X); }
+refarg(A) ::= ON INSERT refact(X).      { A = RefArg::OnInsert(X); }
+refarg(A) ::= ON DELETE refact(X).   { A = RefArg::OnDelete(X); }
+refarg(A) ::= ON UPDATE refact(X).   { A = RefArg::OnUpdate(X); }
+%type refact {RefAct}
+refact(A) ::= SET NULL.              { A = RefAct::SetNull;  /* EV: R-33326-45252 */}
+refact(A) ::= SET DEFAULT.           { A = RefAct::SetDefault;  /* EV: R-33326-45252 */}
+refact(A) ::= CASCADE.               { A = RefAct::Cascade;  /* EV: R-33326-45252 */}
+refact(A) ::= RESTRICT.              { A = RefAct::Restrict; /* EV: R-33326-45252 */}
+refact(A) ::= NO ACTION.             { A = RefAct::NoAction;     /* EV: R-33326-45252 */}
+%type defer_subclause {DeferSubclause}
+defer_subclause(A) ::= NOT DEFERRABLE init_deferred_pred_opt(X).     {A = DeferSubclause{ deferrable: false, init_deferred: X };}
+defer_subclause(A) ::= DEFERRABLE init_deferred_pred_opt(X).      {A = DeferSubclause{ deferrable: true, init_deferred: X };}
+%type init_deferred_pred_opt {Option<InitDeferredPred>}
+init_deferred_pred_opt(A) ::= .                       {A = None;}
+init_deferred_pred_opt(A) ::= INITIALLY DEFERRED.     {A = Some(InitDeferredPred::InitiallyDeferred);}
+init_deferred_pred_opt(A) ::= INITIALLY IMMEDIATE.    {A = Some(InitDeferredPred::InitiallyImmediate);}
 
+/**
 conslist_opt(A) ::= .                         {A.n = 0; A.z = 0;}
 conslist_opt(A) ::= COMMA(A) conslist.
 conslist ::= conslist tconscomma tcons.
@@ -350,18 +385,16 @@ tcons ::= FOREIGN KEY LP eidlist(FA) RP
 %type defer_subclause_opt {int}
 defer_subclause_opt(A) ::= .                    {A = 0;}
 defer_subclause_opt(A) ::= defer_subclause(A).
+**/
 
 // The following is a non-standard extension that allows us to declare the
 // default behavior when there is a constraint conflict.
 //
 %type onconf {Option<ResolveType>}
-**/
 %type orconf {Option<ResolveType>}
 %type resolvetype {ResolveType}
-/**
 onconf(A) ::= .                              {A = None;}
 onconf(A) ::= ON CONFLICT resolvetype(X).    {A = Some(X);}
-**/
 orconf(A) ::= .                              {A = None;}
 orconf(A) ::= OR resolvetype(X).             {A = Some(X);}
 resolvetype(A) ::= raisetype(A).
@@ -492,7 +525,7 @@ selcollist(A) ::= sclp(A) nm(X) DOT STAR. {
 //
 %type as {Option<As>}
 as(X) ::= AS nm(Y).    {X = Some(As::As(Y));}
-as(X) ::= ids(Y).      {X = Some(As::Elided(Name(Y.unwrap())));}
+as(X) ::= ids(Y).      {X = Some(As::Elided(Name::from(Y)));}
 as(X) ::= .            {X = None;}
 
 
@@ -1131,7 +1164,7 @@ eidlist(A) ::= nm(Y) collate(C) sortorder(Z). {
 
 %type collate {Option<Name>}
 collate(C) ::= .              {C = None;}
-collate(C) ::= COLLATE ids(X).   {C = Some(Name(X.unwrap()));}
+collate(C) ::= COLLATE ids(X).   {C = Some(Name::from(X));}
 
 
 ///////////////////////////// The DROP INDEX command /////////////////////////
@@ -1160,7 +1193,7 @@ cmd ::= PRAGMA fullname(X) LP minus_num(Y) RP.
 
 %type nmnum {Expr}
 nmnum(A) ::= plus_num(A).
-nmnum(A) ::= nm(X). {A = Expr::Id(X);}
+nmnum(A) ::= nm(X). {A = Expr::Name(X);}
 nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
 nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
 nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
@@ -1331,17 +1364,12 @@ cmd ::= ANALYZE fullname(X).  {self.ctx.stmt = Some(Stmt::Analyze(Some(X)));}
 cmd ::= ALTER TABLE fullname(X) RENAME TO nm(Z). {
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameTo(Z)));
 }
-/**
-cmd ::= ALTER TABLE add_column_fullname
-        ADD kwcolumn_opt columnname(Y) carglist. {
-  Y.n = (int)(pParse->sLastToken.z-Y.z) + pParse->sLastToken.n;
-  sqlite3AlterFinishAddColumn(pParse, &Y);
+cmd ::= ALTER TABLE fullname(X)
+        ADD kwcolumn_opt columnname(Y) carglist(C). {
+  let (col_name, col_type) = Y;
+  let cd = ColumnDefinition{ col_name: col_name, col_type: col_type, constraints: C };
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::AddColumn(cd)));
 }
-add_column_fullname ::= fullname(X). {
-  disableLookaside(pParse);
-  sqlite3AlterBeginAddColumn(pParse, X);
-}
-**/
 cmd ::= ALTER TABLE fullname(X) RENAME kwcolumn_opt nm(Y) TO nm(Z). {
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameColumn{ old: Y, new: Z }));
 }
