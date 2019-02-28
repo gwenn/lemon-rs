@@ -101,12 +101,9 @@ cmd ::= ROLLBACK trans_opt(Y) TO savepoint_opt nm(X). {
 
 ///////////////////// The CREATE TABLE statement ////////////////////////////
 //
-/**
-cmd ::= create_table create_table_args.
-create_table ::= createkw temp(T) TABLE ifnotexists(E) nm(Y) dbnm(Z). {
-   sqlite3StartTable(pParse,&Y,&Z,T,0,0,E);
+cmd ::= createkw temp(T) TABLE ifnotexists(E) fullname(Y) create_table_args(X). {
+  self.ctx.stmt = Some(Stmt::CreateTable{ temporary: T, if_not_exists: E, tbl_name: Y, body: X });
 }
-**/
 createkw(A) ::= CREATE(A).
 
 %type ifnotexists {bool}
@@ -118,27 +115,32 @@ temp(A) ::= TEMP.  {A = true;}
 %endif  SQLITE_OMIT_TEMPDB
 temp(A) ::= .      {A = false;}
 
-/**
-create_table_args ::= LP columnlist conslist_opt(X) RP(E) table_options(F). {
-  sqlite3EndTable(pParse,&X,&E,F,0);
+%type create_table_args {CreateTableBody}
+create_table_args(A) ::= LP columnlist(C) conslist_opt(X) RP table_options(F). {
+  A = CreateTableBody::ColumnsAndConstraints{ columns: C, constraints: X, without: F };
 }
-create_table_args ::= AS select(S). {
-  sqlite3EndTable(pParse,0,0,0,S);
-  sqlite3SelectDelete(pParse->db, S);
+create_table_args(A) ::= AS select(S). {
+  A = CreateTableBody::AsSelect(S);
 }
-%type table_options {int}
-table_options(A) ::= .    {A = 0;}
+%type table_options {bool}
+table_options(A) ::= .    {A = false;}
 table_options(A) ::= WITHOUT nm(X). {
-  if( X.n==5 && sqlite3_strnicmp(X.z,"rowid",5)==0 ){
-    A = TF_WithoutRowid | TF_NoVisibleRowid;
+  if "rowid".eq_ignore_ascii_case(&X.0) {
+    A = true;
   }else{
-    A = 0;
-    sqlite3ErrorMsg(pParse, "unknown table option: %.*s", X.n, X.z);
+    A = false;
+    let msg = format!("unknown table option: {}", &X);
+    self.ctx.sqlite3_error_msg(msg);
   }
 }
-columnlist ::= columnlist COMMA columnname carglist.
-columnlist ::= columnname carglist.
-**/
+%type columnlist {Vec<ColumnDefinition>}
+columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
+  let cd = ColumnDefinition{ col_name: X.0, col_type: X.1, constraints: Y };
+  A.push(cd);
+}
+columnlist(A) ::= columnname(X) carglist(Y). {
+  A = vec![ColumnDefinition{ col_name: X.0, col_type: X.1, constraints: Y }];
+}
 %type columnname {(Name, Option<Type>)}
 columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 
@@ -362,30 +364,41 @@ init_deferred_pred_opt(A) ::= .                       {A = None;}
 init_deferred_pred_opt(A) ::= INITIALLY DEFERRED.     {A = Some(InitDeferredPred::InitiallyDeferred);}
 init_deferred_pred_opt(A) ::= INITIALLY IMMEDIATE.    {A = Some(InitDeferredPred::InitiallyImmediate);}
 
-/**
-conslist_opt(A) ::= .                         {A.n = 0; A.z = 0;}
-conslist_opt(A) ::= COMMA(A) conslist.
-conslist ::= conslist tconscomma tcons.
-conslist ::= tcons.
-tconscomma ::= COMMA.            {pParse->constraintName.n = 0;}
+%type conslist_opt {Option<Vec<NamedTableConstraint>>}
+conslist_opt(A) ::= .                         {A = None;}
+conslist_opt(A) ::= COMMA conslist(X).        {A = Some(X);}
+%type conslist {Vec<NamedTableConstraint>}
+conslist(A) ::= conslist(A) tconscomma tcons(X). {let tc = X; A.push(tc);}
+conslist(A) ::= tcons(X).                        {A = vec![X];}
+tconscomma ::= COMMA.            { self.ctx.constraint_name = None;} // TODO Validate: useful ?
 tconscomma ::= .
-tcons ::= CONSTRAINT nm(X).      {pParse->constraintName = X;}
-tcons ::= PRIMARY KEY LP sortlist(X) autoinc(I) RP onconf(R).
-                                 {sqlite3AddPrimaryKey(pParse,X,R,I,0);}
-tcons ::= UNIQUE LP sortlist(X) RP onconf(R).
-                                 {sqlite3CreateIndex(pParse,0,0,0,X,R,0,0,0,0,
-                                       SQLITE_IDXTYPE_UNIQUE);}
-tcons ::= CHECK LP expr(E) RP onconf.
-                                 {sqlite3AddCheckConstraint(pParse,E);}
-tcons ::= FOREIGN KEY LP eidlist(FA) RP
-          REFERENCES nm(T) eidlist_opt(TA) refargs(R) defer_subclause_opt(D). {
-    sqlite3CreateForeignKey(pParse, FA, &T, TA, R);
-    sqlite3DeferForeignKey(pParse, D);
+%type tcons {NamedTableConstraint}
+tcons ::= CONSTRAINT nm(X).      {self.ctx.constraint_name = Some(X);}
+tcons(A) ::= PRIMARY KEY LP sortlist(X) autoinc(I) RP onconf(R). {
+  let name = self.ctx.constraint_name();
+  let constraint = TableConstraint::PrimaryKey{ columns: X, auto_increment: I, conflict_clause: R };
+  A = NamedTableConstraint{ name: name, constraint: constraint };
 }
-%type defer_subclause_opt {int}
-defer_subclause_opt(A) ::= .                    {A = 0;}
-defer_subclause_opt(A) ::= defer_subclause(A).
-**/
+tcons(A) ::= UNIQUE LP sortlist(X) RP onconf(R). {
+  let name = self.ctx.constraint_name();
+  let constraint = TableConstraint::Unique{ columns: X, conflict_clause: R };
+  A = NamedTableConstraint{ name: name, constraint: constraint };
+}
+tcons(A) ::= CHECK LP expr(E) RP onconf. {
+  let name = self.ctx.constraint_name();
+  let constraint = TableConstraint::Check(E);
+  A = NamedTableConstraint{ name: name, constraint: constraint };
+}
+tcons(A) ::= FOREIGN KEY LP eidlist(FA) RP
+          REFERENCES nm(T) eidlist_opt(TA) refargs(R) defer_subclause_opt(D). {
+  let name = self.ctx.constraint_name();
+  let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
+  let constraint = TableConstraint::ForeignKey{ columns: FA, clause: clause, deref_clause: D };
+  A = NamedTableConstraint{ name: name, constraint: constraint };
+}
+%type defer_subclause_opt {Option<DeferSubclause>}
+defer_subclause_opt(A) ::= .                    {A = None;}
+defer_subclause_opt(A) ::= defer_subclause(X).  {A = Some(X);}
 
 // The following is a non-standard extension that allows us to declare the
 // default behavior when there is a constraint conflict.
