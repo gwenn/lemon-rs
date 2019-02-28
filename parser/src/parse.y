@@ -130,7 +130,7 @@ table_options(A) ::= WITHOUT nm(X). {
   }else{
     A = false;
     let msg = format!("unknown table option: {}", &X);
-    self.ctx.sqlite3_error_msg(msg);
+    self.ctx.sqlite3_error_msg(&msg);
   }
 }
 %type columnlist {Vec<ColumnDefinition>}
@@ -1220,61 +1220,55 @@ minus_num(A) ::= MINUS number(X).     {A = Expr::Unary(UnaryOperator::Negative, 
 //////////////////////////// The CREATE TRIGGER command /////////////////////
 
 %ifndef SQLITE_OMIT_TRIGGER
-/**
 
-cmd ::= createkw trigger_decl(A) BEGIN trigger_cmd_list(S) END(Z). {
-  Token all;
-  all.z = A.z;
-  all.n = (int)(Z.z - A.z) + Z.n;
-  sqlite3FinishTrigger(pParse, S, &all);
+cmd ::= createkw temp(T) TRIGGER ifnotexists(NOERR) fullname(B) trigger_time(C) trigger_event(D)
+        ON fullname(E) foreach_clause(X) when_clause(G) BEGIN trigger_cmd_list(S) END. {
+  self.ctx.stmt = Some(Stmt::CreateTrigger{
+    temporary: T, if_not_exists: NOERR, trigger_name: B, time: C, event: D, tbl_name: E,
+    for_each_row: X, when_clause: G, commands: S
+  });
 }
 
-trigger_decl(A) ::= temp(T) TRIGGER ifnotexists(NOERR) nm(B) dbnm(Z) 
-                    trigger_time(C) trigger_event(D)
-                    ON fullname(E) foreach_clause when_clause(G). {
-  sqlite3BeginTrigger(pParse, &B, &Z, C, D.a, D.b, E, G, T, NOERR);
-  A = (Z.n==0?B:Z); /*A-overwrites-T*
-}
+%type trigger_time {Option<TriggerTime>}
+trigger_time(A) ::= BEFORE.  { A = Some(TriggerTime::Before); }
+trigger_time(A) ::= AFTER.  { A = Some(TriggerTime::After); }
+trigger_time(A) ::= INSTEAD OF.  { A = Some(TriggerTime::InsteadOf);}
+trigger_time(A) ::= .            { A = None; }
 
-%type trigger_time {int}
-trigger_time(A) ::= BEFORE|AFTER(X).  { A = @X; /*A-overwrites-X* }
-trigger_time(A) ::= INSTEAD OF.  { A = TK_INSTEAD;}
-trigger_time(A) ::= .            { A = TK_BEFORE; }
+%type trigger_event {TriggerEvent}
+trigger_event(A) ::= DELETE.   {A = TriggerEvent::Delete;}
+trigger_event(A) ::= INSERT.   {A = TriggerEvent::Insert;}
+trigger_event(A) ::= UPDATE.          {A = TriggerEvent::Update;}
+trigger_event(A) ::= UPDATE OF idlist(X).{A = TriggerEvent::UpdateOf(X);}
 
-%type trigger_event {struct TrigEvent}
-trigger_event(A) ::= DELETE|INSERT(X).   {A.a = @X; /*A-overwrites-X* A.b = 0;}
-trigger_event(A) ::= UPDATE(X).          {A.a = @X; /*A-overwrites-X* A.b = 0;}
-trigger_event(A) ::= UPDATE OF idlist(X).{A.a = TK_UPDATE; A.b = X;}
+%type foreach_clause {bool}
+foreach_clause(A) ::= .             { A = false; }
+foreach_clause(A) ::= FOR EACH ROW. { A = true;  }
 
-foreach_clause ::= .
-foreach_clause ::= FOR EACH ROW.
+%type when_clause {Option<Expr>}
+when_clause(A) ::= .             { A = None; }
+when_clause(A) ::= WHEN expr(X). { A = Some(X); }
 
-%type when_clause {Expr*}
-when_clause(A) ::= .             { A = 0; }
-when_clause(A) ::= WHEN expr(X). { A = X; }
-
-%type trigger_cmd_list {TriggerStep*}
+%type trigger_cmd_list {Vec<TriggerCmd>}
 trigger_cmd_list(A) ::= trigger_cmd_list(A) trigger_cmd(X) SEMI. {
-  assert( A!=0 );
-  A->pLast->pNext = X;
-  A->pLast = X;
+  let tc = X;
+  A.push(tc);
 }
-trigger_cmd_list(A) ::= trigger_cmd(A) SEMI. { 
-  assert( A!=0 );
-  A->pLast = A;
+trigger_cmd_list(A) ::= trigger_cmd(X) SEMI. {
+  A = vec![X];
 }
 
 // Disallow qualified table names on INSERT, UPDATE, and DELETE statements
 // within a trigger.  The table to INSERT, UPDATE, or DELETE is always in 
 // the same database as the table that the trigger fires on.
 //
-%type trnm {Token}
+%type trnm {Name}
 trnm(A) ::= nm(A).
 trnm(A) ::= nm DOT nm(X). {
   A = X;
-  sqlite3ErrorMsg(pParse, 
-        "qualified table names are not allowed on INSERT, UPDATE, and DELETE "
-        "statements within triggers");
+  self.ctx.sqlite3_error_msg(
+        "qualified table names are not allowed on INSERT, UPDATE, and DELETE \
+         statements within triggers");
 }
 
 // Disallow the INDEX BY and NOT INDEXED clauses on UPDATE and DELETE
@@ -1283,51 +1277,44 @@ trnm(A) ::= nm DOT nm(X). {
 //
 tridxby ::= .
 tridxby ::= INDEXED BY nm. {
-  sqlite3ErrorMsg(pParse,
-        "the INDEXED BY clause is not allowed on UPDATE or DELETE statements "
-        "within triggers");
+  self.ctx.sqlite3_error_msg(
+        "the INDEXED BY clause is not allowed on UPDATE or DELETE statements \
+         within triggers");
 }
 tridxby ::= NOT INDEXED. {
-  sqlite3ErrorMsg(pParse,
-        "the NOT INDEXED clause is not allowed on UPDATE or DELETE statements "
-        "within triggers");
+  self.ctx.sqlite3_error_msg(
+        "the NOT INDEXED clause is not allowed on UPDATE or DELETE statements \
+         within triggers");
 }
 
 
 
-%type trigger_cmd {TriggerStep*}
+%type trigger_cmd {TriggerCmd}
 // UPDATE 
 trigger_cmd(A) ::=
-   UPDATE(B) orconf(R) trnm(X) tridxby SET setlist(Y) where_opt(Z) scanpt(E).  
-   {A = sqlite3TriggerUpdateStep(pParse, &X, Y, Z, R, B.z, E);}
+   UPDATE orconf(R) trnm(X) tridxby SET setlist(Y) where_opt(Z).
+   {A = TriggerCmd::Update{ or_conflict: R, tbl_name: X, sets: Y, where_clause: Z };}
 
 // INSERT
-trigger_cmd(A) ::= scanpt(B) insert_cmd(R) INTO
-                      trnm(X) idlist_opt(F) select(S) upsert(U) scanpt(Z). {
-   A = sqlite3TriggerInsertStep(pParse,&X,F,S,R,U,B,Z);/*A-overwrites-R*
+trigger_cmd(A) ::= insert_cmd(R) INTO
+                      trnm(X) idlist_opt(F) select(S) upsert(U). {
+   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: S, upsert: U };
 }
 // DELETE
-trigger_cmd(A) ::= DELETE(B) FROM trnm(X) tridxby where_opt(Y) scanpt(E).
-   {A = sqlite3TriggerDeleteStep(pParse, &X, Y, B.z, E);}
+trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
+   {A = TriggerCmd::Delete{ tbl_name: X, where_clause: Y };}
 
 // SELECT
-trigger_cmd(A) ::= scanpt(B) select(X) scanpt(E).
-   {A = sqlite3TriggerSelectStep(pParse->db, X, B, E); /*A-overwrites-X*}
+trigger_cmd(A) ::= select(X).
+   {A = TriggerCmd::Select(X);}
 
 // The special RAISE expression that may occur in trigger programs
 expr(A) ::= RAISE LP IGNORE RP.  {
-  A = sqlite3PExpr(pParse, TK_RAISE, 0, 0); 
-  if( A ){
-    A->affinity = OE_Ignore;
-  }
+  A = Expr::Raise(ResolveType::Ignore, None);
 }
 expr(A) ::= RAISE LP raisetype(T) COMMA nm(Z) RP.  {
-  A = sqlite3ExprAlloc(pParse->db, TK_RAISE, &Z, 1); 
-  if( A ) {
-    A->affinity = (char)T;
-  }
+  A = Expr::Raise(T, Some(Z));
 }
-**/
 %endif  !SQLITE_OMIT_TRIGGER
 
 %type raisetype {ResolveType}

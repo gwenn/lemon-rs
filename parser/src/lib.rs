@@ -15,7 +15,7 @@ impl Context {
         self.constraint_name.take()
     }
 
-    pub fn sqlite3_error_msg(&mut self, msg: String) {
+    pub fn sqlite3_error_msg(&mut self, msg: &str) {
         // TODO
         eprintln!("{}", msg);
     }

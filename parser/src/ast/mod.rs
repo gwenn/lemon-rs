@@ -595,7 +595,7 @@ pub enum Expr {
     Parenthesized(Vec<Box<Expr>>),
     Qualified(Name, Name),
     // RAISE function call
-    Raise(ResolveType, Option<String>),
+    Raise(ResolveType, Option<Name>),
     // Subquery expression
     Subquery(Box<Select>),
     // Unary expression
@@ -787,7 +787,7 @@ impl Display for Expr {
                 rt.fmt(f)?;
                 if let Some(err) = err {
                     f.write_str(", ")?;
-                    single_quote(err, f)?;
+                    err.fmt(f)?;
                 }
                 f.write_char(')')
             }
