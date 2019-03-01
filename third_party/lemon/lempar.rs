@@ -774,10 +774,10 @@ impl yyParser {
     #[allow(non_snake_case)]
     pub fn Parse(
         &mut self,
-        yymajor: YYCODETYPE,     /* The major token code number */
+        yymajor: TokenType,     /* The major token code number */
         mut yyminor: Option<ParseTOKENTYPE>, /* The value for the token */
     ) {
-        let mut yymajor = yymajor;
+        let mut yymajor = yymajor as YYCODETYPE;
         let mut yyact: YYACTIONTYPE; /* The parser action. */
         //#[cfg(all(not(feature = "YYERRORSYMBOL"), not(feature = "YYNOERRORRECOVERY")))]
         let mut yyendofinput: bool = false; /* True if we are at the end of input */

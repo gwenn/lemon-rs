@@ -4173,7 +4173,7 @@ void ReportTable(
     fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
     fprintf(out,"#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]\n"); lineno++;
     fprintf(out,"#[repr(%s)]\n",
-      minimum_size_type(0, lemp->nsymbol+1, &szCodeType)); lineno++;
+      minimum_size_type(0, lemp->nsymbol+1, 0)); lineno++;
     fprintf(out,"pub enum TokenType {\n"); lineno++;
     fprintf(out,"    %sEOF = 0,\n",prefix);
     for(i=1; i<lemp->nterminal; i++){
@@ -4186,8 +4186,8 @@ void ReportTable(
 
   /* Generate the defines */
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
-  fprintf(out,"type YYCODETYPE = %s;\n",
-    minimum_size_type(0, lemp->nsymbol, &szCodeType)); lineno++;
+  fprintf(out,"pub type YYCODETYPE = %s;\n",
+    minimum_size_type(0, lemp->nsymbol+1, &szCodeType)); lineno++;
   fprintf(out,"const YYNOCODE: YYCODETYPE = %d;\n",lemp->nsymbol);  lineno++;
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
   fprintf(out,"type YYACTIONTYPE = %s;\n",

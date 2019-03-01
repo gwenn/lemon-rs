@@ -10,6 +10,7 @@
   popped from the stack during error processing
 
 https://www.codeproject.com/Articles/1056460/Generating-a-High-Speed-Parser-Part-Lemon
+https://www.sqlite.org/lemon.html
 
 ### Unsupported by Rust
 

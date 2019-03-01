@@ -1,6 +1,7 @@
 //! Abstract Syntax Tree
 
-use crate::dialect::{is_identifier, is_keyword, Token};
+use crate::dialect::{is_identifier, is_keyword, Token, TokenType};
+use crate::parse::YYCODETYPE;
 use std::fmt::{Display, Formatter, Result, Write};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -547,7 +548,8 @@ pub enum Expr {
         type_name: Type,
     },
     // COLLATE expression
-    Collate(Box<Expr>, Name),
+    Collate(Box<Expr>, String),
+    CurrentTime(Id),
     // schema-name.table-name.column-name
     DoublyQualified(Name, Name, Name),
     // EXISTS subquery
@@ -556,7 +558,7 @@ pub enum Expr {
     FunctionCall {
         name: Id,
         distinctness: Option<Distinctness>,
-        args: Option<Vec<Box<Expr>>>,
+        args: Option<Vec<Expr>>,
     }, // TODO overClause
     // Function call expression with '*' as arg
     FunctionCallStar(Id), // TODO overClause
@@ -565,7 +567,7 @@ pub enum Expr {
     InList {
         lhs: Box<Expr>,
         not: bool,
-        rhs: Option<Vec<Box<Expr>>>,
+        rhs: Option<Vec<Expr>>,
     },
     InSelect {
         lhs: Box<Expr>,
@@ -576,7 +578,7 @@ pub enum Expr {
         lhs: Box<Expr>,
         not: bool,
         rhs: QualifiedName,
-        args: Option<Vec<Box<Expr>>>,
+        args: Option<Vec<Expr>>,
     },
     IsNull(Box<Expr>),
     Like {
@@ -592,7 +594,7 @@ pub enum Expr {
     // "NOT NULL" or "NOTNULL"
     NotNull(Box<Expr>),
     // Parenthesized subexpression
-    Parenthesized(Vec<Box<Expr>>),
+    Parenthesized(Vec<Expr>),
     Qualified(Name, Name),
     // RAISE function call
     Raise(ResolveType, Option<Name>),
@@ -606,7 +608,22 @@ pub enum Expr {
 
 impl Expr {
     pub fn parenthesized(x: Expr) -> Expr {
-        Expr::Parenthesized(vec![Box::new(x)])
+        Expr::Parenthesized(vec![x])
+    }
+    pub fn id(x: Token) -> Expr {
+        Expr::Id(Id::from(x))
+    }
+    pub fn collate(x: Expr, c: Token) -> Expr {
+        Expr::Collate(Box::new(x), c.unwrap())
+    }
+    pub fn cast(x: Expr, type_name: Type) -> Expr {
+        Expr::Cast {
+            expr: Box::new(x),
+            type_name: type_name,
+        }
+    }
+    pub fn binary(left: Expr, op: YYCODETYPE, right: Expr) -> Expr {
+        Expr::Binary(Box::new(left), Operator::from(op), Box::new(right))
     }
 }
 
@@ -667,8 +684,9 @@ impl Display for Expr {
             Expr::Collate(expr, collation) => {
                 expr.fmt(f)?;
                 f.write_str(" COLLATE ")?;
-                collation.fmt(f)
+                double_quote(collation, f)
             }
+            Expr::CurrentTime(id) => id.fmt(f),
             Expr::DoublyQualified(db_name, tbl_name, col_name) => {
                 db_name.fmt(f)?;
                 f.write_char('.')?;
@@ -886,6 +904,32 @@ pub enum Operator {
     Or,
     RightShift,
     Substract,
+}
+
+impl From<YYCODETYPE> for Operator {
+    fn from(token_type: YYCODETYPE) -> Operator {
+        match token_type {
+            x if x == TokenType::TK_AND as YYCODETYPE => Operator::And,
+            x if x == TokenType::TK_OR as YYCODETYPE => Operator::Or,
+            x if x == TokenType::TK_LT as YYCODETYPE => Operator::Less,
+            x if x == TokenType::TK_GT as YYCODETYPE => Operator::Greater,
+            x if x == TokenType::TK_GE as YYCODETYPE => Operator::GreaterEquals,
+            x if x == TokenType::TK_LE as YYCODETYPE => Operator::LessEquals,
+            x if x == TokenType::TK_EQ as YYCODETYPE => Operator::Equals,
+            x if x == TokenType::TK_NE as YYCODETYPE => Operator::NotEquals,
+            x if x == TokenType::TK_BITAND as YYCODETYPE => Operator::BitwiseAnd,
+            x if x == TokenType::TK_BITOR as YYCODETYPE => Operator::BitwiseOr,
+            x if x == TokenType::TK_LSHIFT as YYCODETYPE => Operator::LeftShift,
+            x if x == TokenType::TK_RSHIFT as YYCODETYPE => Operator::RightShift,
+            x if x == TokenType::TK_PLUS as YYCODETYPE => Operator::Add,
+            x if x == TokenType::TK_MINUS as YYCODETYPE => Operator::Substract,
+            x if x == TokenType::TK_STAR as YYCODETYPE => Operator::Multiply,
+            x if x == TokenType::TK_SLASH as YYCODETYPE => Operator::Divide,
+            x if x == TokenType::TK_REM as YYCODETYPE => Operator::Modulus,
+            x if x == TokenType::TK_CONCAT as YYCODETYPE => Operator::Concat,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Display for Operator {

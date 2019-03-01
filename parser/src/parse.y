@@ -284,7 +284,7 @@ ccons(A) ::= DEFAULT MINUS term(X).      {
 }
 ccons(A) ::= DEFAULT id(X).       {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Default(Expr::Id(Id::from(X)));
+  let constraint = ColumnConstraint::Default(Expr::id(X));
   A = NamedColumnConstraint{ name: name, constraint: constraint };
 }
 
@@ -820,77 +820,42 @@ idlist(A) ::= nm(Y).
 }
 
 expr(A) ::= term(A).
-/**
-expr(A) ::= LP expr(X) RP. {A = X;}
-expr(A) ::= id(X).          {A=tokenExpr(pParse,TK_ID,X); /*A-overwrites-X*}
-expr(A) ::= JOIN_KW(X).     {A=tokenExpr(pParse,TK_ID,X); /*A-overwrites-X*}
+expr(A) ::= LP expr(X) RP. {A = Expr::parenthesized(X); /*A-overwrites-X*/}
+expr(A) ::= id(X).          {A= Expr::id(X); /*A-overwrites-X*/}
+expr(A) ::= JOIN_KW(X).     {A= Expr::id(X); /*A-overwrites-X*/}
 expr(A) ::= nm(X) DOT nm(Y). {
-  Expr *temp1 = sqlite3ExprAlloc(pParse->db, TK_ID, &X, 1);
-  Expr *temp2 = sqlite3ExprAlloc(pParse->db, TK_ID, &Y, 1);
-  if( IN_RENAME_OBJECT ){
-    sqlite3RenameTokenMap(pParse, (void*)temp2, &Y);
-    sqlite3RenameTokenMap(pParse, (void*)temp1, &X);
-  }
-  A = sqlite3PExpr(pParse, TK_DOT, temp1, temp2);
+  A = Expr::Qualified(X, Y); /*A-overwrites-X*/
 }
 expr(A) ::= nm(X) DOT nm(Y) DOT nm(Z). {
-  Expr *temp1 = sqlite3ExprAlloc(pParse->db, TK_ID, &X, 1);
-  Expr *temp2 = sqlite3ExprAlloc(pParse->db, TK_ID, &Y, 1);
-  Expr *temp3 = sqlite3ExprAlloc(pParse->db, TK_ID, &Z, 1);
-  Expr *temp4 = sqlite3PExpr(pParse, TK_DOT, temp2, temp3);
-  if( IN_RENAME_OBJECT ){
-    sqlite3RenameTokenMap(pParse, (void*)temp3, &Z);
-    sqlite3RenameTokenMap(pParse, (void*)temp2, &Y);
-  }
-  A = sqlite3PExpr(pParse, TK_DOT, temp1, temp4);
+  A = Expr::DoublyQualified(X, Y, Z); /*A-overwrites-X*/
 }
-**/
 term(A) ::= NULL. {A=Expr::Literal(Literal::Null); /*A-overwrites-X*/}
 term(A) ::= BLOB(X). {A=Expr::Literal(Literal::Blob(X.unwrap())); /*A-overwrites-X*/}
 term(A) ::= STRING(X).          {A=Expr::Literal(Literal::String(X.unwrap())); /*A-overwrites-X*/}
 term(A) ::= FLOAT|INTEGER(X). {
   A = Expr::Literal(Literal::Numeric(X.unwrap())); /*A-overwrites-X*/
 }
-/**
 expr(A) ::= VARIABLE(X).     {
-  if( !(X.z[0]=='#' && sqlite3Isdigit(X.z[1])) ){
-    u32 n = X.n;
-    A = tokenExpr(pParse, TK_VARIABLE, X);
-    sqlite3ExprAssignVarNumber(pParse, A, n);
-  }else{
-    /* When doing a nested parse, one can include terms in an expression
-    ** that look like this:   #1 #2 ...  These terms refer to registers
-    ** in the virtual machine.  #N is the N-th register. *
-    Token t = X; /*A-overwrites-X*
-    assert( t.n>=2 );
-    if( pParse->nested==0 ){
-      sqlite3ErrorMsg(pParse, "near \"%T\": syntax error", &t);
-      A = 0;
-    }else{
-      A = sqlite3PExpr(pParse, TK_REGISTER, 0, 0);
-      if( A ) sqlite3GetInt32(&t.z[1], &A->iTable);
-    }
-  }
+  A = Expr::Variable(X.unwrap()); /*A-overwrites-X*/
 }
-expr(A) ::= expr(A) COLLATE ids(C). {
-  A = sqlite3ExprAddCollateToken(pParse, A, &C, 1);
+expr(A) ::= expr(X) COLLATE ids(C). {
+  A = Expr::collate(X, C); /*A-overwrites-X*/
 }
 %ifndef SQLITE_OMIT_CAST
 expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
-  A = sqlite3ExprAlloc(pParse->db, TK_CAST, &T, 1);
-  sqlite3ExprAttachSubtrees(pParse->db, A, E, 0);
+  A = Expr::cast(E, T.unwrap()); // FIXME mandatory ?
 }
 %endif  SQLITE_OMIT_CAST
 
-
 expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP. {
-  A = sqlite3ExprFunction(pParse, Y, &X, D);
+  A = Expr::FunctionCall{ name: Id::from(X), distinctness: D, args: Y }; /*A-overwrites-X*/
 }
 expr(A) ::= id(X) LP STAR RP. {
-  A = sqlite3ExprFunction(pParse, 0, &X, 0);
+  A = Expr::FunctionCallStar(Id::from(X)); /*A-overwrites-X*/
 }
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
+/**
 expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP over_clause(Z). {
   A = sqlite3ExprFunction(pParse, Y, &X, D);
   sqlite3WindowAttach(pParse, A, Z);
@@ -899,34 +864,31 @@ expr(A) ::= id(X) LP STAR RP over_clause(Z). {
   A = sqlite3ExprFunction(pParse, 0, &X, 0);
   sqlite3WindowAttach(pParse, A, Z);
 }
+**/
 %endif
 
 term(A) ::= CTIME_KW(OP). {
-  A = sqlite3ExprFunction(pParse, 0, &OP, 0);
+  A = Expr::CurrentTime(Id::from(OP));
 }
 
 expr(A) ::= LP nexprlist(X) COMMA expr(Y) RP. {
-  ExprList *pList = sqlite3ExprListAppend(pParse, X, Y);
-  A = sqlite3PExpr(pParse, TK_VECTOR, 0, 0);
-  if( A ){
-    A->x.pList = pList;
-  }else{
-    sqlite3ExprListDelete(pParse->db, pList);
-  }
+  X.push(Y);
+  A = Expr::Parenthesized(X);
 }
 
-expr(A) ::= expr(A) AND(OP) expr(Y).    {A=sqlite3PExpr(pParse,@OP,A,Y);}
-expr(A) ::= expr(A) OR(OP) expr(Y).     {A=sqlite3PExpr(pParse,@OP,A,Y);}
-expr(A) ::= expr(A) LT|GT|GE|LE(OP) expr(Y).
-                                        {A=sqlite3PExpr(pParse,@OP,A,Y);}
-expr(A) ::= expr(A) EQ|NE(OP) expr(Y).  {A=sqlite3PExpr(pParse,@OP,A,Y);}
-expr(A) ::= expr(A) BITAND|BITOR|LSHIFT|RSHIFT(OP) expr(Y).
-                                        {A=sqlite3PExpr(pParse,@OP,A,Y);}
-expr(A) ::= expr(A) PLUS|MINUS(OP) expr(Y).
-                                        {A=sqlite3PExpr(pParse,@OP,A,Y);}
-expr(A) ::= expr(A) STAR|SLASH|REM(OP) expr(Y).
-                                        {A=sqlite3PExpr(pParse,@OP,A,Y);}
-expr(A) ::= expr(A) CONCAT(OP) expr(Y). {A=sqlite3PExpr(pParse,@OP,A,Y);}
+expr(A) ::= expr(X) AND(OP) expr(Y).    {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+expr(A) ::= expr(X) OR(OP) expr(Y).     {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+expr(A) ::= expr(X) LT|GT|GE|LE(OP) expr(Y).
+                                        {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+expr(A) ::= expr(X) EQ|NE(OP) expr(Y).  {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+expr(A) ::= expr(X) BITAND|BITOR|LSHIFT|RSHIFT(OP) expr(Y).
+                                        {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+expr(A) ::= expr(X) PLUS|MINUS(OP) expr(Y).
+                                        {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+expr(A) ::= expr(X) STAR|SLASH|REM(OP) expr(Y).
+                                        {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+expr(A) ::= expr(X) CONCAT(OP) expr(Y). {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+/**
 %type likeop {Token}
 likeop(A) ::= LIKE_KW|MATCH(A).
 likeop(A) ::= NOT LIKE_KW|MATCH(X). {A=X; A.n|=0x80000000; /*A-overwrite-X*}
@@ -1298,7 +1260,7 @@ trigger_cmd(A) ::=
 // INSERT
 trigger_cmd(A) ::= insert_cmd(R) INTO
                       trnm(X) idlist_opt(F) select(S) upsert(U). {
-   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: S, upsert: U };
+   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: S, upsert: U };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
@@ -1306,7 +1268,7 @@ trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
 
 // SELECT
 trigger_cmd(A) ::= select(X).
-   {A = TriggerCmd::Select(X);}
+   {A = TriggerCmd::Select(X); /*A-overwrites-X*/}
 
 // The special RAISE expression that may occur in trigger programs
 expr(A) ::= RAISE LP IGNORE RP.  {
