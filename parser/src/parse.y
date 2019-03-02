@@ -866,7 +866,7 @@ expr(A) ::= id(X) LP STAR RP over_clause(Z). {
 %endif
 
 term(A) ::= CTIME_KW(OP). {
-  A = Expr::CurrentTime(Id::from(OP));
+  A = Expr::Literal(Literal::from_ctime_kw(OP));
 }
 
 expr(A) ::= LP nexprlist(X) COMMA expr(Y) RP. {

@@ -554,7 +554,6 @@ pub enum Expr {
     },
     // COLLATE expression
     Collate(Box<Expr>, String),
-    CurrentTime(Id),
     // schema-name.table-name.column-name
     DoublyQualified(Name, Name, Name),
     // EXISTS subquery
@@ -745,7 +744,6 @@ impl Display for Expr {
                 f.write_str(" COLLATE ")?;
                 double_quote(collation, f)
             }
-            Expr::CurrentTime(id) => id.fmt(f),
             Expr::DoublyQualified(db_name, tbl_name, col_name) => {
                 db_name.fmt(f)?;
                 f.write_char('.')?;
@@ -903,6 +901,24 @@ pub enum Literal {
     CurrentDate,
     CurrentTime,
     CurrentTimestamp,
+}
+
+impl Literal {
+    pub fn from_ctime_kw(token: Token) -> Literal {
+        if let Some(ref token) = token {
+            if "CURRENT_DATE".eq_ignore_ascii_case(token) {
+                Literal::CurrentDate
+            } else if "CURRENT_TIME".eq_ignore_ascii_case(token) {
+                Literal::CurrentTime
+            } else if "CURRENT_TIMESTAMP".eq_ignore_ascii_case(token) {
+                Literal::CurrentTimestamp
+            } else {
+                unreachable!()
+            }
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 impl Display for Literal {

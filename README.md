@@ -30,7 +30,7 @@ https://www.sqlite.org/lemon.html
 
 * RHS are moved. Maybe it is not a problem if they are always used once.
   Just add a check in lemon...
-* `%extra_argument` and `%extra_context` are not correctly used/supported.
+* `%extra_argument` is not supported.
 
 ## Raison d'être
 
