@@ -689,7 +689,7 @@ impl yyParser {
             yymsp.major = yygoto;
         }
         self.yyTraceShift(yyact, "... then shift");
-        return yyact;
+        yyact
     }
 }
 
@@ -934,6 +934,6 @@ impl yyParser {
                 return yyFallback[i_token as usize];
             }
         }
-        return 0;
+        0
     }
 }

@@ -265,27 +265,27 @@ ccons ::= CONSTRAINT nm(X).           { self.ctx.constraint_name = Some(X);}
 ccons(A) ::= DEFAULT term(X). {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::Default(X);
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= DEFAULT LP expr(X) RP. {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::Default(Expr::parenthesized(X));
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= DEFAULT PLUS term(X). {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Positive, Box::new(X)));
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= DEFAULT MINUS term(X).      {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Negative, Box::new(X)));
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= DEFAULT id(X).       {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::Default(Expr::id(X));
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 
 // In addition to the type name, we also care about the primary key and
@@ -294,42 +294,42 @@ ccons(A) ::= DEFAULT id(X).       {
 ccons(A) ::= NULL onconf(R). {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::NotNull{ nullable: true, conflict_clause: R};
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= NOT NULL onconf(R).    {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::NotNull{ nullable: false, conflict_clause: R};
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= PRIMARY KEY sortorder(Z) onconf(R) autoinc(I). {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::PrimaryKey{ order: Z, conflict_clause: R, auto_increment: I };
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= UNIQUE onconf(R).      {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::Unique(R);
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= CHECK LP expr(X) RP.   {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::Check(X);
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= REFERENCES nm(T) eidlist_opt(TA) refargs(R). {
   let name = self.ctx.constraint_name();
   let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
-  let constraint = ColumnConstraint::ForeignKey{ clause: clause, deref_clause: None }; // FIXME deref_clause
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  let constraint = ColumnConstraint::ForeignKey{ clause, deref_clause: None }; // FIXME deref_clause
+  A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= defer_subclause(D).    {
   let constraint = ColumnConstraint::Defer(D);
-  A = NamedColumnConstraint{ name: None, constraint: constraint };
+  A = NamedColumnConstraint{ name: None, constraint };
 }
 ccons(A) ::= COLLATE ids(C).        {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::Collate{ collation_name: Name::from(C) };
-  A = NamedColumnConstraint{ name: name, constraint: constraint };
+  A = NamedColumnConstraint{ name, constraint };
 }
 
 // The optional AUTOINCREMENT keyword
@@ -377,24 +377,24 @@ tcons ::= CONSTRAINT nm(X).      {self.ctx.constraint_name = Some(X);}
 tcons(A) ::= PRIMARY KEY LP sortlist(X) autoinc(I) RP onconf(R). {
   let name = self.ctx.constraint_name();
   let constraint = TableConstraint::PrimaryKey{ columns: X, auto_increment: I, conflict_clause: R };
-  A = NamedTableConstraint{ name: name, constraint: constraint };
+  A = NamedTableConstraint{ name, constraint };
 }
 tcons(A) ::= UNIQUE LP sortlist(X) RP onconf(R). {
   let name = self.ctx.constraint_name();
   let constraint = TableConstraint::Unique{ columns: X, conflict_clause: R };
-  A = NamedTableConstraint{ name: name, constraint: constraint };
+  A = NamedTableConstraint{ name, constraint };
 }
 tcons(A) ::= CHECK LP expr(E) RP onconf. {
   let name = self.ctx.constraint_name();
   let constraint = TableConstraint::Check(E);
-  A = NamedTableConstraint{ name: name, constraint: constraint };
+  A = NamedTableConstraint{ name, constraint };
 }
 tcons(A) ::= FOREIGN KEY LP eidlist(FA) RP
           REFERENCES nm(T) eidlist_opt(TA) refargs(R) defer_subclause_opt(D). {
   let name = self.ctx.constraint_name();
   let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
-  let constraint = TableConstraint::ForeignKey{ columns: FA, clause: clause, deref_clause: D };
-  A = NamedTableConstraint{ name: name, constraint: constraint };
+  let constraint = TableConstraint::ForeignKey{ columns: FA, clause, deref_clause: D };
+  A = NamedTableConstraint{ name, constraint };
 }
 %type defer_subclause_opt {Option<DeferSubclause>}
 defer_subclause_opt(A) ::= .                    {A = None;}
@@ -769,13 +769,13 @@ cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
         upsert(U). {
   let body = InsertBody::Select(S, U);
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
-                                     body: body });
+                                     body });
 }
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) DEFAULT VALUES.
 {
   let body = InsertBody::DefaultValues;
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
-                                     body: body });
+                                     body });
 }
 
 %type upsert {Option<Upsert>}
@@ -790,7 +790,7 @@ upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW)
               DO UPDATE SET setlist(Z) where_opt(W).
               { let index = UpsertIndex{ targets: T, where_clause: TW };
                 let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
-                A = Some(Upsert{ index: Some(index), do_clause: do_clause });}
+                A = Some(Upsert{ index: Some(index), do_clause });}
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING.
               { let index = UpsertIndex{ targets: T, where_clause: TW };
                 A = Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing }); }
@@ -888,35 +888,18 @@ expr(A) ::= expr(X) PLUS|MINUS(OP) expr(Y).
 expr(A) ::= expr(X) STAR|SLASH|REM(OP) expr(Y).
                                         {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
 expr(A) ::= expr(X) CONCAT(OP) expr(Y). {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
-/**
-%type likeop {Token}
-likeop(A) ::= LIKE_KW|MATCH(A).
-likeop(A) ::= NOT LIKE_KW|MATCH(X). {A=X; A.n|=0x80000000; /*A-overwrite-X*}
-expr(A) ::= expr(A) likeop(OP) expr(Y).  [LIKE_KW]  {
-  ExprList *pList;
-  int bNot = OP.n & 0x80000000;
-  OP.n &= 0x7fffffff;
-  pList = sqlite3ExprListAppend(pParse,0, Y);
-  pList = sqlite3ExprListAppend(pParse,pList, A);
-  A = sqlite3ExprFunction(pParse, pList, &OP, 0);
-  if( bNot ) A = sqlite3PExpr(pParse, TK_NOT, A, 0);
-  if( A ) A->flags |= EP_InfixFunc;
+%type likeop {(bool, LikeOperator)}
+likeop(A) ::= LIKE_KW|MATCH(X). {A=(false, LikeOperator::from_token(@X, X)); /*A-overwrite-X*/}
+likeop(A) ::= NOT LIKE_KW|MATCH(X). {A=(true, LikeOperator::from_token(@X, X)); /*A-overwrite-X*/}
+expr(A) ::= expr(X) likeop(OP) expr(Y).  [LIKE_KW]  {
+  A=Expr::like(X,OP.0,OP.1,Y,None); /*A-overwrites-X*/
 }
-expr(A) ::= expr(A) likeop(OP) expr(Y) ESCAPE expr(E).  [LIKE_KW]  {
-  ExprList *pList;
-  int bNot = OP.n & 0x80000000;
-  OP.n &= 0x7fffffff;
-  pList = sqlite3ExprListAppend(pParse,0, Y);
-  pList = sqlite3ExprListAppend(pParse,pList, A);
-  pList = sqlite3ExprListAppend(pParse,pList, E);
-  A = sqlite3ExprFunction(pParse, pList, &OP, 0);
-  if( bNot ) A = sqlite3PExpr(pParse, TK_NOT, A, 0);
-  if( A ) A->flags |= EP_InfixFunc;
+expr(A) ::= expr(X) likeop(OP) expr(Y) ESCAPE expr(E).  [LIKE_KW]  {
+  A=Expr::like(X,OP.0,OP.1,Y,Some(E)); /*A-overwrites-X*/
 }
 
-expr(A) ::= expr(A) ISNULL|NOTNULL(E).   {A = sqlite3PExpr(pParse,@E,A,0);}
-expr(A) ::= expr(A) NOT NULL.    {A = sqlite3PExpr(pParse,TK_NOTNULL,A,0);}
-**/
+expr(A) ::= expr(X) ISNULL|NOTNULL(E).   {A = Expr::not_null(X, @E); /*A-overwrites-X*/}
+expr(A) ::= expr(X) NOT NULL.    {A = Expr::not_null(X, TokenType::TK_NOTNULL as YYCODETYPE); /*A-overwrites-X*/}
 
 %include {
 }
@@ -927,150 +910,66 @@ expr(A) ::= expr(A) NOT NULL.    {A = sqlite3PExpr(pParse,TK_NOTNULL,A,0);}
 // If expr2 is NULL then code as TK_ISNULL or TK_NOTNULL.  If expr2
 // is any other expression, code as TK_IS or TK_ISNOT.
 //
-/**
-expr(A) ::= expr(A) IS expr(Y).     {
-  A = sqlite3PExpr(pParse,TK_IS,A,Y);
-  binaryToUnaryIfNull(pParse, Y, A, TK_ISNULL);
+expr(A) ::= expr(X) IS(OP) expr(Y).     {
+  A = Expr::binary(X, @OP, Y); /*A-overwrites-X*/
 }
-expr(A) ::= expr(A) IS NOT expr(Y). {
-  A = sqlite3PExpr(pParse,TK_ISNOT,A,Y);
-  binaryToUnaryIfNull(pParse, Y, A, TK_NOTNULL);
+expr(A) ::= expr(X) IS NOT expr(Y). {
+  A = Expr::binary(X, TokenType::TK_NOT as YYCODETYPE, Y); /*A-overwrites-X*/
 }
 
-expr(A) ::= NOT(B) expr(X).  
-              {A = sqlite3PExpr(pParse, @B, X, 0);/*A-overwrites-B*}
+expr(A) ::= NOT(B) expr(X).
+              {A = Expr::unary(UnaryOperator::from(@B), X);/*A-overwrites-B*/}
 expr(A) ::= BITNOT(B) expr(X).
-              {A = sqlite3PExpr(pParse, @B, X, 0);/*A-overwrites-B*}
+              {A = Expr::unary(UnaryOperator::from(@B), X);/*A-overwrites-B*/}
 expr(A) ::= PLUS|MINUS(B) expr(X). [BITNOT] {
-  A = sqlite3PExpr(pParse, @B==TK_PLUS ? TK_UPLUS : TK_UMINUS, X, 0);
-  /*A-overwrites-B*
+  A = Expr::unary(UnaryOperator::from(@B), X);/*A-overwrites-B*/
 }
-**/
 
-/**
-%type between_op {int}
-between_op(A) ::= BETWEEN.     {A = 0;}
-between_op(A) ::= NOT BETWEEN. {A = 1;}
-expr(A) ::= expr(A) between_op(N) expr(X) AND expr(Y). [BETWEEN] {
-  ExprList *pList = sqlite3ExprListAppend(pParse,0, X);
-  pList = sqlite3ExprListAppend(pParse,pList, Y);
-  A = sqlite3PExpr(pParse, TK_BETWEEN, A, 0);
-  if( A ){
-    A->x.pList = pList;
-  }else{
-    sqlite3ExprListDelete(pParse->db, pList);
-  } 
-  if( N ) A = sqlite3PExpr(pParse, TK_NOT, A, 0);
+%type between_op {bool}
+between_op(A) ::= BETWEEN.     {A = false;}
+between_op(A) ::= NOT BETWEEN. {A = true;}
+expr(A) ::= expr(B) between_op(N) expr(X) AND expr(Y). [BETWEEN] {
+  A = Expr::between(B, N, X, Y);/*A-overwrites-B*/
 }
-**/
 %ifndef SQLITE_OMIT_SUBQUERY
-/**
-  %type in_op {int}
-  in_op(A) ::= IN.      {A = 0;}
-  in_op(A) ::= NOT IN.  {A = 1;}
-  expr(A) ::= expr(A) in_op(N) LP exprlist(Y) RP. [IN] {
-    if( Y==0 ){
-      /* Expressions of the form
-      **
-      **      expr1 IN ()
-      **      expr1 NOT IN ()
-      **
-      ** simplify to constants 0 (false) and 1 (true), respectively,
-      ** regardless of the value of expr1.
-      *
-      sqlite3ExprDelete(pParse->db, A);
-      A = sqlite3ExprAlloc(pParse->db, TK_INTEGER,&sqlite3IntTokens[N],1);
-    }else if( Y->nExpr==1 ){
-      /* Expressions of the form:
-      **
-      **      expr1 IN (?1)
-      **      expr1 NOT IN (?2)
-      **
-      ** with exactly one value on the RHS can be simplified to something
-      ** like this:
-      **
-      **      expr1 == ?1
-      **      expr1 <> ?2
-      **
-      ** But, the RHS of the == or <> is marked with the EP_Generic flag
-      ** so that it may not contribute to the computation of comparison
-      ** affinity or the collating sequence to use for comparison.  Otherwise,
-      ** the semantics would be subtly different from IN or NOT IN.
-      *
-      Expr *pRHS = Y->a[0].pExpr;
-      Y->a[0].pExpr = 0;
-      sqlite3ExprListDelete(pParse->db, Y);
-      /* pRHS cannot be NULL because a malloc error would have been detected
-      ** before now and control would have never reached this point *
-      if( ALWAYS(pRHS) ){
-        pRHS->flags &= ~EP_Collate;
-        pRHS->flags |= EP_Generic;
-      }
-      A = sqlite3PExpr(pParse, N ? TK_NE : TK_EQ, A, pRHS);
-    }else{
-      A = sqlite3PExpr(pParse, TK_IN, A, 0);
-      if( A ){
-        A->x.pList = Y;
-        sqlite3ExprSetHeightAndFlags(pParse, A);
-      }else{
-        sqlite3ExprListDelete(pParse->db, Y);
-      }
-      if( N ) A = sqlite3PExpr(pParse, TK_NOT, A, 0);
-    }
+  %type in_op {bool}
+  in_op(A) ::= IN.      {A = false;}
+  in_op(A) ::= NOT IN.  {A = true;}
+  expr(A) ::= expr(X) in_op(N) LP exprlist(Y) RP. [IN] {
+    A = Expr::in_list(X, N, Y);/*A-overwrites-X*/
   }
   expr(A) ::= LP select(X) RP. {
-    A = sqlite3PExpr(pParse, TK_SELECT, 0, 0);
-    sqlite3PExprAddSelect(pParse, A, X);
+    A = Expr::sub_query(X);
   }
-  expr(A) ::= expr(A) in_op(N) LP select(Y) RP.  [IN] {
-    A = sqlite3PExpr(pParse, TK_IN, A, 0);
-    sqlite3PExprAddSelect(pParse, A, Y);
-    if( N ) A = sqlite3PExpr(pParse, TK_NOT, A, 0);
+  expr(A) ::= expr(X) in_op(N) LP select(Y) RP.  [IN] {
+    A = Expr::in_select(X, N, Y);/*A-overwrites-X*/
   }
-  expr(A) ::= expr(A) in_op(N) nm(Y) dbnm(Z) paren_exprlist(E). [IN] {
-    SrcList *pSrc = sqlite3SrcListAppend(pParse->db, 0,&Y,&Z);
-    Select *pSelect = sqlite3SelectNew(pParse, 0,pSrc,0,0,0,0,0,0);
-    if( E )  sqlite3SrcListFuncArgs(pParse, pSelect ? pSrc : 0, E);
-    A = sqlite3PExpr(pParse, TK_IN, A, 0);
-    sqlite3PExprAddSelect(pParse, A, pSelect);
-    if( N ) A = sqlite3PExpr(pParse, TK_NOT, A, 0);
+  expr(A) ::= expr(X) in_op(N) fullname(Y) paren_exprlist(E). [IN] {
+    A = Expr::in_table(X, N, Y, E);/*A-overwrites-X*/
   }
   expr(A) ::= EXISTS LP select(Y) RP. {
-    Expr *p;
-    p = A = sqlite3PExpr(pParse, TK_EXISTS, 0, 0);
-    sqlite3PExprAddSelect(pParse, p, Y);
+    A = Expr::Exists(Box::new(Y));
   }
-**/
 %endif SQLITE_OMIT_SUBQUERY
 
 /* CASE expressions */
-/**
 expr(A) ::= CASE case_operand(X) case_exprlist(Y) case_else(Z) END. {
-  A = sqlite3PExpr(pParse, TK_CASE, X, 0);
-  if( A ){
-    A->x.pList = Z ? sqlite3ExprListAppend(pParse,Y,Z) : Y;
-    sqlite3ExprSetHeightAndFlags(pParse, A);
-  }else{
-    sqlite3ExprListDelete(pParse->db, Y);
-    sqlite3ExprDelete(pParse->db, Z);
-  }
+  A = Expr::Case{ base: X.map(Box::new), when_then_pairs: Y, else_expr: Z.map(Box::new)};
 }
-%type case_exprlist {ExprList*}
+%type case_exprlist {Vec<(Expr, Expr)>}
 case_exprlist(A) ::= case_exprlist(A) WHEN expr(Y) THEN expr(Z). {
-  A = sqlite3ExprListAppend(pParse,A, Y);
-  A = sqlite3ExprListAppend(pParse,A, Z);
+  let pair = (Y, Z);
+  A.push(pair);
 }
 case_exprlist(A) ::= WHEN expr(Y) THEN expr(Z). {
-  A = sqlite3ExprListAppend(pParse,0, Y);
-  A = sqlite3ExprListAppend(pParse,A, Z);
+  A = vec![(Y, Z)];
 }
-%type case_else {Expr*}
-case_else(A) ::=  ELSE expr(X).         {A = X;}
-case_else(A) ::=  .                     {A = 0;} 
-%type case_operand {Expr*}
-case_operand(A) ::= expr(X).            {A = X; /*A-overwrites-X*}
-case_operand(A) ::= .                   {A = 0;}
-**/
+%type case_else {Option<Expr>}
+case_else(A) ::=  ELSE expr(X).         {A = Some(X); /*A-overwrites-X*/}
+case_else(A) ::=  .                     {A = None;}
+%type case_operand {Option<Expr>}
+case_operand(A) ::= expr(X).            {A = Some(X); /*A-overwrites-X*/}
+case_operand(A) ::= .                   {A = None;}
 
 %type exprlist {Option<Vec<Expr>>}
 %type nexprlist {Vec<Expr>}
@@ -1085,11 +984,9 @@ nexprlist(A) ::= expr(Y).
 %ifndef SQLITE_OMIT_SUBQUERY
 /* A paren_exprlist is an optional expression list contained inside
 ** of parenthesis */
-/**
-%type paren_exprlist {ExprList*}
-paren_exprlist(A) ::= .   {A = 0;}
+%type paren_exprlist {Option<Vec<Expr>>}
+paren_exprlist(A) ::= .   {A = None;}
 paren_exprlist(A) ::= LP exprlist(X) RP.  {A = X;}
-**/
 %endif SQLITE_OMIT_SUBQUERY
 
 
@@ -1175,10 +1072,10 @@ nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
 %endif SQLITE_OMIT_PRAGMA
 %token_class number INTEGER|FLOAT.
 %type plus_num {Expr}
-plus_num(A) ::= PLUS number(X).       {A = Expr::Unary(UnaryOperator::Positive, Box::new(Expr::Literal(Literal::Numeric(X.unwrap()))));}
+plus_num(A) ::= PLUS number(X).       {A = Expr::unary(UnaryOperator::Positive, Expr::Literal(Literal::Numeric(X.unwrap())));}
 plus_num(A) ::= number(X).            {A = Expr::Literal(Literal::Numeric(X.unwrap()));}
 %type minus_num {Expr}
-minus_num(A) ::= MINUS number(X).     {A = Expr::Unary(UnaryOperator::Negative, Box::new(Expr::Literal(Literal::Numeric(X.unwrap()))));}
+minus_num(A) ::= MINUS number(X).     {A = Expr::unary(UnaryOperator::Negative, Expr::Literal(Literal::Numeric(X.unwrap())));}
 //////////////////////////// The CREATE TRIGGER command /////////////////////
 
 %ifndef SQLITE_OMIT_TRIGGER
@@ -1329,7 +1226,7 @@ cmd ::= ALTER TABLE fullname(X) RENAME TO nm(Z). {
 cmd ::= ALTER TABLE fullname(X)
         ADD kwcolumn_opt columnname(Y) carglist(C). {
   let (col_name, col_type) = Y;
-  let cd = ColumnDefinition{ col_name: col_name, col_type: col_type, constraints: C };
+  let cd = ColumnDefinition{ col_name, col_type, constraints: C };
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::AddColumn(cd)));
 }
 cmd ::= ALTER TABLE fullname(X) RENAME kwcolumn_opt nm(Y) TO nm(Z). {

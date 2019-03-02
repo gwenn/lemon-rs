@@ -539,7 +539,7 @@ pub enum Expr {
     // CASE expression
     Case {
         base: Option<Box<Expr>>,
-        when_then_pairs: Vec<(Box<Expr>, Box<Expr>)>,
+        when_then_pairs: Vec<(Expr, Expr)>,
         else_expr: Option<Box<Expr>>,
     },
     // CAST expression
@@ -619,11 +619,65 @@ impl Expr {
     pub fn cast(x: Expr, type_name: Type) -> Expr {
         Expr::Cast {
             expr: Box::new(x),
-            type_name: type_name,
+            type_name,
         }
     }
     pub fn binary(left: Expr, op: YYCODETYPE, right: Expr) -> Expr {
         Expr::Binary(Box::new(left), Operator::from(op), Box::new(right))
+    }
+    pub fn like(lhs: Expr, not: bool, op: LikeOperator, rhs: Expr, escape: Option<Expr>) -> Expr {
+        Expr::Like {
+            lhs: Box::new(lhs),
+            not,
+            op,
+            rhs: Box::new(rhs),
+            escape: escape.map(Box::new),
+        }
+    }
+    pub fn not_null(x: Expr, op: YYCODETYPE) -> Expr {
+        if op == TokenType::TK_ISNULL as YYCODETYPE {
+            Expr::IsNull(Box::new(x))
+        } else if op == TokenType::TK_NOTNULL as YYCODETYPE {
+            Expr::NotNull(Box::new(x))
+        } else {
+            unreachable!()
+        }
+    }
+    pub fn unary(op: UnaryOperator, x: Expr) -> Expr {
+        Expr::Unary(op, Box::new(x))
+    }
+    pub fn between(lhs: Expr, not: bool, start: Expr, end: Expr) -> Expr {
+        Expr::Between {
+            lhs: Box::new(lhs),
+            not,
+            start: Box::new(start),
+            end: Box::new(end),
+        }
+    }
+    pub fn in_list(lhs: Expr, not: bool, rhs: Option<Vec<Expr>>) -> Expr {
+        Expr::InList {
+            lhs: Box::new(lhs),
+            not,
+            rhs,
+        }
+    }
+    pub fn in_select(lhs: Expr, not: bool, rhs: Select) -> Expr {
+        Expr::InSelect {
+            lhs: Box::new(lhs),
+            not,
+            rhs: Box::new(rhs),
+        }
+    }
+    pub fn in_table(lhs: Expr, not: bool, rhs: QualifiedName, args: Option<Vec<Expr>>) -> Expr {
+        Expr::InTable {
+            lhs: Box::new(lhs),
+            not,
+            rhs,
+            args,
+        }
+    }
+    pub fn sub_query(query: Select) -> Expr {
+        Expr::Subquery(Box::new(query))
     }
 }
 
@@ -871,6 +925,25 @@ pub enum LikeOperator {
     Regexp,
 }
 
+impl LikeOperator {
+    pub fn from_token(token_type: YYCODETYPE, token: Token) -> LikeOperator {
+        if token_type == TokenType::TK_MATCH as YYCODETYPE {
+            return LikeOperator::Match;
+        } else if token_type == TokenType::TK_LIKE_KW as YYCODETYPE {
+            if let Some(ref token) = token {
+                if "LIKE".eq_ignore_ascii_case(token) {
+                    return LikeOperator::Like;
+                } else if "GLOB".eq_ignore_ascii_case(token) {
+                    return LikeOperator::Glob;
+                } else if "REGEXP".eq_ignore_ascii_case(token) {
+                    return LikeOperator::Regexp;
+                }
+            }
+        }
+        unreachable!()
+    }
+}
+
 impl Display for LikeOperator {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
@@ -927,6 +1000,8 @@ impl From<YYCODETYPE> for Operator {
             x if x == TokenType::TK_SLASH as YYCODETYPE => Operator::Divide,
             x if x == TokenType::TK_REM as YYCODETYPE => Operator::Modulus,
             x if x == TokenType::TK_CONCAT as YYCODETYPE => Operator::Concat,
+            x if x == TokenType::TK_IS as YYCODETYPE => Operator::Is,
+            x if x == TokenType::TK_NOT as YYCODETYPE => Operator::IsNot,
             _ => unreachable!(),
         }
     }
@@ -969,6 +1044,18 @@ pub enum UnaryOperator {
     Not,
     // positive-sign
     Positive,
+}
+
+impl From<YYCODETYPE> for UnaryOperator {
+    fn from(token_type: YYCODETYPE) -> UnaryOperator {
+        match token_type {
+            x if x == TokenType::TK_BITNOT as YYCODETYPE => UnaryOperator::BitwiseNot,
+            x if x == TokenType::TK_MINUS as YYCODETYPE => UnaryOperator::Negative,
+            x if x == TokenType::TK_NOT as YYCODETYPE => UnaryOperator::Not,
+            x if x == TokenType::TK_PLUS as YYCODETYPE => UnaryOperator::Positive,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Display for UnaryOperator {
@@ -1152,7 +1239,7 @@ impl FromClause {
         if let Some(op) = op {
             let jst = JoinedSelectTable {
                 operator: op,
-                table: table,
+                table,
                 constraint: jc,
             };
             if let Some(ref mut joins) = self.joins {
@@ -1554,28 +1641,28 @@ impl QualifiedName {
     pub fn single(name: Name) -> Self {
         QualifiedName {
             db_name: None,
-            name: name,
+            name,
             alias: None,
         }
     }
     pub fn fullname(db_name: Name, name: Name) -> Self {
         QualifiedName {
             db_name: Some(db_name),
-            name: name,
+            name,
             alias: None,
         }
     }
     pub fn xfullname(db_name: Name, name: Name, alias: Name) -> Self {
         QualifiedName {
             db_name: Some(db_name),
-            name: name,
+            name,
             alias: Some(alias),
         }
     }
     pub fn alias(name: Name, alias: Name) -> Self {
         QualifiedName {
             db_name: None,
-            name: name,
+            name,
             alias: Some(alias),
         }
     }

@@ -4021,7 +4021,7 @@ void print_stack_union(
     fprintf(out,"            unreachable!()\n"); lineno++;
     fprintf(out,"        }\n"); lineno++;
     fprintf(out,"    }\n"); lineno++;
-    fprintf(out,"    #[allow(dead_code)]\n"); lineno++;
+    fprintf(out,"    #[allow(dead_code)]\n"); lineno++; // TODO generates only when needed
     fprintf(out,"    fn yy%d_ref(&mut self) -> &mut %s {\n",i+1,types[i]); lineno++;
     fprintf(out,"        if let YYMINORTYPE::yy%d(ref mut v) = self.minor {\n",i+1); lineno++;
     fprintf(out,"            v\n"); lineno++;
@@ -4327,7 +4327,7 @@ void ReportTable(
   lemp->tablesize += n*szActionType;
   fprintf(out,"const YY_ACTTAB_COUNT: %s = %d;\n",
        minimum_size_type(0, n, 0), n); lineno++;
-  fprintf(out,"#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
+  fprintf(out,"#[rustfmt::skip]\n"); lineno++;
   fprintf(out,"#[allow(non_upper_case_globals)]\n"); lineno++;
   fprintf(out,"static yy_action: [YYACTIONTYPE; %d] = [\n", n); lineno++;
   for(i=j=0; i<n; i++){
@@ -4347,7 +4347,7 @@ void ReportTable(
   /* Output the yy_lookahead table */
   lemp->nlookaheadtab = n = acttab_lookahead_size(pActtab);
   lemp->tablesize += n*szCodeType;
-  fprintf(out,"#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
+  fprintf(out,"#[rustfmt::skip]\n"); lineno++;
   fprintf(out,"#[allow(non_upper_case_globals)]\n"); lineno++;
   fprintf(out,"static yy_lookahead: [YYCODETYPE; %d] = [\n", n); lineno++;
   for(i=j=0; i<n; i++){
@@ -4373,7 +4373,7 @@ void ReportTable(
   fprintf(out, "const YY_SHIFT_COUNT: YYACTIONTYPE =    %d;\n", n-1); lineno++;
   fprintf(out, "const YY_SHIFT_MIN: YY_SHIFT_TYPE =      %d;\n", mnTknOfst); lineno++;
   fprintf(out, "const YY_SHIFT_MAX: YY_SHIFT_TYPE =      %d;\n", mxTknOfst); lineno++;
-  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
+  fprintf(out, "#[rustfmt::skip]\n"); lineno++;
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yy_shift_ofst: [YY_SHIFT_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
@@ -4402,7 +4402,7 @@ void ReportTable(
   fprintf(out, "const YY_REDUCE_COUNT: YYACTIONTYPE = %d;\n", n-1); lineno++;
   fprintf(out, "//const YY_REDUCE_MIN: YY_REDUCE_TYPE =   %d;\n", mnNtOfst); lineno++;
   fprintf(out, "//const YY_REDUCE_MAX: YY_REDUCE_TYPE =   %d;\n", mxNtOfst); lineno++;
-  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
+  fprintf(out, "#[rustfmt::skip]\n"); lineno++;
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yy_reduce_ofst: [YY_REDUCE_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
@@ -4424,7 +4424,7 @@ void ReportTable(
 
   /* Output the default action table */
   n = lemp->nxstate;
-  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
+  fprintf(out, "#[rustfmt::skip]\n"); lineno++;
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yy_default: [YYACTIONTYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*szActionType;
@@ -4479,7 +4479,7 @@ void ReportTable(
 
   /* Generate a table containing the symbolic name of every symbol
   */
-  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
+  fprintf(out, "#[rustfmt::skip]\n"); lineno++;
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yyTokenName: [&'static str; %d] = [\n", lemp->nsymbol); lineno++;
   for(i=0; i<lemp->nsymbol; i++){
@@ -4495,7 +4495,7 @@ void ReportTable(
   ** rule in the rule set of the grammar.  This information is used
   ** when tracing REDUCE actions.
   */
-  fprintf(out, "#[cfg_attr(rustfmt, rustfmt_skip)]\n"); lineno++;
+  fprintf(out, "#[rustfmt::skip]\n"); lineno++;
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yyRuleName: [&'static str; %d] = [\n", lemp->nrule); lineno++;
   for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){
@@ -4519,7 +4519,7 @@ void ReportTable(
   if( lemp->arg && lemp->arg[0] ){
     char *name = strtok(lemp->arg,":");
     if (name) {
-      fprintf(out,"        %s: %s,\n",name, name);  lineno++;
+      fprintf(out,"        %s,\n",name);  lineno++;
     }
   }
   tplt_xfer(lemp->name, in, out, &lineno);
