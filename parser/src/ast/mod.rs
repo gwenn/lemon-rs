@@ -32,6 +32,11 @@ impl Display for Cmd {
     }
 }
 
+pub(crate) enum ExplainKind {
+    Explain,
+    QueryPlan,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stmt {
     // table name, body

@@ -1,7 +1,8 @@
 %token_type { i32 }
 
-// The generated parser function takes a 4th argument as follows:
-%extra_argument {ctx: Context}
+// An extra argument to the constructor for the parser, which is available
+// to all actions.
+%extra_context {ctx: Context}
 
 %left PLUS MINUS.
 %left DIVIDE TIMES.

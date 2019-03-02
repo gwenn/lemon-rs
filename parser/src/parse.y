@@ -26,7 +26,7 @@
 
 // An extra argument to the constructor for the parser, which is available
 // to all actions.
-%extra_argument {ctx: Context}
+%extra_context {ctx: Context}
 
 // This code runs whenever there is a syntax error
 //
@@ -57,7 +57,6 @@ use log::{debug, error, log_enabled};
 } // end %include
 
 // Input is a single SQL command
-/**
 input ::= cmdlist.
 cmdlist ::= cmdlist ecmd.
 cmdlist ::= ecmd.
@@ -65,11 +64,10 @@ ecmd ::= SEMI.
 ecmd ::= cmdx SEMI.
 %ifndef SQLITE_OMIT_EXPLAIN
 ecmd ::= explain cmdx.
-explain ::= EXPLAIN.              { pParse->explain = 1; }
-explain ::= EXPLAIN QUERY PLAN.   { pParse->explain = 2; }
+explain ::= EXPLAIN.              { self.ctx.explain = Some(ExplainKind::Explain); }
+explain ::= EXPLAIN QUERY PLAN.   { self.ctx.explain = Some(ExplainKind::QueryPlan); }
 %endif  SQLITE_OMIT_EXPLAIN
-cmdx ::= cmd.           { sqlite3FinishCoding(pParse); }
-**/
+cmdx ::= cmd.           { self.ctx.sqlite3_finish_coding(); }
 
 ///////////////////// Begin and end transactions. ////////////////////////////
 //

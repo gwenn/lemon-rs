@@ -3,20 +3,59 @@ use dialect;
 pub mod ast;
 pub mod parse;
 
-use ast::{Name, Stmt};
+use ast::{Cmd, ExplainKind, Name, Stmt};
 
 pub struct Context {
+    explain: Option<ExplainKind>,
     stmt: Option<Stmt>,
-    constraint_name: Option<Name>,
+    constraint_name: Option<Name>, // transient
+    done: bool,
 }
 
 impl Context {
-    pub fn constraint_name(&mut self) -> Option<Name> {
+    pub fn new() -> Context {
+        Context {
+            explain: None,
+            stmt: None,
+            constraint_name: None,
+            done: false,
+        }
+    }
+
+    pub fn cmd(&mut self) -> Option<Cmd> {
+        if let Some(stmt) = self.stmt.take() {
+            match self.explain.take() {
+                Some(ExplainKind::Explain) => Some(Cmd::Explain(stmt)),
+                Some(ExplainKind::QueryPlan) => Some(Cmd::ExplainQueryPlan(stmt)),
+                None => Some(Cmd::Stmt(stmt)),
+            }
+        } else {
+            None
+        }
+    }
+
+    fn constraint_name(&mut self) -> Option<Name> {
         self.constraint_name.take()
     }
 
-    pub fn sqlite3_error_msg(&mut self, msg: &str) {
+    fn sqlite3_error_msg(&mut self, msg: &str) {
         // TODO
         eprintln!("{}", msg);
+    }
+
+    /// This routine is called after a single SQL statement has been parsed.
+    fn sqlite3_finish_coding(&mut self) {
+        self.done = true;
+    }
+
+    pub fn done(&self) -> bool {
+        self.done
+    }
+
+    pub fn reset(&mut self) {
+        self.explain = None;
+        self.stmt = None;
+        self.constraint_name = None;
+        self.done = false;
     }
 }

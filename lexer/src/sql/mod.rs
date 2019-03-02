@@ -4,6 +4,8 @@ use std::result::Result;
 pub use crate::dialect::TokenType;
 use crate::dialect::{is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN};
 use memchr::memchr;
+use parser::parse::yyParser;
+use parser::Context;
 
 mod error;
 
@@ -13,8 +15,8 @@ pub use crate::sql::error::Error;
 pub fn parse(sql: &str) -> Result<Option<()>, Error> {
     let lexer = Tokenizer::new();
     let mut s = super::Scanner::new(sql.as_bytes(), lexer);
-    //let ctx = ;
-    //let mut parser = ;
+    let ctx = Context::new();
+    let mut parser = yyParser::new(ctx);
     let mut last_token_parsed = TokenType::TK_EOF;
     let mut eof = false;
     loop {
@@ -42,12 +44,10 @@ pub fn parse(sql: &str) -> Result<Option<()>, Error> {
         } else if token_type == TokenType::TK_FILTER {
             token_type = analyze_filter_keyword(last_token_parsed);
         }
-        let _token = token_type.into_token(value);
-        //parser.sqlite3Parser(token_type, token);
+        let token = token_type.into_token(value);
+        parser.sqlite3Parser(token_type, token);
         last_token_parsed = token_type;
-        if
-        /*ctx.done()*/
-        true {
+        if parser.ctx.done() {
             break;
         }
     }
@@ -55,15 +55,15 @@ pub fn parse(sql: &str) -> Result<Option<()>, Error> {
         return Ok(None); // empty input
     }
     /* Upon reaching the end of input, call the parser two more times
-    okens TK_SEMI and 0, in that order. */
+    with tokens TK_SEMI and 0, in that order. */
     if eof {
         if last_token_parsed != TokenType::TK_SEMI {
-            //parser.sqlite3Parser(TokenType::TK_SEMI, &";");
+            parser.sqlite3Parser(TokenType::TK_SEMI, None);
         }
-        //parser.sqlite3Parser(TokenType::TK_EOF, &"");
+        parser.sqlite3Parser(TokenType::TK_EOF, None);
     }
-    //parser.sqlite3ParserFinalize();
-    //assert ctx.stmt != null;
+    parser.sqlite3ParserFinalize();
+    assert_ne!(parser.ctx.cmd(), None); // FIXME
     Ok(Some(()))
 }
 

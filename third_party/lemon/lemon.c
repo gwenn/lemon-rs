@@ -4470,10 +4470,10 @@ void ReportTable(
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 
-  /* Generate %extra_argument field declaration
+  /* Generate %extra_context field declaration
   */
-  if( lemp->arg && lemp->arg[0] ){
-    fprintf(out,"    %s,\n",lemp->arg);  lineno++;
+  if( lemp->ctx && lemp->ctx[0] ){
+    fprintf(out,"    pub %s,\n",lemp->ctx);  lineno++;
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 
@@ -4507,17 +4507,17 @@ void ReportTable(
   fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
 
-  /* Generate %extra_argument parameter declaration
+  /* Generate %extra_context parameter declaration
   */
-  if( lemp->arg && lemp->arg[0] ){
-    fprintf(out,"        %s,\n",lemp->arg);  lineno++;
+  if( lemp->ctx && lemp->ctx[0] ){
+    fprintf(out,"        %s,\n",lemp->ctx);  lineno++;
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 
-  /* Generate %extra_argument field initialization
+  /* Generate %extra_context field initialization
   */
-  if( lemp->arg && lemp->arg[0] ){
-    char *name = strtok(lemp->arg,":");
+  if( lemp->ctx && lemp->ctx[0] ){
+    char *name = strtok(lemp->ctx,":");
     if (name) {
       fprintf(out,"        %s,\n",name);  lineno++;
     }
