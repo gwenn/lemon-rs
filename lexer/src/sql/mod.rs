@@ -43,6 +43,7 @@ impl<R: Read> FallibleIterator for Parser<R> {
     type Item = Cmd;
 
     fn next(&mut self) -> Result<Option<Cmd>, Error> {
+        self.parser.ctx.reset();
         let mut last_token_parsed = TokenType::TK_EOF;
         let mut eof = false;
         loop {
