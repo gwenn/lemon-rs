@@ -4593,7 +4593,7 @@ void ReportTable(
     fprintf(out,"      /* (%d) ", rp->iRule);
     writeRuleText(out, rp);
     if( rp->doesReduce ){
-      fprintf(out, " */ debug_assert_eq!(yyruleno, %d);\n", rp->iRule); lineno++;
+      fprintf(out, " * debug_assert_eq!(yyruleno, %d); */\n", rp->iRule); lineno++;
     }else{
       fprintf(out, " (OPTIMIZED OUT) */ debug_assert_ne!(yyruleno, %d);\n",
               rp->iRule); lineno++;
