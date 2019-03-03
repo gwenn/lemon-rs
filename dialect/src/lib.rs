@@ -179,7 +179,11 @@ pub fn is_keyword(name: &str) -> bool {
     if KEYWORDS.contains_key(name.as_bytes()) {
         return true;
     }
-    unimplemented!()
+    if name.bytes().all(|b| b.is_ascii_uppercase()) {
+        return false;
+    }
+    // FIXME: ignore case
+    false
 }
 
 /// word must be uppercase
