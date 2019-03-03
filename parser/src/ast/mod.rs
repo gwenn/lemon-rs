@@ -89,7 +89,7 @@ pub enum Stmt {
         if_not_exists: bool,
         tbl_name: QualifiedName,
         module_name: Name,
-        args: Option<Vec<Expr>>, // TODO Validate Expr
+        args: Option<Vec<String>>,
     },
     Delete {
         with: Option<With>,

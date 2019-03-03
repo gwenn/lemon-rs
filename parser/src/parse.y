@@ -1232,26 +1232,30 @@ kwcolumn_opt ::= COLUMNKW.
 //////////////////////// CREATE VIRTUAL TABLE ... /////////////////////////////
 %ifndef SQLITE_OMIT_VIRTUALTABLE
 cmd ::= create_vtab(X).                       {self.ctx.stmt = Some(X);}
-/**
-cmd ::= create_vtab LP vtabarglist RP(X).  {sqlite3VtabFinishParse(pParse,&X);}
-**/
+cmd ::= create_vtab(X) LP vtabarglist(Y) RP.  {
+  let mut stmt = X;
+  if let Stmt::CreateVirtualTable{ ref mut args, .. } = stmt {
+    *args = Some(Y);
+  }
+  self.ctx.stmt = Some(stmt);
+}
 %type create_vtab {Stmt}
 create_vtab(A) ::= createkw VIRTUAL TABLE ifnotexists(E)
                 fullname(X) USING nm(Z). {
     A = Stmt::CreateVirtualTable{ if_not_exists: E, tbl_name: X, module_name: Z, args: None };
 }
-/**
-vtabarglist ::= vtabarg.
-vtabarglist ::= vtabarglist COMMA vtabarg.
-vtabarg ::= .                       {sqlite3VtabArgInit(pParse);}
+/* FIXME */
+%type vtabarglist {Vec<String>}
+vtabarglist(A) ::= vtabarg(X). {A = vec![X.unwrap()]}
+vtabarglist(A) ::= vtabarglist(A) COMMA vtabarg(X). {let arg = X; A.push(arg.unwrap()); }
+vtabarg ::= .
 vtabarg ::= vtabarg vtabargtoken.
-vtabargtoken ::= ANY(X).            {sqlite3VtabArgExtend(pParse,&X);}
-vtabargtoken ::= lp anylist RP(X).  {sqlite3VtabArgExtend(pParse,&X);}
-lp ::= LP(X).                       {sqlite3VtabArgExtend(pParse,&X);}
+vtabargtoken ::= ANY.
+vtabargtoken ::= LP anylist RP.
 anylist ::= .
 anylist ::= anylist LP anylist RP.
 anylist ::= anylist ANY.
-**/
+/* FIXME */
 %endif  SQLITE_OMIT_VIRTUALTABLE
 
 
