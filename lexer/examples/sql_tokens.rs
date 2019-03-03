@@ -8,6 +8,7 @@ use std::fs::File;
 use std::i64;
 use std::str;
 
+/// Tokenize specified files (and do some checks)
 fn main() {
     let args = env::args();
     for arg in args.skip(1) {

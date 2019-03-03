@@ -1,14 +1,14 @@
 //! Adaptation/port of [`SQLite` tokenizer](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/tokenize.c)
-use std::result::Result;
 pub use fallible_iterator::FallibleIterator;
 use memchr::memchr;
 use std::io::Read;
+use std::result::Result;
 
 pub use crate::dialect::TokenType;
 use crate::dialect::{is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN};
+use parser::ast::Cmd;
 use parser::parse::yyParser;
 use parser::Context;
-use parser::ast::Cmd;
 
 mod error;
 
