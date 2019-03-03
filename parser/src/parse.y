@@ -51,7 +51,7 @@
 %include {
 use crate::ast::*;
 use crate::Context;
-use dialect::TokenType;
+use dialect::{from_token, TokenType};
 use log::{debug, error, log_enabled};
 
 } // end %include
@@ -214,9 +214,9 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 // The name of a column or table can be any of the following:
 //
 %type nm {Name}
-nm(A) ::= id(X). { A = Name::from(X); }
-nm(A) ::= STRING(X). { A = Name::from(X); }
-nm(A) ::= JOIN_KW(X). { A = Name::from(X); }
+nm(A) ::= id(X). { A = Name::from_token(@X, X); }
+nm(A) ::= STRING(X). { A = Name::from_token(@X, X); }
+nm(A) ::= JOIN_KW(X). { A = Name::from_token(@X, X); }
 
 // A typetoken is really zero or more tokens that form a type name such
 // as can be found after the column name in a CREATE TABLE statement.
@@ -232,8 +232,8 @@ typetoken(A) ::= typename(X) LP signed(Y) COMMA signed(Z) RP. {
   A = Some(Type{ name: X, size: Some(TypeSize::TypeSize(Box::new(Y), Box::new(Z))) });
 }
 %type typename {String}
-typename(A) ::= ids(X). {A=X.unwrap();}
-typename(A) ::= typename(A) ids(Y). {let ids=Y.unwrap(); A.push(' '); A.push_str(&ids);}
+typename(A) ::= ids(X). {A=from_token(@X, X);}
+typename(A) ::= typename(A) ids(Y). {let ids=from_token(@Y, Y); A.push(' '); A.push_str(&ids);}
 %type signed {Expr}
 signed ::= plus_num.
 signed ::= minus_num.
@@ -282,7 +282,7 @@ ccons(A) ::= DEFAULT MINUS term(X).      {
 }
 ccons(A) ::= DEFAULT id(X).       {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Default(Expr::id(X));
+  let constraint = ColumnConstraint::Default(Expr::id(@X, X));
   A = NamedColumnConstraint{ name, constraint };
 }
 
@@ -326,7 +326,7 @@ ccons(A) ::= defer_subclause(D).    {
 }
 ccons(A) ::= COLLATE ids(C).        {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Collate{ collation_name: Name::from(C) };
+  let constraint = ColumnConstraint::Collate{ collation_name: Name::from_token(@C, C) };
   A = NamedColumnConstraint{ name, constraint };
 }
 
@@ -534,7 +534,7 @@ selcollist(A) ::= sclp(A) nm(X) DOT STAR. {
 //
 %type as {Option<As>}
 as(X) ::= AS nm(Y).    {X = Some(As::As(Y));}
-as(X) ::= ids(Y).      {X = Some(As::Elided(Name::from(Y)));}
+as(X) ::= ids(Y).      {X = Some(As::Elided(Name::from_token(@Y, Y)));}
 as(X) ::= .            {X = None;}
 
 
@@ -817,8 +817,8 @@ idlist(A) ::= nm(Y).
 
 expr(A) ::= term(A).
 expr(A) ::= LP expr(X) RP. {A = Expr::parenthesized(X); /*A-overwrites-X*/}
-expr(A) ::= id(X).          {A= Expr::id(X); /*A-overwrites-X*/}
-expr(A) ::= JOIN_KW(X).     {A= Expr::id(X); /*A-overwrites-X*/}
+expr(A) ::= id(X).          {A= Expr::id(@X, X); /*A-overwrites-X*/}
+expr(A) ::= JOIN_KW(X).     {A= Expr::id(@X, X); /*A-overwrites-X*/}
 expr(A) ::= nm(X) DOT nm(Y). {
   A = Expr::Qualified(X, Y); /*A-overwrites-X*/
 }
@@ -835,7 +835,7 @@ expr(A) ::= VARIABLE(X).     {
   A = Expr::Variable(X.unwrap()); /*A-overwrites-X*/
 }
 expr(A) ::= expr(X) COLLATE ids(C). {
-  A = Expr::collate(X, C); /*A-overwrites-X*/
+  A = Expr::collate(X, @C, C); /*A-overwrites-X*/
 }
 %ifndef SQLITE_OMIT_CAST
 expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
@@ -844,18 +844,18 @@ expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
 %endif  SQLITE_OMIT_CAST
 
 expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP. {
-  A = Expr::FunctionCall{ name: Id::from(X), distinctness: D, args: Y, over_clause: None }; /*A-overwrites-X*/
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, over_clause: None }; /*A-overwrites-X*/
 }
 expr(A) ::= id(X) LP STAR RP. {
-  A = Expr::FunctionCallStar(Id::from(X), None); /*A-overwrites-X*/
+  A = Expr::FunctionCallStar(Id::from_token(@X, X), None); /*A-overwrites-X*/
 }
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
 expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP over_clause(Z). {
-  A = Expr::FunctionCall{ name: Id::from(X), distinctness: D, args: Y, over_clause: Some(Box::new(Z)) }; /*A-overwrites-X*/
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, over_clause: Some(Box::new(Z)) }; /*A-overwrites-X*/
 }
 expr(A) ::= id(X) LP STAR RP over_clause(Z). {
-  A = Expr::FunctionCallStar(Id::from(X), Some(Box::new(Z))); /*A-overwrites-X*/
+  A = Expr::FunctionCallStar(Id::from_token(@X, X), Some(Box::new(Z))); /*A-overwrites-X*/
 }
 %endif
 
@@ -1028,7 +1028,7 @@ eidlist(A) ::= nm(Y) collate(C) sortorder(Z). {
 
 %type collate {Option<Name>}
 collate(C) ::= .              {C = None;}
-collate(C) ::= COLLATE ids(X).   {C = Some(Name::from(X));}
+collate(C) ::= COLLATE ids(X).   {C = Some(Name::from_token(@X, X));}
 
 
 ///////////////////////////// The DROP INDEX command /////////////////////////
@@ -1058,9 +1058,9 @@ cmd ::= PRAGMA fullname(X) LP minus_num(Y) RP.
 %type nmnum {Expr}
 nmnum(A) ::= plus_num(A).
 nmnum(A) ::= nm(X). {A = Expr::Name(X);}
-nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
-nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
-nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::String(X.unwrap()));}
+nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
+nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
+nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
 %endif SQLITE_OMIT_PRAGMA
 %token_class number INTEGER|FLOAT.
 %type plus_num {Expr}

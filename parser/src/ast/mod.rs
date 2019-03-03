@@ -1,6 +1,6 @@
 //! Abstract Syntax Tree
 
-use crate::dialect::{is_identifier, is_keyword, Token, TokenType};
+use crate::dialect::{from_token, is_identifier, is_keyword, Token, TokenType};
 use crate::parse::YYCODETYPE;
 use std::fmt::{Display, Formatter, Result, Write};
 
@@ -615,11 +615,11 @@ impl Expr {
     pub fn parenthesized(x: Expr) -> Expr {
         Expr::Parenthesized(vec![x])
     }
-    pub fn id(x: Token) -> Expr {
-        Expr::Id(Id::from(x))
+    pub fn id(xt: YYCODETYPE, x: Token) -> Expr {
+        Expr::Id(Id::from_token(xt, x))
     }
-    pub fn collate(x: Expr, c: Token) -> Expr {
-        Expr::Collate(Box::new(x), c.unwrap())
+    pub fn collate(x: Expr, ct: YYCODETYPE, c: Token) -> Expr {
+        Expr::Collate(Box::new(x), from_token(ct, c))
     }
     pub fn cast(x: Expr, type_name: Type) -> Expr {
         Expr::Cast {
@@ -909,6 +909,7 @@ pub enum Literal {
     Numeric(String),
     String(String),
     Blob(String),
+    Keyword(String),
     Null,
     CurrentDate,
     CurrentTime,
@@ -942,6 +943,7 @@ impl Display for Literal {
                 f.write_char('X')?;
                 single_quote(blob, f)
             }
+            Literal::Keyword(ref str) => f.write_str(str),
             Literal::Null => f.write_str("NULL"),
             Literal::CurrentDate => f.write_str("CURRENT_DATE"),
             Literal::CurrentTime => f.write_str("CURRENT_TIME"),
@@ -1637,10 +1639,9 @@ impl Display for GroupBy {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Id(pub String);
 
-impl From<Token> for Id {
-    // FIXME TryFrom
-    fn from(token: Token) -> Id {
-        Id(token.unwrap())
+impl Id {
+    pub fn from_token(ty: YYCODETYPE, token: Token) -> Id {
+        Id(from_token(ty, token))
     }
 }
 
@@ -1656,10 +1657,9 @@ impl Display for Id {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
 
-impl From<Token> for Name {
-    // FIXME TryFrom
-    fn from(token: Token) -> Name {
-        Name(token.unwrap())
+impl Name {
+    pub fn from_token(ty: YYCODETYPE, token: Token) -> Name {
+        Name(from_token(ty, token))
     }
 }
 
