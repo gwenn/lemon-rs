@@ -332,9 +332,11 @@ impl yyParser {
 */
 impl yyParser {
     fn yy_pop_parser_stack(&mut self) {
-        let yytos = self.yystack.pop().unwrap();
+        use std::mem::replace;
+        let yytos = replace(&mut self.yystack[self.yyidx], yyStackEntry::default());
         self.yyidx -= 1;
-        assert_eq!(self.yyidx+1, self.yystack.len());
+        //assert_eq!(self.yyidx+1, self.yystack.len());
+        assert!(self.yyidx >= 0);
         #[cfg(not(feature = "NDEBUG"))] {
             debug!(
                 target: TARGET,
