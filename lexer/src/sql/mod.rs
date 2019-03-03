@@ -1,70 +1,98 @@
 //! Adaptation/port of [`SQLite` tokenizer](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/tokenize.c)
 use std::result::Result;
+pub use fallible_iterator::FallibleIterator;
+use memchr::memchr;
+use std::io::Read;
 
 pub use crate::dialect::TokenType;
 use crate::dialect::{is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN};
-use memchr::memchr;
 use parser::parse::yyParser;
 use parser::Context;
+use parser::ast::Cmd;
 
 mod error;
 
 pub use crate::scan::Splitter;
 pub use crate::sql::error::Error;
+use crate::Scanner;
 
-pub fn parse(sql: &str) -> Result<Option<()>, Error> {
-    let lexer = Tokenizer::new();
-    let mut s = super::Scanner::new(sql.as_bytes(), lexer);
-    let ctx = Context::new();
-    let mut parser = yyParser::new(ctx);
-    let mut last_token_parsed = TokenType::TK_EOF;
-    let mut eof = false;
-    loop {
-        let (value, mut token_type) = match s.scan() {
-            Err(e) => {
-                return Err(e);
+// TODO Extract scanning stuff and move this into the parser crate
+// to make possible the tokenizer without depending on the parser...
+
+pub struct Parser<R: Read> {
+    scanner: Scanner<R, Tokenizer>,
+    parser: yyParser,
+}
+
+impl<R: Read> Parser<R> {
+    pub fn new(input: R) -> Parser<R> {
+        let lexer = Tokenizer::new();
+        let scanner = super::Scanner::new(input, lexer);
+        let ctx = Context::new();
+        let parser = yyParser::new(ctx);
+        Parser { scanner, parser }
+    }
+
+    pub fn reset(&mut self, input: R) {
+        self.scanner.reset(input);
+    }
+}
+
+impl<R: Read> FallibleIterator for Parser<R> {
+    type Error = Error;
+    type Item = Cmd;
+
+    fn next(&mut self) -> Result<Option<Cmd>, Error> {
+        let mut last_token_parsed = TokenType::TK_EOF;
+        let mut eof = false;
+        loop {
+            let (value, mut token_type) = match self.scanner.scan() {
+                Err(e) => {
+                    return Err(e);
+                }
+                Ok(None) => {
+                    eof = true;
+                    break;
+                }
+                Ok(Some(tuple)) => tuple,
+            };
+            if token_type >= TokenType::TK_WINDOW {
+                debug_assert!(
+                    token_type == TokenType::TK_OVER
+                        || token_type == TokenType::TK_FILTER
+                        || token_type == TokenType::TK_WINDOW
+                );
             }
-            Ok(None) => {
-                eof = true;
+            if token_type == TokenType::TK_WINDOW {
+                token_type = analyze_window_keyword();
+            } else if token_type == TokenType::TK_OVER {
+                token_type = analyze_over_keyword(last_token_parsed);
+            } else if token_type == TokenType::TK_FILTER {
+                token_type = analyze_filter_keyword(last_token_parsed);
+            }
+            let token = token_type.into_token(value);
+            self.parser.sqlite3Parser(token_type, token);
+            last_token_parsed = token_type;
+            if self.parser.ctx.done() {
                 break;
             }
-            Ok(Some(tuple)) => tuple,
-        };
-        if token_type >= TokenType::TK_WINDOW {
-            debug_assert!(
-                token_type == TokenType::TK_OVER
-                    || token_type == TokenType::TK_FILTER
-                    || token_type == TokenType::TK_WINDOW
-            );
         }
-        if token_type == TokenType::TK_WINDOW {
-            token_type = analyze_window_keyword();
-        } else if token_type == TokenType::TK_OVER {
-            token_type = analyze_over_keyword(last_token_parsed);
-        } else if token_type == TokenType::TK_FILTER {
-            token_type = analyze_filter_keyword(last_token_parsed);
+        if last_token_parsed == TokenType::TK_EOF {
+            return Ok(None); // empty input
         }
-        let token = token_type.into_token(value);
-        parser.sqlite3Parser(token_type, token);
-        last_token_parsed = token_type;
-        if parser.ctx.done() {
-            break;
+        /* Upon reaching the end of input, call the parser two more times
+        with tokens TK_SEMI and 0, in that order. */
+        if eof {
+            if last_token_parsed != TokenType::TK_SEMI {
+                self.parser.sqlite3Parser(TokenType::TK_SEMI, None);
+            }
+            self.parser.sqlite3Parser(TokenType::TK_EOF, None);
         }
+        self.parser.sqlite3ParserFinalize();
+        let cmd = self.parser.ctx.cmd();
+        assert_ne!(cmd, None);
+        Ok(cmd)
     }
-    if last_token_parsed == TokenType::TK_EOF {
-        return Ok(None); // empty input
-    }
-    /* Upon reaching the end of input, call the parser two more times
-    with tokens TK_SEMI and 0, in that order. */
-    if eof {
-        if last_token_parsed != TokenType::TK_SEMI {
-            parser.sqlite3Parser(TokenType::TK_SEMI, None);
-        }
-        parser.sqlite3Parser(TokenType::TK_EOF, None);
-    }
-    parser.sqlite3ParserFinalize();
-    assert_ne!(parser.ctx.cmd(), None); // FIXME
-    Ok(Some(()))
 }
 
 /*
