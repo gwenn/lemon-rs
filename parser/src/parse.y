@@ -31,7 +31,7 @@
 // This code runs whenever there is a syntax error
 //
 %syntax_error {
-  if TokenType::TK_EOF as u8 == yymajor {
+  if TokenType::TK_EOF as YYCODETYPE == yymajor {
     error!(target: TARGET, "incomplete input");
   } else {
     error!(target: TARGET, "near {:?}, \"{:?}\": syntax error", yymajor, yyminor);
@@ -477,16 +477,14 @@ multiselect_op(A) ::= INTERSECT.         {A = CompoundOperator::Intersect;}
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
                  groupby_opt(P). {
   A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y,
-                         group_by: P };
+                         group_by: P, window_clause: None };
     }
 %ifndef SQLITE_OMIT_WINDOWFUNC
-/**
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
                  groupby_opt(P) window_clause(R). {
   A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y,
                          group_by: P, window_clause: Some(R) };
 }
-**/
 %endif
 
 
@@ -846,23 +844,19 @@ expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
 %endif  SQLITE_OMIT_CAST
 
 expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP. {
-  A = Expr::FunctionCall{ name: Id::from(X), distinctness: D, args: Y }; /*A-overwrites-X*/
+  A = Expr::FunctionCall{ name: Id::from(X), distinctness: D, args: Y, over_clause: None }; /*A-overwrites-X*/
 }
 expr(A) ::= id(X) LP STAR RP. {
-  A = Expr::FunctionCallStar(Id::from(X)); /*A-overwrites-X*/
+  A = Expr::FunctionCallStar(Id::from(X), None); /*A-overwrites-X*/
 }
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
-/**
 expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP over_clause(Z). {
-  A = sqlite3ExprFunction(pParse, Y, &X, D);
-  sqlite3WindowAttach(pParse, A, Z);
+  A = Expr::FunctionCall{ name: Id::from(X), distinctness: D, args: Y, over_clause: Some(Box::new(Z)) }; /*A-overwrites-X*/
 }
 expr(A) ::= id(X) LP STAR RP over_clause(Z). {
-  A = sqlite3ExprFunction(pParse, 0, &X, 0);
-  sqlite3WindowAttach(pParse, A, Z);
+  A = Expr::FunctionCallStar(Id::from(X), Some(Box::new(Z))); /*A-overwrites-X*/
 }
-**/
 %endif
 
 term(A) ::= CTIME_KW(OP). {
@@ -1286,91 +1280,75 @@ wqlist(A) ::= wqlist(A) COMMA nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
 // tokens that may be output by the tokenizer except TK_SPACE and TK_ILLEGAL.
 //
 %ifndef SQLITE_OMIT_WINDOWFUNC
-/**
-%type windowdefn_list {Window*}
-windowdefn_list(A) ::= windowdefn(Z). { A = Z; }
-windowdefn_list(A) ::= windowdefn_list(Y) COMMA windowdefn(Z). {
-  assert( Z!=0 );
-  Z->pNextWin = Y;
-  A = Z;
+%type windowdefn_list {Vec<Window>}
+windowdefn_list(A) ::= windowdefn(Z). { A = vec![Z]; }
+windowdefn_list(A) ::= windowdefn_list(A) COMMA windowdefn(Z). {
+  let w = Z;
+  A.push(w);
 }
 
-%type windowdefn {Window*}
+%type windowdefn {Window}
 windowdefn(A) ::= nm(X) AS window(Y). {
-  if( ALWAYS(Y) ){
-    Y->zName = sqlite3DbStrNDup(pParse->db, X.z, X.n);
-  }
-  A = Y;
+  let mut w = Y;
+  w.name = Some(X);
+  A = w;
 }
 
-%type window {Window*}
+%type window {Window}
 
-%type frame_opt {Window*}
+%type frame_opt {Option<FrameClause>}
 
-%type part_opt {ExprList*}
+%type part_opt {Option<Vec<Expr>>}
 
-%type filter_opt {Expr*}
+%type filter_opt {Option<Expr>}
 
-%type range_or_rows {int}
+%type range_or_rows {FrameMode}
 
-%type frame_bound {struct FrameBound}
-%type frame_bound_s {struct FrameBound}
-%type frame_bound_e {struct FrameBound}
+%type frame_bound {FrameBound}
+%type frame_bound_s {FrameBound}
+%type frame_bound_e {FrameBound}
 
 window(A) ::= LP part_opt(X) orderby_opt(Y) frame_opt(Z) RP. {
-  A = Z;
-  if( ALWAYS(A) ){
-    A->pPartition = X;
-    A->pOrderBy = Y;
-  }
+  A = Window{ name: None,  partition_by: X, order_by: Y, frame_clause: Z};
 }
 
-part_opt(A) ::= PARTITION BY nexprlist(X). { A = X; }
-part_opt(A) ::= .                          { A = 0; }
+part_opt(A) ::= PARTITION BY nexprlist(X). { A = Some(X); }
+part_opt(A) ::= .                          { A = None; }
 
 frame_opt(A) ::= .                             {
-  A = sqlite3WindowAlloc(pParse, TK_RANGE, TK_UNBOUNDED, 0, TK_CURRENT, 0);
+  A = None;
 }
 frame_opt(A) ::= range_or_rows(X) frame_bound_s(Y). {
-  A = sqlite3WindowAlloc(pParse, X, Y.eType, Y.pExpr, TK_CURRENT, 0);
+  A = Some(FrameClause{ mode: X, start: Y, end: None });
 }
 frame_opt(A) ::= range_or_rows(X) BETWEEN frame_bound_s(Y) AND frame_bound_e(Z). {
-  A = sqlite3WindowAlloc(pParse, X, Y.eType, Y.pExpr, Z.eType, Z.pExpr);
+  A = Some(FrameClause{ mode: X, start: Y, end: Some(Z) });
 }
 
-range_or_rows(A) ::= RANGE.   { A = TK_RANGE; }
-range_or_rows(A) ::= ROWS.    { A = TK_ROWS;  }
+range_or_rows(A) ::= RANGE.   { A = FrameMode::Range; }
+range_or_rows(A) ::= ROWS.    { A = FrameMode::Rows;  }
 
 
 frame_bound_s(A) ::= frame_bound(X). { A = X; }
-frame_bound_s(A) ::= UNBOUNDED PRECEDING. {A.eType = TK_UNBOUNDED; A.pExpr = 0;}
+frame_bound_s(A) ::= UNBOUNDED PRECEDING. {A = FrameBound::UnboundedPreceding;}
 frame_bound_e(A) ::= frame_bound(X). { A = X; }
-frame_bound_e(A) ::= UNBOUNDED FOLLOWING. {A.eType = TK_UNBOUNDED; A.pExpr = 0;}
+frame_bound_e(A) ::= UNBOUNDED FOLLOWING. {A = FrameBound::UnboundedFollowing;}
 
-frame_bound(A) ::= expr(X) PRECEDING.   { A.eType = TK_PRECEDING; A.pExpr = X; }
-frame_bound(A) ::= CURRENT ROW.         { A.eType = TK_CURRENT  ; A.pExpr = 0; }
-frame_bound(A) ::= expr(X) FOLLOWING.   { A.eType = TK_FOLLOWING; A.pExpr = X; }
+frame_bound(A) ::= expr(X) PRECEDING.   { A = FrameBound::Preceding(X); }
+frame_bound(A) ::= CURRENT ROW.         { A = FrameBound::CurrentRow; }
+frame_bound(A) ::= expr(X) FOLLOWING.   { A = FrameBound::Following(X); }
 
-%type window_clause {Window*}
+%type window_clause {Vec<Window>}
 window_clause(A) ::= WINDOW windowdefn_list(B). { A = B; }
 
-%type over_clause {Window*}
+%type over_clause {OverClause}
 over_clause(A) ::= filter_opt(W) OVER window(Z). {
-  A = Z;
-  assert( A!=0 );
-  A->pFilter = W;
+  A = OverClause{ filter: W, over: Over::Window(Z) };
 }
 over_clause(A) ::= filter_opt(W) OVER nm(Z). {
-  A = (Window*)sqlite3DbMallocZero(pParse->db, sizeof(Window));
-  if( A ){
-    A->zName = sqlite3DbStrNDup(pParse->db, Z.z, Z.n);
-    A->pFilter = W;
-  }else{
-    sqlite3ExprDelete(pParse->db, W);
-  }
+  A = OverClause{ filter: W, over: Over::Name(Z) };
 }
 
-filter_opt(A) ::= .                            { A = 0; }
-filter_opt(A) ::= FILTER LP WHERE expr(X) RP.  { A = X; }
-**/
+filter_opt(A) ::= .                            { A = None; }
+filter_opt(A) ::= FILTER LP WHERE expr(X) RP.  { A = Some(X); }
 %endif /* SQLITE_OMIT_WINDOWFUNC */

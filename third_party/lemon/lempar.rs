@@ -621,7 +621,6 @@ impl yyParser {
         yyruleno: YYACTIONTYPE, /* Number of the rule by which to reduce */
         yy_look_ahead: YYCODETYPE,             /* Lookahead token, or YYNOCODE if none */
         yy_lookahead_token: Option<&ParseTOKENTYPE>,  /* Value of the lookahead token */
-//        ParseARG_PDECL               /* Optional %extra_argument parameter */
     ) -> YYACTIONTYPE {
         let yygoto: YYCODETYPE; /* The next state */
         let yyact: YYACTIONTYPE; /* The next action */
@@ -777,7 +776,6 @@ impl yyParser {
         &mut self,
         yymajor: TokenType,     /* The major token code number */
         mut yyminor: Option<ParseTOKENTYPE>, /* The value for the token */
-//        ParseARG_PDECL          /* Optional %extra_argument parameter */
     ) {
         let mut yymajor = yymajor as YYCODETYPE;
         let mut yyact: YYACTIONTYPE; /* The parser action. */
@@ -806,7 +804,7 @@ impl yyParser {
             assert_eq!(yyact, self[0].stateno);
             yyact = self.yy_find_shift_action(yymajor,yyact);
             if yyact >= YY_MIN_REDUCE {
-                yyact = self.yy_reduce(yyact - YY_MIN_REDUCE,yymajor,yyminor.as_ref()/*, ParseARG_PARAM*/);
+                yyact = self.yy_reduce(yyact - YY_MIN_REDUCE,yymajor,yyminor.as_ref());
             } else if yyact <= YY_MAX_SHIFTREDUCE {
                 self.yy_shift(yyact, yymajor, yyminor.take());
                 if cfg!(not(feature = "YYNOERRORRECOVERY")) {

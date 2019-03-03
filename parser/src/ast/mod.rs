@@ -563,9 +563,10 @@ pub enum Expr {
         name: Id,
         distinctness: Option<Distinctness>,
         args: Option<Vec<Expr>>,
-    }, // TODO overClause
+        over_clause: Option<Box<OverClause>>,
+    },
     // Function call expression with '*' as arg
-    FunctionCallStar(Id), // TODO overClause
+    FunctionCallStar(Id, Option<Box<OverClause>>),
     // Identifier
     Id(Id),
     InList {
@@ -760,6 +761,7 @@ impl Display for Expr {
                 name,
                 distinctness,
                 args,
+                over_clause,
             } => {
                 name.fmt(f)?;
                 f.write_char('(')?;
@@ -770,11 +772,21 @@ impl Display for Expr {
                 if let Some(args) = args {
                     comma(args, f)?;
                 }
-                f.write_char(')')
+                f.write_char(')')?;
+                if let Some(over_clause) = over_clause {
+                    f.write_char(' ')?;
+                    over_clause.fmt(f)?;
+                }
+                Ok(())
             }
-            Expr::FunctionCallStar(name) => {
+            Expr::FunctionCallStar(name, over_clause) => {
                 name.fmt(f)?;
-                f.write_str("(*)")
+                f.write_str("(*)")?;
+                if let Some(over_clause) = over_clause {
+                    f.write_char(' ')?;
+                    over_clause.fmt(f)?;
+                }
+                Ok(())
             }
             Expr::Id(id) => id.fmt(f),
             Expr::InList { lhs, not, rhs } => {
@@ -1186,7 +1198,8 @@ pub enum OneSelect {
         columns: Vec<ResultColumn>,
         from: Option<FromClause>,
         where_clause: Option<Expr>,
-        group_by: Option<GroupBy>, // TODO windowClause
+        group_by: Option<GroupBy>,
+        window_clause: Option<Vec<Window>>,
     },
     Values(Vec<Vec<Expr>>),
 }
@@ -1200,6 +1213,7 @@ impl Display for OneSelect {
                 from,
                 where_clause,
                 group_by,
+                window_clause,
             } => {
                 f.write_str("SELECT")?;
                 if let Some(ref distinctness) = distinctness {
@@ -1219,6 +1233,10 @@ impl Display for OneSelect {
                 if let Some(ref group_by) = group_by {
                     f.write_char(' ')?;
                     group_by.fmt(f)?;
+                }
+                if let Some(ref window_clause) = window_clause {
+                    f.write_char(' ')?;
+                    comma(window_clause, f)?;
                 }
                 Ok(())
             }
@@ -1792,8 +1810,6 @@ impl Display for ColumnDefinition {
         Ok(())
     }
 }
-
-// TODO ColumnNameAndType
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NamedColumnConstraint {
@@ -2576,6 +2592,136 @@ impl Display for UpsertDo {
                 Ok(())
             }
             UpsertDo::Nothing => f.write_str("DO NOTHING"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OverClause {
+    pub filter: Option<Expr>,
+    pub over: Over,
+}
+
+impl Display for OverClause {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        if let Some(ref filter) = self.filter {
+            filter.fmt(f)?;
+            f.write_char(' ')?;
+        }
+        f.write_str("OVER ")?;
+        self.over.fmt(f)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Over {
+    Window(Window),
+    Name(Name),
+}
+
+impl Display for Over {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Over::Window(ref window) => window.fmt(f),
+            Over::Name(ref name) => name.fmt(f),
+        }
+    }
+}
+
+// https://sqlite.org/syntax/window-defn.html
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Window {
+    pub name: Option<Name>,
+    pub partition_by: Option<Vec<Expr>>,
+    pub order_by: Option<Vec<SortedColumn>>,
+    pub frame_clause: Option<FrameClause>,
+}
+
+impl Display for Window {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        if let Some(ref name) = self.name {
+            name.fmt(f)?;
+            f.write_str(" AS ")?;
+        }
+        f.write_char('(')?;
+        if let Some(ref partition_by) = self.partition_by {
+            f.write_str("PARTITION BY ")?;
+            comma(partition_by, f)?;
+            f.write_char(' ')?;
+        }
+        if let Some(ref order_by) = self.order_by {
+            f.write_str("ORDER BY ")?;
+            comma(order_by, f)?;
+            f.write_char(' ')?;
+        }
+        if let Some(ref frame_clause) = self.frame_clause {
+            frame_clause.fmt(f)?;
+        }
+        f.write_char(')')
+    }
+}
+
+// https://sqlite.org/syntax/frame-spec.html
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FrameClause {
+    pub mode: FrameMode,
+    pub start: FrameBound,
+    pub end: Option<FrameBound>,
+}
+
+impl Display for FrameClause {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        self.mode.fmt(f)?;
+        if let Some(ref end) = self.end {
+            f.write_str(" BETWEEN ")?;
+            self.start.fmt(f)?;
+            f.write_str(" AND ")?;
+            end.fmt(f)
+        } else {
+            f.write_char(' ')?;
+            self.start.fmt(f)
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum FrameMode {
+    Range,
+    Rows,
+}
+
+impl Display for FrameMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.write_str(match self {
+            FrameMode::Range => "RANGE",
+            FrameMode::Rows => "ROWS",
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FrameBound {
+    CurrentRow,
+    Following(Expr),
+    Preceding(Expr),
+    UnboundedFollowing,
+    UnboundedPreceding,
+}
+
+impl Display for FrameBound {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            FrameBound::CurrentRow => f.write_str("CURRENT ROW"),
+            FrameBound::Following(value) => {
+                value.fmt(f)?;
+                f.write_str(" FOLLOWING")
+            }
+            FrameBound::Preceding(value) => {
+                value.fmt(f)?;
+                f.write_str(" PRECEDING")
+            }
+            FrameBound::UnboundedFollowing => f.write_str("UNBOUNDED FOLLOWING"),
+            FrameBound::UnboundedPreceding => f.write_str("UNBOUNDED PRECEDING"),
         }
     }
 }

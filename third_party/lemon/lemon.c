@@ -4507,15 +4507,13 @@ void ReportTable(
   fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
 
-  /* Generate %extra_context parameter declaration
-  */
+  /* Generate %extra_context parameter declaration */
   if( lemp->ctx && lemp->ctx[0] ){
     fprintf(out,"        %s,\n",lemp->ctx);  lineno++;
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 
-  /* Generate %extra_context field initialization
-  */
+  /* Generate %extra_context field initialization */
   if( lemp->ctx && lemp->ctx[0] ){
     char *name = strtok(lemp->ctx,":");
     if (name) {
