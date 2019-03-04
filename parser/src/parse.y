@@ -133,11 +133,13 @@ table_options(A) ::= WITHOUT nm(X). {
 }
 %type columnlist {Vec<ColumnDefinition>}
 columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
-  let cd = ColumnDefinition{ col_name: X.0, col_type: X.1, constraints: Y };
+  let col = X;
+  let cd = ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y };
   A.push(cd);
 }
 columnlist(A) ::= columnname(X) carglist(Y). {
-  A = vec![ColumnDefinition{ col_name: X.0, col_type: X.1, constraints: Y }];
+  let col = X;
+  A = vec![ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y }];
 }
 %type columnname {(Name, Option<Type>)}
 columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
@@ -864,8 +866,9 @@ term(A) ::= CTIME_KW(OP). {
 }
 
 expr(A) ::= LP nexprlist(X) COMMA expr(Y) RP. {
-  X.push(Y);
-  A = Expr::Parenthesized(X);
+  let mut x = X;
+  x.push(Y);
+  A = Expr::Parenthesized(x);
 }
 
 expr(A) ::= expr(X) AND(OP) expr(Y).    {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
@@ -884,10 +887,12 @@ expr(A) ::= expr(X) CONCAT(OP) expr(Y). {A=Expr::binary(X,@OP,Y); /*A-overwrites
 likeop(A) ::= LIKE_KW|MATCH(X). {A=(false, LikeOperator::from_token(@X, X)); /*A-overwrite-X*/}
 likeop(A) ::= NOT LIKE_KW|MATCH(X). {A=(true, LikeOperator::from_token(@X, X)); /*A-overwrite-X*/}
 expr(A) ::= expr(X) likeop(OP) expr(Y).  [LIKE_KW]  {
-  A=Expr::like(X,OP.0,OP.1,Y,None); /*A-overwrites-X*/
+  let op = OP;
+  A=Expr::like(X,op.0,op.1,Y,None); /*A-overwrites-X*/
 }
 expr(A) ::= expr(X) likeop(OP) expr(Y) ESCAPE expr(E).  [LIKE_KW]  {
-  A=Expr::like(X,OP.0,OP.1,Y,Some(E)); /*A-overwrites-X*/
+  let op = OP;
+  A=Expr::like(X,op.0,op.1,Y,Some(E)); /*A-overwrites-X*/
 }
 
 expr(A) ::= expr(X) ISNULL|NOTNULL(E).   {A = Expr::not_null(X, @E); /*A-overwrites-X*/}
