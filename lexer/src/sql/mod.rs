@@ -43,6 +43,7 @@ impl<R: Read> FallibleIterator for Parser<R> {
     type Item = Cmd;
 
     fn next(&mut self) -> Result<Option<Cmd>, Error> {
+        //print!("line: {}, column: {}: ", self.scanner.line(), self.scanner.column());
         self.parser.ctx.reset();
         let mut last_token_parsed = TokenType::TK_EOF;
         let mut eof = false;
@@ -72,9 +73,11 @@ impl<R: Read> FallibleIterator for Parser<R> {
                 token_type = analyze_filter_keyword(last_token_parsed);
             }
             let token = token_type.into_token(value);
+            //print!("({:?}, {:?})", token_type, token);
             self.parser.sqlite3Parser(token_type, token);
             last_token_parsed = token_type;
             if self.parser.ctx.done() {
+                //println!();
                 break;
             }
         }

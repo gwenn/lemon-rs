@@ -194,6 +194,7 @@ pub struct yyParser {
 use std::ops::Neg;
 impl yyParser {
     fn shift(&self, shift: i8) -> usize {
+        assert!(shift <= 1);
         if shift == 0 {
             self.yyidx
         } else if shift > 0 {
@@ -280,6 +281,12 @@ impl yyParser {
                 self.yyStackOverflow();
                 return true;
             }
+        }
+        // yystack is not prefilled with zero value like in C.
+        if self.yyidx == self.yystack.len() {
+            self.yystack.push(yyStackEntry::default());
+        } else if self.yyidx+1 == self.yystack.len() {
+            self.yystack.push(yyStackEntry::default());
         }
         false
     }
@@ -584,7 +591,9 @@ impl yyParser {
     ) {
         let mut yyNewState = yyNewState;
         self.yyidx_shift(1);
-        self.yy_grow_stack_if_needed();
+        if self.yy_grow_stack_if_needed() {
+            return;
+        }
         if yyNewState > YY_MAX_SHIFT {
             yyNewState += YY_MIN_REDUCE - YY_MIN_SHIFTREDUCE;
         }
@@ -654,7 +663,12 @@ impl yyParser {
          ** enough on the stack to push the LHS value */
         if yyRuleInfoNRhs[yyruleno as usize] == 0 {
             self.yyhwm_incr();
-            self.yy_grow_stack_for_push();
+            if self.yy_grow_stack_for_push() {
+                /* The call to yyStackOverflow() above pops the stack until it is
+                ** empty, causing the main parser loop to exit.  So the return value
+                ** is never used and does not matter. */
+                return 0;
+            }
         }
 
         let yylhsminor: YYMINORTYPE;
