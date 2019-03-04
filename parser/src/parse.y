@@ -1251,8 +1251,8 @@ create_vtab(A) ::= createkw VIRTUAL TABLE ifnotexists(E)
 }
 /* FIXME */
 %type vtabarglist {Vec<String>}
-vtabarglist(A) ::= vtabarg(X). {A = vec![X.unwrap()];}
-vtabarglist(A) ::= vtabarglist(A) COMMA vtabarg(X). {let arg = X; A.push(arg.unwrap()); }
+vtabarglist(A) ::= vtabarg(X). { if let Some(arg) = X { A = vec![arg]; } else { A = vec![]; } }
+vtabarglist(A) ::= vtabarglist(A) COMMA vtabarg(X). { if let Some(arg) = X { A.push(arg); } }
 vtabarg ::= .
 vtabarg ::= vtabarg vtabargtoken.
 vtabargtoken ::= ANY.
