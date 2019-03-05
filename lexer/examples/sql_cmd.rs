@@ -1,5 +1,4 @@
 use env_logger;
-
 use fallible_iterator::FallibleIterator;
 use sqlite_lexer::sql::Parser;
 

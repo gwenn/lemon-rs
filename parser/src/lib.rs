@@ -10,6 +10,7 @@ pub struct Context {
     stmt: Option<Stmt>,
     constraint_name: Option<Name>, // transient
     done: bool,
+    error: Option<String>,
 }
 
 impl Context {
@@ -19,6 +20,7 @@ impl Context {
             stmt: None,
             constraint_name: None,
             done: false,
+            error: None,
         }
     }
 
@@ -52,10 +54,15 @@ impl Context {
         self.done
     }
 
+    pub fn error(&mut self) -> Option<String> {
+        self.error.take()
+    }
+
     pub fn reset(&mut self) {
         self.explain = None;
         self.stmt = None;
         self.constraint_name = None;
         self.done = false;
+        self.error = None;
     }
 }

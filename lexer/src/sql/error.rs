@@ -17,6 +17,7 @@ pub enum Error {
     ExpectedEqualsSign(Option<(u64, usize)>),
     MalformedBlobLiteral(Option<(u64, usize)>),
     MalformedHexInteger(Option<(u64, usize)>),
+    SyntaxError(String, Option<(u64, usize)>),
 }
 
 impl fmt::Display for Error {
@@ -42,6 +43,7 @@ impl fmt::Display for Error {
             Error::MalformedHexInteger(pos) => {
                 write!(f, "malformed hex integer at {:?}", pos.unwrap())
             }
+            Error::SyntaxError(ref msg, pos) => write!(f, "{} at {:?}", msg, pos.unwrap()),
         }
     }
 }
@@ -59,6 +61,7 @@ impl error::Error for Error {
             Error::ExpectedEqualsSign(_) => "Expected = sign",
             Error::MalformedBlobLiteral(_) => "Malformed blob literal",
             Error::MalformedHexInteger(_) => "Malformed hex integer",
+            Error::SyntaxError(_, _) => "Syntax error",
         }
     }
 }
@@ -82,6 +85,7 @@ impl ScanError for Error {
             Error::ExpectedEqualsSign(ref mut pos) => *pos = Some((line, column)),
             Error::MalformedBlobLiteral(ref mut pos) => *pos = Some((line, column)),
             Error::MalformedHexInteger(ref mut pos) => *pos = Some((line, column)),
+            Error::SyntaxError(_, ref mut pos) => *pos = Some((line, column)),
         }
     }
 }

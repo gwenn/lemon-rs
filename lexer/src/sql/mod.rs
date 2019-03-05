@@ -15,6 +15,7 @@ mod error;
 pub use crate::scan::Splitter;
 pub use crate::sql::error::Error;
 use crate::Scanner;
+use crate::scan::ScanError;
 
 // TODO Extract scanning stuff and move this into the parser crate
 // to make possible the tokenizer without depending on the parser...
@@ -77,6 +78,11 @@ impl<R: Read> FallibleIterator for Parser<R> {
             self.parser.sqlite3Parser(token_type, token);
             last_token_parsed = token_type;
             if self.parser.ctx.done() {
+                if let Some(msg) = self.parser.ctx.error() {
+                    let mut err = Error::SyntaxError(msg, None);
+                    err.position(self.scanner.line(), self.scanner.column());
+                    return Err(err);
+                }
                 //println!();
                 break;
             }

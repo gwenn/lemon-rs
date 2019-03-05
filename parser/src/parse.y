@@ -33,8 +33,10 @@
 %syntax_error {
   if TokenType::TK_EOF as YYCODETYPE == yymajor {
     error!(target: TARGET, "incomplete input");
+    self.ctx.error = Some("incomplete input".to_owned());
   } else {
-    error!(target: TARGET, "near {:?}, \"{:?}\": syntax error", yymajor, yyminor);
+    error!(target: TARGET, "near {}, \"{:?}\": syntax error", yyTokenName[yymajor as usize], yyminor);
+    self.ctx.error = Some(format!("near {}, \"{:?}\": syntax error", yyTokenName[yymajor as usize], yyminor));
   }
 }
 %stack_overflow {
