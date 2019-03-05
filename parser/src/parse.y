@@ -368,33 +368,33 @@ init_deferred_pred_opt(A) ::= INITIALLY IMMEDIATE.    {A = Some(InitDeferredPred
 conslist_opt(A) ::= .                         {A = None;}
 conslist_opt(A) ::= COMMA conslist(X).        {A = Some(X);}
 %type conslist {Vec<NamedTableConstraint>}
-conslist(A) ::= conslist(A) tconscomma tcons(X). {let tc = X; A.push(tc);}
-conslist(A) ::= tcons(X).                        {A = vec![X];}
+conslist(A) ::= conslist(A) tconscomma tcons(X). {let tc = X; tc.map(|c| A.push(c));}
+conslist(A) ::= tcons(X).                        {if let Some(tc) = X { A = vec![tc]; } else { A = vec![]; }}
 tconscomma ::= COMMA.            { self.ctx.constraint_name = None;} // TODO Validate: useful ?
 tconscomma ::= .
-%type tcons {NamedTableConstraint}
-tcons ::= CONSTRAINT nm(X).      {self.ctx.constraint_name = Some(X);}
+%type tcons {Option<NamedTableConstraint>}
+tcons(A) ::= CONSTRAINT nm(X).      { self.ctx.constraint_name = Some(X); A = None;}
 tcons(A) ::= PRIMARY KEY LP sortlist(X) autoinc(I) RP onconf(R). {
   let name = self.ctx.constraint_name();
   let constraint = TableConstraint::PrimaryKey{ columns: X, auto_increment: I, conflict_clause: R };
-  A = NamedTableConstraint{ name, constraint };
+  A = Some(NamedTableConstraint{ name, constraint });
 }
 tcons(A) ::= UNIQUE LP sortlist(X) RP onconf(R). {
   let name = self.ctx.constraint_name();
   let constraint = TableConstraint::Unique{ columns: X, conflict_clause: R };
-  A = NamedTableConstraint{ name, constraint };
+  A = Some(NamedTableConstraint{ name, constraint });
 }
 tcons(A) ::= CHECK LP expr(E) RP onconf. {
   let name = self.ctx.constraint_name();
   let constraint = TableConstraint::Check(E);
-  A = NamedTableConstraint{ name, constraint };
+  A = Some(NamedTableConstraint{ name, constraint });
 }
 tcons(A) ::= FOREIGN KEY LP eidlist(FA) RP
           REFERENCES nm(T) eidlist_opt(TA) refargs(R) defer_subclause_opt(D). {
   let name = self.ctx.constraint_name();
   let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
   let constraint = TableConstraint::ForeignKey{ columns: FA, clause, deref_clause: D };
-  A = NamedTableConstraint{ name, constraint };
+  A = Some(NamedTableConstraint{ name, constraint });
 }
 %type defer_subclause_opt {Option<DeferSubclause>}
 defer_subclause_opt(A) ::= .                    {A = None;}
