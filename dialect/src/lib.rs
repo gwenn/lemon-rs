@@ -9,6 +9,9 @@ pub use crate::token::TokenType;
 pub type Token = Option<String>;
 
 impl TokenType {
+    // TODO try Cow<&'static, str> (Borrowed<&'static str> for keyword and Owned<String> for below),
+    // => Syntax error on keyword will be better
+    // => `from_token` will become unecessary
     pub fn into_token(&self, value: &[u8]) -> Token {
         match self {
             TokenType::TK_CTIME_KW => Some(from_bytes(value)),

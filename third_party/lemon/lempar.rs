@@ -362,6 +362,7 @@ impl yyParser {
         while self.yyidx > 0 {
             self.yy_pop_parser_stack();
         }
+        // TODO check all elements remaining in yystack are yyinit()
     }
 }
 

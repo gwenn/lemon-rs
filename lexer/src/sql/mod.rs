@@ -12,10 +12,10 @@ use parser::Context;
 
 mod error;
 
+use crate::scan::ScanError;
 pub use crate::scan::Splitter;
 pub use crate::sql::error::Error;
 use crate::Scanner;
-use crate::scan::ScanError;
 
 // TODO Extract scanning stuff and move this into the parser crate
 // to make possible the tokenizer without depending on the parser...

@@ -4018,7 +4018,7 @@ void print_stack_union(
     fprintf(out,"        if let YYMINORTYPE::yy%d(v) = self.minor {\n",i+1); lineno++;
     fprintf(out,"            v\n"); lineno++;
     fprintf(out,"        } else {\n"); lineno++;
-    fprintf(out,"            unreachable!()\n"); lineno++;
+    fprintf(out,"            unreachable!()\n"); lineno++; // TODO } else if YYMINORTYPE::yyinit() { return None;
     fprintf(out,"        }\n"); lineno++;
     fprintf(out,"    }\n"); lineno++;
     fprintf(out,"    #[allow(dead_code)]\n"); lineno++; // TODO generates only when needed
