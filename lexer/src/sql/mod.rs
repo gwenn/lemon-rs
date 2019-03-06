@@ -78,14 +78,15 @@ impl<R: Read> FallibleIterator for Parser<R> {
             self.parser.sqlite3Parser(token_type, token);
             last_token_parsed = token_type;
             if self.parser.ctx.done() {
-                if let Some(msg) = self.parser.ctx.error() {
-                    let mut err = Error::SyntaxError(msg, None);
-                    err.position(self.scanner.line(), self.scanner.column());
-                    return Err(err);
-                }
                 //println!();
                 break;
             }
+        }
+        if let Some(msg) = self.parser.ctx.error() {
+            self.parser.sqlite3ParserFinalize();
+            let mut err = Error::SyntaxError(msg, None);
+            err.position(self.scanner.line(), self.scanner.column());
+            return Err(err);
         }
         if last_token_parsed == TokenType::TK_EOF {
             return Ok(None); // empty input
