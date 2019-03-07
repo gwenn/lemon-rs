@@ -7,7 +7,7 @@ use std::result::Result;
 pub use crate::dialect::TokenType;
 use crate::dialect::{is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN};
 use parser::ast::Cmd;
-use parser::parse::yyParser;
+use parser::parse::{yyParser, YYCODETYPE};
 use parser::Context;
 
 mod error;
@@ -119,7 +119,7 @@ fn get_token() -> TokenType {
         || t == TokenType::TK_JOIN_KW
         || t == TokenType::TK_WINDOW
         || t == TokenType::TK_OVER
-    // FIXME || parser::sqlite3ParserFallback(t) == TokenType::TK_ID
+        || yyParser::parse_fallback(t as YYCODETYPE) == TokenType::TK_ID as YYCODETYPE
     {
         t = TokenType::TK_ID;
     }
