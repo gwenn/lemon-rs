@@ -1,3 +1,5 @@
+use log::error;
+
 use dialect;
 
 pub mod ast;
@@ -41,8 +43,7 @@ impl Context {
     }
 
     fn sqlite3_error_msg(&mut self, msg: &str) {
-        // TODO
-        eprintln!("{}", msg);
+        error!("parser error: {}", msg);
     }
 
     /// This routine is called after a single SQL statement has been parsed.
@@ -51,7 +52,7 @@ impl Context {
     }
 
     pub fn done(&self) -> bool {
-        self.done
+        self.done || self.error.is_some()
     }
 
     pub fn error(&mut self) -> Option<String> {
