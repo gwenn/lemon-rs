@@ -30,7 +30,6 @@ TODO:
   - [ ] Check generated AST (reparse/reinject)
   - [ ] Tests
   - [ ] Do not panic while parsing
-  - [ ] WINDOW function expressions
   - [ ] CREATE VIRTUAL TABLE args
   - [ ] Zero copy (at least tokens)
 

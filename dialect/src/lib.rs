@@ -31,7 +31,7 @@ impl TokenType {
     }
 }
 
-fn from_bytes(bytes: &[u8]) -> String {
+pub fn from_bytes(bytes: &[u8]) -> String {
     unsafe { str::from_utf8_unchecked(bytes).to_owned() }
 }
 

@@ -1237,7 +1237,7 @@ impl Display for OneSelect {
                     group_by.fmt(f)?;
                 }
                 if let Some(ref window_clause) = window_clause {
-                    f.write_char(' ')?;
+                    f.write_str(" WINDOW ")?;
                     comma(window_clause, f)?;
                 }
                 Ok(())
