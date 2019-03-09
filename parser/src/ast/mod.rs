@@ -89,7 +89,7 @@ pub enum Stmt {
         if_not_exists: bool,
         tbl_name: QualifiedName,
         module_name: Name,
-        args: Option<Vec<String>>,
+        args: Option<String>,
     },
     Delete {
         with: Option<With>,
@@ -329,7 +329,7 @@ impl Display for Stmt {
                 module_name.fmt(f)?;
                 f.write_char('(')?;
                 if let Some(args) = args {
-                    comma(args, f)?;
+                    f.write_str(args)?;
                 }
                 f.write_char(')')
             }
