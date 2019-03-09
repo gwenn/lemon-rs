@@ -1,26 +1,35 @@
+use env_logger;
 use fallible_iterator::FallibleIterator;
 use std::env;
 use std::fs::File;
+use std::panic;
 
 use sqlite_lexer::sql::Parser;
 
 /// Parse specified files and print all commands.
 fn main() {
+    env_logger::init();
     let args = env::args();
     for arg in args.skip(1) {
-        let f = File::open(arg.clone()).unwrap();
-        let mut parser = Parser::new(f);
-        loop {
-            match parser.next() {
-                Ok(None) => break,
-                Err(err) => {
-                    eprintln!("Err: {} in {}", err, arg);
-                    break;
-                }
-                Ok(Some(cmd)) => {
-                    println!("{}", cmd);
+        println!("{}", arg);
+        let result = panic::catch_unwind(|| {
+            let f = File::open(arg.clone()).unwrap();
+            let mut parser = Parser::new(f);
+            loop {
+                match parser.next() {
+                    Ok(None) => break,
+                    Err(err) => {
+                        eprintln!("Err: {} in {}", err, arg);
+                        break;
+                    }
+                    Ok(Some(cmd)) => {
+                        println!("{}", cmd);
+                    }
                 }
             }
+        });
+        if let Err(e) = result {
+            eprintln!("Panic: {:?} in {}", e, arg);
         }
     }
 }
