@@ -41,6 +41,9 @@ impl Context {
     fn constraint_name(&mut self) -> Option<Name> {
         self.constraint_name.take()
     }
+    fn no_constraint_name(&self) -> bool {
+        self.constraint_name.is_none()
+    }
 
     fn sqlite3_error_msg(&mut self, msg: &str) {
         error!("parser error: {}", msg);

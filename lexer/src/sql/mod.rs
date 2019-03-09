@@ -37,6 +37,13 @@ impl<R: Read> Parser<R> {
     pub fn reset(&mut self, input: R) {
         self.scanner.reset(input);
     }
+
+    pub fn line(&self) -> u64 {
+        self.scanner.line()
+    }
+    pub fn column(&self) -> usize {
+        self.scanner.column()
+    }
 }
 
 impl<R: Read> FallibleIterator for Parser<R> {
