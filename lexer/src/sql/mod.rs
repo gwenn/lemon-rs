@@ -82,24 +82,23 @@ impl<R: Read> FallibleIterator for Parser<R> {
                 break;
             }
         }
-        if let Some(msg) = self.parser.ctx.error() {
-            self.parser.sqlite3ParserFinalize();
-            let mut err = Error::SyntaxError(msg, None);
-            err.position(self.scanner.line(), self.scanner.column());
-            return Err(err);
-        }
         if last_token_parsed == TokenType::TK_EOF {
             return Ok(None); // empty input
         }
         /* Upon reaching the end of input, call the parser two more times
         with tokens TK_SEMI and 0, in that order. */
-        if eof {
+        if eof && self.parser.ctx.is_ok() {
             if last_token_parsed != TokenType::TK_SEMI {
                 self.parser.sqlite3Parser(TokenType::TK_SEMI, None);
             }
             self.parser.sqlite3Parser(TokenType::TK_EOF, None);
         }
         self.parser.sqlite3ParserFinalize();
+        if let Some(msg) = self.parser.ctx.error() {
+            let mut err = Error::SyntaxError(msg, None);
+            err.position(self.scanner.line(), self.scanner.column());
+            return Err(err);
+        }
         let cmd = self.parser.ctx.cmd();
         assert_ne!(cmd, None);
         Ok(cmd)

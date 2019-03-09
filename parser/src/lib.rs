@@ -55,6 +55,10 @@ impl Context {
         self.done || self.error.is_some()
     }
 
+    pub fn is_ok(&self) -> bool {
+        self.error.is_none()
+    }
+
     pub fn error(&mut self) -> Option<String> {
         self.error.take()
     }
