@@ -4186,11 +4186,11 @@ void ReportTable(
 
   /* Generate the defines */
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
-  fprintf(out,"pub type YYCODETYPE = %s;\n",
+  fprintf(out,"pub type YYCODETYPE = %s; // unsigned\n",
     minimum_size_type(0, lemp->nsymbol+1, &szCodeType)); lineno++;
   fprintf(out,"const YYNOCODE: YYCODETYPE = %d;\n",lemp->nsymbol);  lineno++;
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
-  fprintf(out,"type YYACTIONTYPE = %s;\n",
+  fprintf(out,"type YYACTIONTYPE = %s; // unsigned\n",
     minimum_size_type(0,lemp->maxAction,&szActionType)); lineno++;
   if( lemp->wildcard ){
     fprintf(out,"const YYWILDCARD: YYCODETYPE = %d;\n",
@@ -4325,8 +4325,7 @@ void ReportTable(
   /* Output the yy_action table */
   lemp->nactiontab = n = acttab_action_size(pActtab);
   lemp->tablesize += n*szActionType;
-  fprintf(out,"const YY_ACTTAB_COUNT: %s = %d;\n",
-       minimum_size_type(0, n, 0), n); lineno++;
+  fprintf(out,"macro_rules! YY_ACTTAB_COUNT {() => {%d}}\n", n); lineno++;
   fprintf(out,"#[rustfmt::skip]\n"); lineno++;
   fprintf(out,"#[allow(non_upper_case_globals)]\n"); lineno++;
   fprintf(out,"static yy_action: [YYACTIONTYPE; %d] = [\n", n); lineno++;

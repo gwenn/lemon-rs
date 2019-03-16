@@ -268,7 +268,7 @@ impl yyParser {
     fn yy_grow_stack_if_needed(&mut self) -> bool {
         if self.yyidx >= self.yystack.capacity() {
             if self.yyGrowStack() {
-                self.yyidx -= 1;
+                self.yyidx = self.yyidx.checked_sub(1).unwrap();
                 self.yyStackOverflow();
                 return true;
             }
@@ -341,7 +341,7 @@ impl yyParser {
     fn yy_pop_parser_stack(&mut self) {
         use std::mem::replace;
         let yytos = replace(&mut self.yystack[self.yyidx], yyStackEntry::default());
-        self.yyidx -= 1;
+        self.yyidx = self.yyidx.checked_sub(1).unwrap();
         //assert_eq!(self.yyidx+1, self.yystack.len());
         #[cfg(not(feature = "NDEBUG"))] {
             debug!(
@@ -431,11 +431,10 @@ impl yyParser {
     #[allow(non_snake_case)]
     fn yy_find_shift_action(
         &self,
-        iLookAhead: YYCODETYPE, /* The look-ahead token */
+        mut iLookAhead: YYCODETYPE, /* The look-ahead token */
         stateno: YYACTIONTYPE, /* Current state number */
     ) -> YYACTIONTYPE {
-        let mut iLookAhead = iLookAhead;
-        let mut i: i32;
+        let mut i: usize;
 
         if stateno > YY_MAX_SHIFT {
             return stateno;
@@ -445,13 +444,12 @@ impl yyParser {
             //yycoverage[stateno][iLookAhead] = true;
         }
         loop {
-            i = i32::from(yy_shift_ofst[stateno as usize]);
-            assert!(i >= 0);
+            i = yy_shift_ofst[stateno as usize] as usize;
             //assert!(i+i32::from(YYNTOKEN) <= yy_lookahead.len() as i32);
             assert_ne!(iLookAhead, YYNOCODE);
             assert!((iLookAhead as YYACTIONTYPE) < YYNTOKEN);
-            i += i32::from(iLookAhead);
-            if (i as usize) >= yy_lookahead.len() || yy_lookahead[i as usize] != iLookAhead {
+            i += iLookAhead as usize;
+            if i >= yy_lookahead.len() || yy_lookahead[i] != iLookAhead {
                 if YYFALLBACK {
                     let mut iFallback: YYCODETYPE = 0; /* Fallback token */
                     if (iLookAhead as usize) < yyFallback.len() && {
@@ -473,9 +471,9 @@ impl yyParser {
                     }
                 }
                 if YYWILDCARD > 0 {
-                    let j = i - i32::from(iLookAhead) + i32::from(YYWILDCARD);
-                    if (YY_SHIFT_MIN + (YYWILDCARD as YY_SHIFT_TYPE) >= 0 || j >= 0) &&
-                        (YY_SHIFT_MAX + (YYWILDCARD as YY_SHIFT_TYPE) < YY_ACTTAB_COUNT.into() || j < i32::from(YY_ACTTAB_COUNT)) &&
+                    let j = i as i32 - i32::from(iLookAhead) + i32::from(YYWILDCARD);
+                    if (YY_SHIFT_MIN + YYWILDCARD >= 0 || j >= 0) &&
+                        (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT!() || j < YY_ACTTAB_COUNT!()) &&
                         (j as usize) < yy_lookahead.len() &&
                         yy_lookahead[j as usize] == YYWILDCARD &&
                         iLookAhead > 0
@@ -493,7 +491,7 @@ impl yyParser {
                 } /* YYWILDCARD */
                 return yy_default[stateno as usize];
             } else {
-                return yy_action[i as usize];
+                return yy_action[i];
             }
         }
     }
@@ -516,15 +514,15 @@ fn yy_find_reduce_action(
     } else {
         assert!(stateno <= YY_REDUCE_COUNT);
     }
-    i = i32::from(yy_reduce_ofst[stateno as usize]);
+    i = yy_reduce_ofst[stateno as usize].into();
     assert_ne!(iLookAhead, YYNOCODE);
     i += i32::from(iLookAhead);
     if YYERRORSYMBOL > 0 {
-        if i < 0 || i >= i32::from(YY_ACTTAB_COUNT) || yy_lookahead[i as usize] != iLookAhead {
+        if i < 0 || i >= YY_ACTTAB_COUNT!() || yy_lookahead[i as usize] != iLookAhead {
             return yy_default[stateno as usize];
         }
     } else {
-        assert!(i >= 0 && i < i32::from(YY_ACTTAB_COUNT));
+        assert!(i >= 0 && i < YY_ACTTAB_COUNT!());
         assert_eq!(yy_lookahead[i as usize], iLookAhead);
     }
     yy_action[i as usize]
