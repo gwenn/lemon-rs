@@ -21,7 +21,7 @@ pub use crate::sql::error::Error;
 use crate::Scanner;
 
 // TODO Extract scanning stuff and move this into the parser crate
-// to make possible the tokenizer without depending on the parser...
+// to make possible to use the tokenizer without depending on the parser...
 
 pub struct Parser<R: Read> {
     scanner: Scanner<R, Tokenizer>,

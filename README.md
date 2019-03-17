@@ -28,6 +28,7 @@ Lexer and parser have been tested with the following scripts:
 
 TODO:
   - [ ] Check generated AST (reparse/reinject)
+  - [ ] [If a keyword in double quotes is used in a context where it cannot be resolved to an identifier but where a string literal is allowed, then the token is understood to be a string literal instead of an identifier.](https://sqlite.org/lang_keywords.html)
   - [ ] Tests
   - [ ] Do not panic while parsing
   - [ ] CREATE VIRTUAL TABLE args

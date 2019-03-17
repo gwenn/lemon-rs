@@ -1,3 +1,4 @@
+//! Streaming SQLite tokenizer
 #![feature(read_initializer)]
 
 use dialect;
