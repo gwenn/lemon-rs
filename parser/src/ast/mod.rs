@@ -2487,7 +2487,9 @@ pub struct Type {
 impl Display for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self.size {
-            None => f.write_str(&self.name),
+            None => {
+                double_quote(&self.name, f)
+            },
             Some(ref size) => {
                 f.write_str(&self.name)?; // TODO check there is no forbidden chars
                 f.write_char('(')?;
