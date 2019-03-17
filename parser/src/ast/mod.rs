@@ -2605,8 +2605,9 @@ pub struct OverClause {
 impl Display for OverClause {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if let Some(ref filter) = self.filter {
+            f.write_str("FILTER (WHERE ")?;
             filter.fmt(f)?;
-            f.write_char(' ')?;
+            f.write_str(") ")?;
         }
         f.write_str("OVER ")?;
         self.over.fmt(f)
