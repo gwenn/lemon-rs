@@ -1,6 +1,6 @@
 //! Abstract Syntax Tree
 
-use crate::dialect::{from_token, is_identifier, is_keyword, Token, TokenType};
+use crate::dialect::{from_token, is_identifier, Token, TokenType};
 use crate::parse::YYCODETYPE;
 use std::fmt::{Display, Formatter, Result, Write};
 
@@ -1635,7 +1635,7 @@ impl Display for GroupBy {
     }
 }
 
-/// identifier or one of several keywords or `INDEXED` (but not string)
+/// identifier or one of several keywords or `INDEXED`
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Id(pub String);
 
@@ -1647,7 +1647,7 @@ impl Id {
 
 impl Display for Id {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        self.0.fmt(f)
+        double_quote(&self.0, f)
     }
 }
 
@@ -2748,12 +2748,12 @@ fn double_quote(name: &str, f: &mut Formatter<'_>) -> Result {
     }
     if is_identifier(name) {
         // identifier must be quoted when they match a keyword...
-        if is_keyword(name) {
-            f.write_char('`')?;
-            f.write_str(name)?;
-            return f.write_char('`');
-        }
-        return f.write_str(name);
+        //if is_keyword(name) {
+        f.write_char('`')?;
+        f.write_str(name)?;
+        return f.write_char('`');
+        //}
+        //return f.write_str(name);
     }
     f.write_char('"')?;
     for c in name.chars() {

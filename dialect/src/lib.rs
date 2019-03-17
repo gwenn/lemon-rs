@@ -175,20 +175,6 @@ static KEYWORDS: phf::Map<&[u8], TokenType> = phf_map! {
 };
 pub const MAX_KEYWORD_LEN: usize = 17;
 
-pub fn is_keyword(name: &str) -> bool {
-    if name.len() < 2 || name.len() > MAX_KEYWORD_LEN || !name.is_ascii() {
-        return false;
-    }
-    if KEYWORDS.contains_key(name.as_bytes()) {
-        return true;
-    }
-    if name.bytes().all(|b| b.is_ascii_uppercase()) {
-        return false;
-    }
-    // FIXME: ignore case
-    false
-}
-
 /// word must be uppercase
 pub fn keyword_token(word: &[u8]) -> Option<TokenType> {
     KEYWORDS.get(word).cloned()
