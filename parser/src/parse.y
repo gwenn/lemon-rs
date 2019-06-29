@@ -151,9 +151,7 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 // improve performance and reduce the executable size.  The goal here is
 // to get the "jump" operations in ISNULL through ESCAPE to have numeric
 // values that are early enough so that all jump operations are clustered
-// at the beginning, but also so that the comparison tokens NE through GE
-// are as large as possible so that they are near to FUNCTION, which is a
-// token synthesized by addopcodes.tcl.
+// at the beginning.
 //
 %token ABORT ACTION AFTER ANALYZE ASC ATTACH BEFORE BEGIN BY CASCADE CAST.
 %token CONFLICT DATABASE DEFERRED DESC DETACH EACH END EXCLUSIVE EXPLAIN FAIL.
@@ -176,6 +174,7 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 %endif SQLITE_OMIT_COMPOUND_SELECT
 %ifndef SQLITE_OMIT_WINDOWFUNC
   CURRENT FOLLOWING PARTITION PRECEDING RANGE UNBOUNDED
+  EXCLUDE GROUPS OTHERS TIES
 %endif SQLITE_OMIT_WINDOWFUNC
   REINDEX RENAME CTIME_KW IF
   .
@@ -1298,7 +1297,7 @@ windowdefn_list(A) ::= windowdefn_list(A) COMMA windowdefn(Z). {
 }
 
 %type windowdefn {Window}
-windowdefn(A) ::= nm(X) AS window(Y). {
+windowdefn(A) ::= nm(X) AS LP window(Y) RP. {
   let mut w = Y;
   w.name = Some(X);
   A = w;
@@ -1308,8 +1307,6 @@ windowdefn(A) ::= nm(X) AS window(Y). {
 
 %type frame_opt {Option<FrameClause>}
 
-%type part_opt {Option<Vec<Expr>>}
-
 %type filter_opt {Option<Expr>}
 
 %type range_or_rows {FrameMode}
@@ -1318,41 +1315,65 @@ windowdefn(A) ::= nm(X) AS window(Y). {
 %type frame_bound_s {FrameBound}
 %type frame_bound_e {FrameBound}
 
-window(A) ::= LP part_opt(X) orderby_opt(Y) frame_opt(Z) RP. {
-  A = Window{ name: None,  partition_by: X, order_by: Y, frame_clause: Z};
+window(A) ::= PARTITION BY nexprlist(X) orderby_opt(Y) frame_opt(Z). {
+  A = Window{ name: None,  partition_by: Some(X), order_by: Y, frame_clause: Z};
 }
-
-part_opt(A) ::= PARTITION BY nexprlist(X). { A = Some(X); }
-part_opt(A) ::= .                          { A = None; }
+window(A) ::= nm(W) PARTITION BY nexprlist(X) orderby_opt(Y) frame_opt(Z). {
+  A = Window{ name: Some(W),  partition_by: Some(X), order_by: Y, frame_clause: Z};
+}
+window(A) ::= ORDER BY sortlist(Y) frame_opt(Z). {
+  A = Window{ name: None,  partition_by: None, order_by: Some(Y), frame_clause: Z};
+}
+window(A) ::= nm(W) ORDER BY sortlist(Y) frame_opt(Z). {
+  A = Window{ name: Some(W),  partition_by: None, order_by: Some(Y), frame_clause: Z};
+}
+window(A) ::= frame_opt(Z). {
+  A = Window{ name: None,  partition_by: None, order_by: None, frame_clause: Z};
+}
+window(A) ::= nm(W) frame_opt(Z). {
+  A = Window{ name: Some(W),  partition_by: None, order_by: None, frame_clause: Z};
+}
 
 frame_opt(A) ::= .                             {
   A = None;
 }
-frame_opt(A) ::= range_or_rows(X) frame_bound_s(Y). {
-  A = Some(FrameClause{ mode: X, start: Y, end: None });
+frame_opt(A) ::= range_or_rows(X) frame_bound_s(Y) frame_exclude_opt(Z). {
+  A = Some(FrameClause{ mode: X, start: Y, end: None, exclude: Z });
 }
-frame_opt(A) ::= range_or_rows(X) BETWEEN frame_bound_s(Y) AND frame_bound_e(Z). {
-  A = Some(FrameClause{ mode: X, start: Y, end: Some(Z) });
+frame_opt(A) ::= range_or_rows(X) BETWEEN frame_bound_s(Y) AND
+                          frame_bound_e(Z) frame_exclude_opt(W). {
+  A = Some(FrameClause{ mode: X, start: Y, end: Some(Z), exclude: W });
 }
 
-range_or_rows(A) ::= RANGE.   { A = FrameMode::Range; }
-range_or_rows(A) ::= ROWS.    { A = FrameMode::Rows;  }
+range_or_rows(A) ::= RANGE.   { A = FrameMode::Range; /*A-overwrites-X*/}
+range_or_rows(A) ::= ROWS.    { A = FrameMode::Rows;  /*A-overwrites-X*/}
+range_or_rows(A) ::= GROUPS.  { A = FrameMode::Groups;/*A-overwrites-X*/}
 
 
-frame_bound_s(A) ::= frame_bound(X). { A = X; }
+frame_bound_s(A) ::= frame_bound(X).      {A = X;}
 frame_bound_s(A) ::= UNBOUNDED PRECEDING. {A = FrameBound::UnboundedPreceding;}
-frame_bound_e(A) ::= frame_bound(X). { A = X; }
+frame_bound_e(A) ::= frame_bound(X).      {A = X;}
 frame_bound_e(A) ::= UNBOUNDED FOLLOWING. {A = FrameBound::UnboundedFollowing;}
 
 frame_bound(A) ::= expr(X) PRECEDING.   { A = FrameBound::Preceding(X); }
 frame_bound(A) ::= CURRENT ROW.         { A = FrameBound::CurrentRow; }
 frame_bound(A) ::= expr(X) FOLLOWING.   { A = FrameBound::Following(X); }
 
+%type frame_exclude_opt {Option<FrameExclude>}
+frame_exclude_opt(A) ::= . {A = None;}
+frame_exclude_opt(A) ::= EXCLUDE frame_exclude(X). {A = Some(X);}
+
+%type frame_exclude {FrameExclude}
+frame_exclude(A) ::= NO OTHERS.   { A = FrameExclude::NoOthers;  /*A-overwrites-X*/}
+frame_exclude(A) ::= CURRENT ROW. { A = FrameExclude::CurrentRow;  /*A-overwrites-X*/}
+frame_exclude(A) ::= GROUP.       { A = FrameExclude::Group;  /*A-overwrites-X*/}
+frame_exclude(A) ::= TIES.        { A = FrameExclude::Ties;  /*A-overwrites-X*/}
+
 %type window_clause {Vec<Window>}
 window_clause(A) ::= WINDOW windowdefn_list(B). { A = B; }
 
 %type over_clause {OverClause}
-over_clause(A) ::= filter_opt(W) OVER window(Z). {
+over_clause(A) ::= filter_opt(W) OVER LP window(Z) RP. {
   A = OverClause{ filter: W, over: Over::Window(Z) };
 }
 over_clause(A) ::= filter_opt(W) OVER nm(Z). {

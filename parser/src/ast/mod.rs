@@ -2695,6 +2695,7 @@ pub struct FrameClause {
     pub mode: FrameMode,
     pub start: FrameBound,
     pub end: Option<FrameBound>,
+    pub exclude: Option<FrameExclude>,
 }
 
 impl Display for FrameClause {
@@ -2704,16 +2705,22 @@ impl Display for FrameClause {
             f.write_str(" BETWEEN ")?;
             self.start.fmt(f)?;
             f.write_str(" AND ")?;
-            end.fmt(f)
+            end.fmt(f)?;
         } else {
             f.write_char(' ')?;
-            self.start.fmt(f)
+            self.start.fmt(f)?;
         }
+        if let Some(ref exclude) = self.exclude {
+            f.write_str(" EXCLUDE ")?;
+            exclude.fmt(f)?;
+        }
+        Ok(())
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FrameMode {
+    Groups,
     Range,
     Rows,
 }
@@ -2721,6 +2728,7 @@ pub enum FrameMode {
 impl Display for FrameMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(match self {
+            FrameMode::Groups => "GROUPS",
             FrameMode::Range => "RANGE",
             FrameMode::Rows => "ROWS",
         })
@@ -2750,6 +2758,25 @@ impl Display for FrameBound {
             }
             FrameBound::UnboundedFollowing => f.write_str("UNBOUNDED FOLLOWING"),
             FrameBound::UnboundedPreceding => f.write_str("UNBOUNDED PRECEDING"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FrameExclude {
+    NoOthers,
+    CurrentRow,
+    Group,
+    Ties,
+}
+
+impl Display for FrameExclude {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            FrameExclude::NoOthers => f.write_str("NO OTHERS"),
+            FrameExclude::CurrentRow => f.write_str("CURRENT ROW"),
+            FrameExclude::Group => f.write_str("GROUP"),
+            FrameExclude::Ties => f.write_str("TIES"),
         }
     }
 }
