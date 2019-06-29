@@ -149,8 +149,8 @@ pub enum Stmt {
         order_by: Option<Vec<SortedColumn>>,
         limit: Option<Limit>,
     },
-    // database name
-    Vacuum(Option<Name>),
+    // database name, into expr
+    Vacuum(Option<Name>, Option<Expr>),
 }
 
 impl Display for Stmt {
@@ -521,11 +521,15 @@ impl Display for Stmt {
                 }
                 Ok(())
             }
-            Stmt::Vacuum(name) => {
+            Stmt::Vacuum(name, expr) => {
                 f.write_str("VACUUM")?;
                 if let Some(ref name) = name {
                     f.write_char(' ')?;
                     name.fmt(f)?;
+                }
+                if let Some(ref expr) = expr {
+                    f.write_str(" INTO ")?;
+                    expr.fmt(f)?;
                 }
                 Ok(())
             }
