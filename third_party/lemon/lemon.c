@@ -4481,7 +4481,7 @@ void ReportTable(
   */
   fprintf(out, "#[rustfmt::skip]\n"); lineno++;
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
-  fprintf(out, "static yyTokenName: [&'static str; %d] = [\n", lemp->nsymbol); lineno++;
+  fprintf(out, "static yyTokenName: [&str; %d] = [\n", lemp->nsymbol); lineno++;
   for(i=0; i<lemp->nsymbol; i++){
     lemon_sprintf(line,"\"%s\",",lemp->symbols[i]->name);
     fprintf(out,"  /* %4d */ \"%s\",\n",i, lemp->symbols[i]->name); lineno++;
@@ -4497,7 +4497,7 @@ void ReportTable(
   */
   fprintf(out, "#[rustfmt::skip]\n"); lineno++;
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
-  fprintf(out, "static yyRuleName: [&'static str; %d] = [\n", lemp->nrule); lineno++;
+  fprintf(out, "static yyRuleName: [&str; %d] = [\n", lemp->nrule); lineno++;
   for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){
     assert( rp->iRule==i );
     fprintf(out," /* %3d */ \"", i);

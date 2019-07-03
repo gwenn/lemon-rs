@@ -247,7 +247,7 @@ impl IndexMut<i8> for yyParser {
 #[cfg(not(feature = "NDEBUG"))]
 use log::Level::Debug;
 #[cfg(not(feature = "NDEBUG"))]
-static TARGET: &'static str = "Parse";
+static TARGET: &str = "Parse";
 
 
 /* For tracing shifts, the names of all terminals and nonterminals

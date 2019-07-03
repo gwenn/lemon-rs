@@ -180,11 +180,11 @@ impl<R: Read> FallibleIterator for Parser<R> {
                 } else if token_type == TokenType::TK_FILTER {
                     token_type = self.analyze_filter_keyword(last_token_parsed)?;
                 }
-                let token = token_type.into_token(self.buffer.as_slice());
+                let token = token_type.to_token(self.buffer.as_slice());
                 self.buffer.clear();
                 token
             } else {
-                token_type.into_token(value)
+                token_type.to_token(value)
             };
             //print!("({:?}, {:?})", token_type, token);
             self.parser.sqlite3Parser(token_type, token);
