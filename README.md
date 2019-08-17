@@ -1,3 +1,5 @@
+[![dependency status](https://deps.rs/repo/github/gwenn/lemon-rs/status.svg)](https://deps.rs/repo/github/gwenn/lemon-rs)
+
 [LEMON parser generator](https://www.sqlite.org/src/doc/trunk/doc/lemon.html) modified to generate Rust code.
 
 ## Unsupported
