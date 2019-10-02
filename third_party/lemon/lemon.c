@@ -4139,6 +4139,7 @@ void ReportTable(
   struct rule *rp;
   struct acttab *pActtab;
   int i, j, n, sz;
+  int nLookAhead;
   int szActionType;     /* sizeof(YYACTIONTYPE) */
   int szCodeType;       /* sizeof(YYCODETYPE)   */
   int mnTknOfst, mxTknOfst;
@@ -4349,19 +4350,35 @@ void ReportTable(
   lemp->tablesize += n*szCodeType;
   fprintf(out,"#[rustfmt::skip]\n"); lineno++;
   fprintf(out,"#[allow(non_upper_case_globals)]\n"); lineno++;
-  fprintf(out,"static yy_lookahead: [YYCODETYPE; %d] = [\n", n); lineno++;
+  nLookAhead = lemp->nterminal + lemp->nactiontab;
+  fprintf(out,"static yy_lookahead: [YYCODETYPE; %d] = [\n", nLookAhead); lineno++;
   for(i=j=0; i<n; i++){
     int la = acttab_yylookahead(pActtab, i);
     if( la<0 ) la = lemp->nsymbol;
     if( j==0 ) fprintf(out," /* %5d */ ", i);
     fprintf(out, " %4d,", la);
-    if( j==9 || i==n-1 ){
+    if( j==9 ){
       fprintf(out, "\n"); lineno++;
       j = 0;
     }else{
       j++;
     }
   }
+  /* Add extra entries to the end of the yy_lookahead[] table so that
+  ** yy_shift_ofst[]+iToken will always be a valid index into the array,
+  ** even for the largest possible value of yy_shift_ofst[] and iToken. */
+  while( i<nLookAhead ){
+    if( j==0 ) fprintf(out," /* %5d */ ", i);
+    fprintf(out, " %4d,", lemp->nterminal);
+    if( j==9 ){
+      fprintf(out, "\n"); lineno++;
+      j = 0;
+    }else{
+      j++;
+    }
+    i++;
+  }
+  if( j>0 ){ fprintf(out, "\n"); lineno++; }
   fprintf(out, "];\n"); lineno++;
 
   /* Output the yy_shift_ofst[] table */
@@ -4371,8 +4388,8 @@ void ReportTable(
   fprintf(out, "type YY_SHIFT_TYPE = %s;\n",
        minimum_size_type(mnTknOfst, lemp->nterminal+lemp->nactiontab, &sz)); lineno++;
   fprintf(out, "const YY_SHIFT_COUNT: YYACTIONTYPE =    %d;\n", n-1); lineno++;
-  fprintf(out, "const YY_SHIFT_MIN: YY_SHIFT_TYPE =      %d;\n", mnTknOfst); lineno++;
-  fprintf(out, "const YY_SHIFT_MAX: YY_SHIFT_TYPE =      %d;\n", mxTknOfst); lineno++;
+  fprintf(out, "//const YY_SHIFT_MIN: YY_SHIFT_TYPE =      %d;\n", mnTknOfst); lineno++;
+  fprintf(out, "//const YY_SHIFT_MAX: YY_SHIFT_TYPE =      %d;\n", mxTknOfst); lineno++;
   fprintf(out, "#[rustfmt::skip]\n"); lineno++;
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yy_shift_ofst: [YY_SHIFT_TYPE; %d] = [\n", n); lineno++;
@@ -4451,7 +4468,9 @@ void ReportTable(
   fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
   if( lemp->has_fallback ){
     int mx = lemp->nterminal - 1;
-    while( mx>0 && lemp->symbols[mx]->fallback==0 ){ mx--; }
+    /* 2019-08-28:  Generate fallback entries for every token to avoid
+    ** having to do a range check on the index */
+    /* while( mx>0 && lemp->symbols[mx]->fallback==0 ){ mx--; } */
     fprintf(out, "static yyFallback: [YYCODETYPE; %d] = [\n", mx+1); lineno++;
     lemp->tablesize += (mx+1)*szCodeType;
     for(i=0; i<=mx; i++){

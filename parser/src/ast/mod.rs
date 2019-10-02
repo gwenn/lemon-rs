@@ -568,10 +568,13 @@ pub enum Expr {
         name: Id,
         distinctness: Option<Distinctness>,
         args: Option<Vec<Expr>>,
-        over_clause: Option<Box<OverClause>>,
+        filter_over: Option<FunctionTail>,
     },
     // Function call expression with '*' as arg
-    FunctionCallStar(Id, Option<Box<OverClause>>),
+    FunctionCallStar {
+        name: Id,
+        filter_over: Option<FunctionTail>,
+    },
     // Identifier
     Id(Id),
     InList {
@@ -766,7 +769,7 @@ impl Display for Expr {
                 name,
                 distinctness,
                 args,
-                over_clause,
+                filter_over,
             } => {
                 name.fmt(f)?;
                 f.write_char('(')?;
@@ -778,18 +781,19 @@ impl Display for Expr {
                     comma(args, f)?;
                 }
                 f.write_char(')')?;
-                if let Some(over_clause) = over_clause {
-                    f.write_char(' ')?;
-                    over_clause.fmt(f)?;
+                if let Some(filter_over) = filter_over {
+                    filter_over.fmt(f)?;
                 }
                 Ok(())
             }
-            Expr::FunctionCallStar(name, over_clause) => {
+            Expr::FunctionCallStar {
+                name,
+                filter_over,
+            } => {
                 name.fmt(f)?;
                 f.write_str("(*)")?;
-                if let Some(over_clause) = over_clause {
-                    f.write_char(' ')?;
-                    over_clause.fmt(f)?;
+                if let Some(filter_over) = filter_over {
+                    filter_over.fmt(f)?;
                 }
                 Ok(())
             }
@@ -2065,6 +2069,21 @@ impl Display for SortOrder {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum NullsOrder {
+    First,
+    Last,
+}
+
+impl Display for NullsOrder {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.write_str(match self {
+            NullsOrder::First => "NULLS FIRST",
+            NullsOrder::Last => "NULLS LAST",
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ForeignKeyClause {
     pub tbl_name: Name,
@@ -2220,6 +2239,7 @@ impl Display for Indexed {
 pub struct SortedColumn {
     pub expr: Expr,
     pub order: Option<SortOrder>,
+    pub nulls: Option<NullsOrder>
 }
 
 impl Display for SortedColumn {
@@ -2228,6 +2248,10 @@ impl Display for SortedColumn {
         if let Some(ref order) = self.order {
             f.write_char(' ')?;
             order.fmt(f)?;
+        }
+        if let Some(ref nulls) = self.nulls {
+            f.write_char(' ')?;
+            nulls.fmt(f)?;
         }
         Ok(())
     }
@@ -2628,20 +2652,23 @@ impl Display for UpsertDo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct OverClause {
-    pub filter: Option<Expr>,
-    pub over: Over,
+pub struct FunctionTail {
+    pub filter_clause: Option<Box<Expr>>,
+    pub over_clause: Option<Box<Over>>,
 }
 
-impl Display for OverClause {
+impl Display for FunctionTail {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        if let Some(ref filter) = self.filter {
-            f.write_str("FILTER (WHERE ")?;
-            filter.fmt(f)?;
-            f.write_str(") ")?;
+        if let Some(ref filter_clause) = self.filter_clause {
+            f.write_str(" FILTER (WHERE ")?;
+            filter_clause.fmt(f)?;
+            f.write_str(")")?;
         }
-        f.write_str("OVER ")?;
-        self.over.fmt(f)
+        if let Some(ref over_clause) = self.over_clause {
+            f.write_str(" OVER ")?;
+            over_clause.fmt(f)?;
+        }
+        Ok(())
     }
 }
 

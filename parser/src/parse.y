@@ -169,6 +169,7 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
   IGNORE IMMEDIATE INITIALLY INSTEAD LIKE_KW MATCH NO PLAN
   QUERY KEY OF OFFSET PRAGMA RAISE RECURSIVE RELEASE REPLACE RESTRICT ROW ROWS
   ROLLBACK SAVEPOINT TEMP TRIGGER VACUUM VIEW VIRTUAL WITH WITHOUT
+  NULLS FIRST LAST
 %ifdef SQLITE_OMIT_COMPOUND_SELECT
   EXCEPT INTERSECT UNION
 %endif SQLITE_OMIT_COMPOUND_SELECT
@@ -668,12 +669,12 @@ using_opt(U) ::= .                        {U = None;}
 
 orderby_opt(A) ::= .                          {A = None;}
 orderby_opt(A) ::= ORDER BY sortlist(X).      {A = Some(X);}
-sortlist(A) ::= sortlist(A) COMMA expr(Y) sortorder(Z). {
-  let sc = SortedColumn { expr: Y, order: Z };
+sortlist(A) ::= sortlist(A) COMMA expr(Y) sortorder(Z) nulls(X). {
+  let sc = SortedColumn { expr: Y, order: Z, nulls: X };
   A.push(sc);
 }
-sortlist(A) ::= expr(Y) sortorder(Z). {
-  A = vec![SortedColumn { expr: Y, order: Z }]; /*A-overwrites-Y*/
+sortlist(A) ::= expr(Y) sortorder(Z) nulls(X). {
+  A = vec![SortedColumn { expr: Y, order: Z, nulls: X }]; /*A-overwrites-Y*/
 }
 
 %type sortorder {Option<SortOrder>}
@@ -681,6 +682,11 @@ sortlist(A) ::= expr(Y) sortorder(Z). {
 sortorder(A) ::= ASC.           {A = Some(SortOrder::Asc);}
 sortorder(A) ::= DESC.          {A = Some(SortOrder::Desc);}
 sortorder(A) ::= .              {A = None;}
+
+%type nulls {Option<NullsOrder>}
+nulls(A) ::= NULLS FIRST.       {A = Some(NullsOrder::First);}
+nulls(A) ::= NULLS LAST.        {A = Some(NullsOrder::Last);}
+nulls(A) ::= .                  {A = None;}
 
 %type groupby_opt {Option<GroupBy>}
 groupby_opt(A) ::= .                      {A = None;}
@@ -848,18 +854,18 @@ expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
 %endif  SQLITE_OMIT_CAST
 
 expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP. {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, over_clause: None }; /*A-overwrites-X*/
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, filter_over: None }; /*A-overwrites-X*/
 }
 expr(A) ::= id(X) LP STAR RP. {
-  A = Expr::FunctionCallStar(Id::from_token(@X, X), None); /*A-overwrites-X*/
+  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: None }; /*A-overwrites-X*/
 }
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
-expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP over_clause(Z). {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, over_clause: Some(Box::new(Z)) }; /*A-overwrites-X*/
+expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, filter_over: Some(Z) }; /*A-overwrites-X*/
 }
-expr(A) ::= id(X) LP STAR RP over_clause(Z). {
-  A = Expr::FunctionCallStar(Id::from_token(@X, X), Some(Box::new(Z))); /*A-overwrites-X*/
+expr(A) ::= id(X) LP STAR RP filter_over(Z). {
+  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: Some(Z) }; /*A-overwrites-X*/
 }
 %endif
 
@@ -1310,7 +1316,11 @@ windowdefn(A) ::= nm(X) AS LP window(Y) RP. {
 
 %type frame_opt {Option<FrameClause>}
 
-%type filter_opt {Option<Expr>}
+%type filter_clause {Expr}
+
+%type over_clause {Over}
+
+%type filter_over {FunctionTail}
 
 %type range_or_rows {FrameMode}
 
@@ -1375,14 +1385,22 @@ frame_exclude(A) ::= TIES.        { A = FrameExclude::Ties;  /*A-overwrites-X*/}
 %type window_clause {Vec<Window>}
 window_clause(A) ::= WINDOW windowdefn_list(B). { A = B; }
 
-%type over_clause {OverClause}
-over_clause(A) ::= filter_opt(W) OVER LP window(Z) RP. {
-  A = OverClause{ filter: W, over: Over::Window(Z) };
+filter_over(A) ::= filter_clause(F) over_clause(O). {
+  A = FunctionTail{ filter_clause: Some(Box::new(F)), over_clause: Some(Box::new(O)) };
 }
-over_clause(A) ::= filter_opt(W) OVER nm(Z). {
-  A = OverClause{ filter: W, over: Over::Name(Z) };
+filter_over(A) ::= over_clause(O). {
+  A = FunctionTail{ filter_clause: None, over_clause: Some(Box::new(O)) };
+}
+filter_over(A) ::= filter_clause(F). {
+  A = FunctionTail{ filter_clause: Some(Box::new(F)), over_clause: None };
 }
 
-filter_opt(A) ::= .                            { A = None; }
-filter_opt(A) ::= FILTER LP WHERE expr(X) RP.  { A = Some(X); }
+over_clause(A) ::= OVER LP window(Z) RP. {
+  A = Over::Window(Z);
+}
+over_clause(A) ::= OVER nm(Z). {
+  A = Over::Name(Z);
+}
+
+filter_clause(A) ::= FILTER LP WHERE expr(X) RP.  { A = X; }
 %endif /* SQLITE_OMIT_WINDOWFUNC */

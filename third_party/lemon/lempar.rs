@@ -445,18 +445,17 @@ impl yyParser {
         }
         loop {
             i = yy_shift_ofst[stateno as usize] as usize;
-            //assert!(i+i32::from(YYNTOKEN) <= yy_lookahead.len() as i32);
+            assert!(i <= YY_ACTTAB_COUNT!());
+            assert!(i+usize::from(YYNTOKEN) <= yy_lookahead.len());
             assert_ne!(iLookAhead, YYNOCODE);
             assert!((iLookAhead as YYACTIONTYPE) < YYNTOKEN);
             i += iLookAhead as usize;
-            if i >= yy_lookahead.len() || yy_lookahead[i] != iLookAhead {
+            assert!(i < yy_lookahead.len());
+            if yy_lookahead[i] != iLookAhead {
                 if YYFALLBACK {
-                    let mut iFallback: YYCODETYPE = 0; /* Fallback token */
-                    if (iLookAhead as usize) < yyFallback.len() && {
-                        iFallback = yyFallback[iLookAhead as usize];
-                        iFallback
-                    } != 0
-                    {
+                    assert!((iLookAhead as usize) < yyFallback.len());
+                    let iFallback = yyFallback[iLookAhead as usize]; /* Fallback token */
+                    if iFallback != 0 {
                         #[cfg(not(feature = "NDEBUG"))] {
                             debug!(
                                 target: TARGET,
@@ -472,12 +471,8 @@ impl yyParser {
                 }
                 if YYWILDCARD > 0 {
                     let j = i as i32 - i32::from(iLookAhead) + i32::from(YYWILDCARD);
-                    if (YY_SHIFT_MIN + YYWILDCARD >= 0 || j >= 0) &&
-                        (YY_SHIFT_MAX + YYWILDCARD < YY_ACTTAB_COUNT!() || j < YY_ACTTAB_COUNT!()) &&
-                        (j as usize) < yy_lookahead.len() &&
-                        yy_lookahead[j as usize] == YYWILDCARD &&
-                        iLookAhead > 0
-                    {
+                    assert!((j as usize) < yy_lookahead.len());
+                    if yy_lookahead[j as usize] == YYWILDCARD && iLookAhead > 0 {
                         #[cfg(not(feature = "NDEBUG"))] {
                             debug!(
                                 target: TARGET,
@@ -491,6 +486,7 @@ impl yyParser {
                 } /* YYWILDCARD */
                 return yy_default[stateno as usize];
             } else {
+                assert!(i >= 0 && i < yy_action.len());
                 return yy_action[i];
             }
         }
@@ -944,9 +940,8 @@ impl yyParser {
 */
     pub fn parse_fallback(i_token: YYCODETYPE) -> YYCODETYPE {
         if YYFALLBACK {
-            if (i_token as usize) < yyFallback.len() {
-                return yyFallback[i_token as usize];
-            }
+            assert!((i_token as usize) < yyFallback.len());
+            return yyFallback[i_token as usize];
         }
         0
     }
