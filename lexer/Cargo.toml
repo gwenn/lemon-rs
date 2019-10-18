@@ -24,4 +24,4 @@ parser = { path = "../parser", package = "sqlite-parser", version = "0.0.1" }
 fallible-iterator = "0.2"
 
 [dev-dependencies]
-env_logger = "0.6"
+env_logger = "0.7"

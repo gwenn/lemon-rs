@@ -1,5 +1,4 @@
 //! SQLite dialect
-#![feature(proc_macro_hygiene)]
 
 use phf::phf_map;
 use std::str;

@@ -786,10 +786,7 @@ impl Display for Expr {
                 }
                 Ok(())
             }
-            Expr::FunctionCallStar {
-                name,
-                filter_over,
-            } => {
+            Expr::FunctionCallStar { name, filter_over } => {
                 name.fmt(f)?;
                 f.write_str("(*)")?;
                 if let Some(filter_over) = filter_over {
@@ -2239,7 +2236,7 @@ impl Display for Indexed {
 pub struct SortedColumn {
     pub expr: Expr,
     pub order: Option<SortOrder>,
-    pub nulls: Option<NullsOrder>
+    pub nulls: Option<NullsOrder>,
 }
 
 impl Display for SortedColumn {
