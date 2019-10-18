@@ -9,6 +9,7 @@ Currently, there are one `unsafe` block in the `scan` method used to bypass the 
 I don't know if it can be replaced with safe code.
 But I am quite confident that it is safe.
 
-Two concrete scanners are implemented:
- - CSV lexer based on SQLite [extension](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/shell.c) (use `rust-csv` instead),
+One concrete scanner is implemented:
  - SQL lexer based on SQLite [tokenizer](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/tokenize.c).
+
+[Bytes](https://doc.rust-lang.org/std/io/struct.Bytes.html) cannot be used because we don't want to copy token bytes twice.
