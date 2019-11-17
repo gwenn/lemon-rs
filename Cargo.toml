@@ -31,6 +31,7 @@ memchr = "2.0"
 fallible-iterator = "0.2"
 smallvec = "1.0"
 pretty = "0.5"
+buf_redux = { version = "0.8", features = ["default"] }
 
 [dev-dependencies]
 env_logger = "0.7"

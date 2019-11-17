@@ -8,6 +8,10 @@ use std::fmt;
 use std::io::{self, BufRead, Read};
 use std::result::Result;
 
+use buf_redux::Buffer;
+
+const MAX_CAPACITY: usize = 1024 * 1024 * 1024;
+
 pub trait ScanError: Error + From<io::Error> + Sized {
     fn position(&mut self, line: u64, column: usize);
 }
@@ -53,11 +57,7 @@ pub struct Scanner<R: Read, S: Splitter> {
     /// The function to tokenize the input.
     splitter: S,
     /// Buffer used as argument to split.
-    buf: Vec<u8>,
-    /// First non-processed byte in buf.
-    pos: usize,
-    /// End of data in buf.
-    cap: usize,
+    buf: Buffer,
     eof: bool,
     /// current line number
     line: u64,
@@ -71,17 +71,11 @@ impl<R: Read, S: Splitter> Scanner<R, S> {
     }
 
     fn with_capacity(inner: R, splitter: S, capacity: usize) -> Scanner<R, S> {
-        let mut buf = Vec::with_capacity(capacity);
-        unsafe {
-            buf.set_len(capacity);
-            inner.initializer().initialize(&mut buf);
-        }
+        let buf = Buffer::with_capacity_ringbuf(capacity);
         Scanner {
             inner,
             splitter,
             buf,
-            pos: 0,
-            cap: 0,
             eof: false,
             line: 1,
             column: 1,
@@ -105,14 +99,10 @@ impl<R: Read, S: Splitter> Scanner<R, S> {
     /// Reset the scanner such that it behaves as if it had never been used.
     pub fn reset(&mut self, inner: R) {
         self.inner = inner;
-        self.pos = 0;
-        self.cap = 0;
+        self.buf.clear();
         self.eof = false;
         self.line = 1;
         self.column = 1;
-        unsafe {
-            self.inner.initializer().initialize(&mut self.buf);
-        }
     }
 }
 
@@ -129,9 +119,9 @@ impl<R: Read, S: Splitter> Scanner<R, S> {
         // Loop until we have a token.
         loop {
             // See if we can get a token with what we already have.
-            if self.cap > self.pos || self.eof {
+            if self.buf.len() > 0 || self.eof {
                 // TODO: I don't know how to make the borrow checker happy!
-                let data = unsafe { mem::transmute(&mut self.buf[self.pos..self.cap]) };
+                let data = unsafe { mem::transmute(self.buf.buf_mut()) };
                 match self.splitter.split(data, self.eof) {
                     Err(mut e) => {
                         e.position(self.line, self.column);
@@ -155,8 +145,6 @@ impl<R: Read, S: Splitter> Scanner<R, S> {
             // If we've already hit EOF, we are done.
             if self.eof {
                 // Shut it down.
-                self.pos = 0;
-                self.cap = 0;
                 return Ok(None);
             }
             // Must read more data.
@@ -167,61 +155,31 @@ impl<R: Read, S: Splitter> Scanner<R, S> {
 
 impl<R: Read, S: Splitter> BufRead for Scanner<R, S> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        debug!(target: "scanner", "fill_buf: pos: {}, cap: {}, buf: {}", self.pos, self.cap, self.buf.len());
-        // First, shift data to beginning of buffer if there's lots of empty space
-        // or space is needed.
-        if self.pos > 0 && (self.cap == self.buf.len() || self.pos > self.buf.len() / 2) {
-            unsafe {
-                use std::ptr;
-                ptr::copy(
-                    self.buf.as_mut_ptr().add(self.pos),
-                    self.buf.as_mut_ptr(),
-                    self.cap - self.pos,
-                );
-            }
-            self.cap -= self.pos;
-            self.pos = 0
-        }
+        debug!(target: "scanner", "fill_buf: {}", self.buf.capacity());
         // Is the buffer full? If so, resize.
-        if self.cap == self.buf.len() {
-            // TODO maxTokenSize
-            let additional = self.buf.capacity();
-            self.buf.reserve(additional);
-            let cap = self.buf.capacity();
-            unsafe {
-                self.buf.set_len(cap);
-                self.inner
-                    .initializer()
-                    .initialize(&mut self.buf[self.cap..])
+        if self.buf.free_space() == 0 {
+            let mut capacity = self.buf.capacity();
+            if capacity * 2 < MAX_CAPACITY {
+                capacity *= 2;
+                self.buf.make_room();
+                self.buf.reserve(capacity);
+            } else {
+                return Err(io::Error::from(io::ErrorKind::UnexpectedEof)); // FIXME
             }
-            self.cap -= self.pos;
-            self.pos = 0;
+        } else if self.buf.usable_space() == 0 {
+            self.buf.make_room();
         }
         // Finally we can read some input.
-        loop {
-            match self.inner.read(&mut self.buf[self.cap..]) {
-                Ok(0) => {
-                    self.eof = true;
-                    break;
-                }
-                Ok(n) => {
-                    self.cap += n;
-                    break;
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
-        Ok(&self.buf[self.pos..self.cap])
+        let sz = self.buf.read_from(&mut self.inner)?;
+        self.eof = sz == 0;
+        Ok(&self.buf.buf())
     }
 
     /// Consume `amt` bytes of the buffer.
     fn consume(&mut self, amt: usize) {
         debug!(target: "scanner", "comsume({})", amt);
-        debug_assert!(self.pos + amt <= self.cap);
-        for byte in &self.buf[self.pos..self.pos + amt] {
+        debug_assert!(amt <= self.buf.len());
+        for byte in &self.buf.buf()[..amt] {
             if *byte == b'\n' {
                 self.line += 1;
                 self.column = 1;
@@ -229,7 +187,7 @@ impl<R: Read, S: Splitter> BufRead for Scanner<R, S> {
                 self.column += 1;
             }
         }
-        self.pos += amt;
+        self.buf.consume(amt);
     }
 }
 
@@ -248,8 +206,6 @@ impl<R: Read, S: Splitter> fmt::Debug for Scanner<R, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Scanner")
             .field("buf", &self.buf)
-            .field("pos", &self.pos)
-            .field("cap", &self.cap)
             .field("eof", &self.eof)
             .field("line", &self.line)
             .field("column", &self.column)
