@@ -2,7 +2,7 @@ use std::error;
 use std::fmt;
 use std::io;
 
-use crate::scan::ScanError;
+use crate::lexer::scan::ScanError;
 
 #[derive(Debug)]
 pub enum Error {

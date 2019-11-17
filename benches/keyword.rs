@@ -1,8 +1,8 @@
 #![feature(test)]
 extern crate test;
 
-use sqlite_dialect::MAX_KEYWORD_LEN;
-use sqlite_dialect::keyword_token;
+use sqlite_parser::dialect::keyword_token;
+use sqlite_parser::dialect::MAX_KEYWORD_LEN;
 use test::Bencher;
 
 static VALUES: [&[u8]; 136] = [

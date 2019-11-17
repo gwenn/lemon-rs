@@ -1,6 +1,40 @@
-[workspace]
-members=[
-    "dialect",
-    "lexer",
-    "parser"
-]
+[package]
+name = "sqlite-parser"
+version = "0.1.0"
+edition = "2018"
+authors = ["gwenn"]
+description = "SQL parser (as understood by SQLite)"
+#documentation = "http://docs.rs/lemon-rs"
+repository = "https://github.com/gwenn/lemon-rs"
+readme = "README.md"
+categories = ["parser-implementations"]
+keywords = ["sql", "parser", "scanner", "tokenizer"]
+license = "Apache-2.0/MIT"
+#build = "build.rs" # Lemon preprocessing
+
+[badges]
+#travis-ci = { repository = "gwenn/lemon-rs" }
+maintenance = { status = "experimental" }
+
+[features]
+# FIXME: specific to one parser, not global
+YYTRACKMAXSTACKDEPTH = []
+YYNOERRORRECOVERY = []
+YYSTACKDYNAMIC = []
+NDEBUG = []
+default = ["YYNOERRORRECOVERY"]
+
+[dependencies]
+phf = { version = "0.8", features = ["macros"] }
+log = "0.4"
+memchr = "2.0"
+fallible-iterator = "0.2"
+smallvec = "1.0"
+pretty = "0.5"
+
+[dev-dependencies]
+env_logger = "0.7"
+
+#[build-dependencies]
+#gcc = "0.3"
+#lemon = "0.0.1"

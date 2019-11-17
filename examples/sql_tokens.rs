@@ -1,8 +1,6 @@
-use sqlite_lexer as scan;
+use sqlite_parser::lexer::sql::{TokenType, Tokenizer};
+use sqlite_parser::lexer::Scanner;
 
-use crate::scan::sql::TokenType;
-use crate::scan::sql::Tokenizer;
-use crate::scan::Scanner;
 use std::env;
 use std::fs::File;
 use std::i64;

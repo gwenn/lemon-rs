@@ -4,7 +4,7 @@ use std::env;
 use std::fs::File;
 use std::panic;
 
-use sqlite_lexer::sql::Parser;
+use sqlite_parser::lexer::sql::Parser;
 
 /// Parse specified files and print all commands.
 fn main() {

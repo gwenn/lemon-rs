@@ -4,7 +4,7 @@ use phf::phf_map;
 use std::str;
 
 mod token;
-pub use crate::token::TokenType;
+pub use token::TokenType;
 
 /// Token value (lexeme)
 pub type Token = Option<String>;

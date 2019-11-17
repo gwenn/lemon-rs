@@ -52,9 +52,9 @@
 // code file that implements the parser.
 //
 %include {
-use crate::ast::*;
-use crate::Context;
-use dialect::{from_token, TokenType};
+use crate::parser::ast::*;
+use crate::parser::Context;
+use crate::dialect::{from_token, TokenType};
 use log::{debug, error, log_enabled};
 
 } // end %include

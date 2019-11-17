@@ -1,7 +1,7 @@
 //! Abstract Syntax Tree
 
 use crate::dialect::{from_token, is_identifier, Token, TokenType};
-use crate::parse::YYCODETYPE;
+use crate::parser::parse::YYCODETYPE;
 use pretty::{DocAllocator, DocBuilder};
 use std::fmt::{Display, Formatter, Result, Write};
 

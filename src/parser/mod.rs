@@ -1,8 +1,6 @@
 //! SQLite parser
 use log::error;
 
-use dialect;
-
 pub mod ast;
 pub mod parse;
 

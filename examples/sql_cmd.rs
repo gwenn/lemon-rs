@@ -1,6 +1,6 @@
 use env_logger;
 use fallible_iterator::FallibleIterator;
-use sqlite_lexer::sql::Parser;
+use sqlite_parser::lexer::sql::Parser;
 
 /// Parse a string.
 // RUST_LOG=sqlite3Parser=debug

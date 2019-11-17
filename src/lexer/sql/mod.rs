@@ -9,16 +9,16 @@ pub use crate::dialect::TokenType;
 use crate::dialect::{
     from_bytes, is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN,
 };
-use parser::ast::Cmd;
-use parser::parse::{yyParser, YYCODETYPE};
-use parser::Context;
+use crate::parser::ast::Cmd;
+use crate::parser::parse::{yyParser, YYCODETYPE};
+use crate::parser::Context;
 
 mod error;
 
-use crate::scan::ScanError;
-pub use crate::scan::Splitter;
-pub use crate::sql::error::Error;
-use crate::Scanner;
+use crate::lexer::scan::ScanError;
+pub use crate::lexer::scan::Splitter;
+use crate::lexer::Scanner;
+pub use error::Error;
 
 // TODO Extract scanning stuff and move this into the parser crate
 // to make possible to use the tokenizer without depending on the parser...
