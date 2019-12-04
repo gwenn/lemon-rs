@@ -30,7 +30,7 @@ log = "0.4"
 memchr = "2.0"
 fallible-iterator = "0.2"
 smallvec = "1.0"
-pretty = "0.6"
+pretty = "0.7"
 buf_redux = { version = "0.8", features = ["default"] }
 
 [dev-dependencies]
