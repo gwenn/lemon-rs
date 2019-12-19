@@ -192,24 +192,22 @@ pub struct yyParser {
 }
 
 use std::ops::Neg;
+use std::cmp::Ordering;
 impl yyParser {
     fn shift(&self, shift: i8) -> usize {
         assert!(shift <= 1);
-        if shift == 0 {
-            self.yyidx
-        } else if shift > 0 {
-            self.yyidx + shift as usize
-        } else {
-            self.yyidx.checked_sub(shift.neg() as usize).unwrap()
+        match shift.cmp(&0) {
+            Ordering::Equal => self.yyidx,
+            Ordering::Greater => self.yyidx + shift as usize,
+            Ordering::Less => self.yyidx.checked_sub(shift.neg() as usize).unwrap(),
         }
     }
 
     fn yyidx_shift(&mut self, shift: i8) {
-        if shift == 0 {
-        } else if shift > 0 {
-            self.yyidx += shift as usize;
-        } else {
-            self.yyidx = self.yyidx.checked_sub(shift.neg() as usize).unwrap()
+        match shift.cmp(&0) {
+            Ordering::Greater => self.yyidx += shift as usize,
+            Ordering::Less => self.yyidx = self.yyidx.checked_sub(shift.neg() as usize).unwrap(),
+            Ordering::Equal => {}
         }
     }
 
@@ -925,7 +923,7 @@ impl yyParser {
         }
         #[cfg(not(feature = "NDEBUG"))] {
             if log_enabled!(target: TARGET, Debug) {
-                let msg = self.yystack[1..self.yyidx + 1].iter()
+                let msg = self.yystack[1..=self.yyidx].iter()
                     .map(|entry| yyTokenName[entry.major as usize])
                     .collect::<Vec<&str>>().join(" ");
                 debug!(target: TARGET, "Return. Stack=[{}]", msg);

@@ -119,7 +119,7 @@ impl<R: Read, S: Splitter> Scanner<R, S> {
         // Loop until we have a token.
         loop {
             // See if we can get a token with what we already have.
-            if self.buf.len() > 0 || self.eof {
+            if !self.buf.is_empty() || self.eof {
                 // TODO: I don't know how to make the borrow checker happy!
                 let data = unsafe { mem::transmute(self.buf.buf_mut()) };
                 match self.splitter.split(data, self.eof) {
