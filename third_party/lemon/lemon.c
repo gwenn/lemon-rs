@@ -4653,6 +4653,7 @@ void ReportHeader(struct lemon *lemp)
   else                    prefix = "";
   out = file_open(lemp,".h","wb");
   if( out ){
+    fprintf(out,"#[non_exhaustive]\n");
     fprintf(out,"#[allow(non_camel_case_types)]\n");
     fprintf(out,"#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]\n");
     fprintf(out,"#[repr(%s)]\n",

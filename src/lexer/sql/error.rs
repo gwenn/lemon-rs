@@ -4,6 +4,7 @@ use std::io;
 
 use crate::lexer::scan::ScanError;
 
+#[non_exhaustive]
 #[derive(Debug)]
 pub enum Error {
     /// I/O Error
