@@ -9,6 +9,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    - uses: actions-rs/toolchain@v1
+      with:
+        default: true
+        profile: minimal
+        toolchain: stable
+        override: true
     - name: Build Lemon
       run: make  
     - name: Build
