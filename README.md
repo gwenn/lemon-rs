@@ -1,4 +1,4 @@
-[![Build Status](https://github.com/gwenn/lemon-rs/workflows/Rust/badge.svg)](https://github.com/gwenn/lemon-rs/actions)
+[![Build Status](https://github.com/gwenn/lemon-rs/workflows/CI/badge.svg)](https://github.com/gwenn/lemon-rs/actions)
 [![dependency status](https://deps.rs/repo/github/gwenn/lemon-rs/status.svg)](https://deps.rs/repo/github/gwenn/lemon-rs)
 
 [LEMON parser generator](https://www.sqlite.org/src/doc/trunk/doc/lemon.html) modified to generate Rust code.
