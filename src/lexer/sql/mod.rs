@@ -144,8 +144,8 @@ impl<R: Read> Parser<R> {
 }
 
 impl<R: Read> FallibleIterator for Parser<R> {
-    type Error = Error;
     type Item = Cmd;
+    type Error = Error;
 
     fn next(&mut self) -> Result<Option<Cmd>, Error> {
         //print!("line: {}, column: {}: ", self.scanner.line(), self.scanner.column());
@@ -339,10 +339,10 @@ impl Splitter for Tokenizer {
             }
             b'!' => {
                 if let Some(b) = data.get(1) {
-                    if *b == b'=' {
-                        return Ok((Some((&data[..2], TokenType::TK_NE)), 2));
+                    return if *b == b'=' {
+                        Ok((Some((&data[..2], TokenType::TK_NE)), 2))
                     } else {
-                        return Err(Error::ExpectedEqualsSign(None));
+                        Err(Error::ExpectedEqualsSign(None))
                     }
                 } else if eof {
                     return Err(Error::ExpectedEqualsSign(None));
@@ -420,14 +420,14 @@ impl Splitter for Tokenizer {
                 };
             }
             b if is_identifier_start(b) => {
-                if b == b'x' || b == b'X' {
+                return if b == b'x' || b == b'X' {
                     if let Some(&b'\'') = data.get(1) {
-                        return blob_literal(data, eof);
+                        blob_literal(data, eof)
                     } else {
-                        return self.identifierish(data, eof);
+                        self.identifierish(data, eof)
                     }
                 } else {
-                    return self.identifierish(data, eof);
+                    self.identifierish(data, eof)
                 }
             }
             _ => return Err(Error::UnrecognizedToken(None)),
