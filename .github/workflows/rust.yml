@@ -18,6 +18,6 @@ jobs:
     - name: Build Lemon
       run: make  
     - name: Build
-      run: cargo build --verbose
+      run: cargo build
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test
