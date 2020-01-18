@@ -666,3 +666,29 @@ impl Tokenizer {
         Ok((None, 0))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Tokenizer;
+    use crate::dialect::TokenType;
+    use crate::lexer::Scanner;
+
+    #[test]
+    fn faillible_iterator() {
+        let tokenizer = Tokenizer::new();
+        let input = "PRAGMA parser_trace=ON;".as_bytes();
+        let mut s = Scanner::new(input, tokenizer);
+        let (token1, token_type1) = s.scan().unwrap().unwrap();
+        assert!(b"PRAGMA".eq_ignore_ascii_case(token1));
+        assert_eq!(TokenType::TK_PRAGMA, token_type1);
+        let (token2, token_type2) = s.scan().unwrap().unwrap();
+        assert_eq!("parser_trace".as_bytes(), token2);
+        assert_eq!(TokenType::TK_ID, token_type2);
+    }
+
+    #[test]
+    fn streaming_iterator() {
+        let t = trybuild::TestCases::new();
+        t.compile_fail("tests/lexer/streaming_iterator.rs");
+    }
+}
