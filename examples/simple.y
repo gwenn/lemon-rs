@@ -35,7 +35,7 @@ impl Expr {
 }
 
 fn main() {
-    init_logger().is_ok();
+    init_logger().unwrap();
 
     let r = Context { expr: None };
     let mut p = yyParser::new(r);

@@ -212,9 +212,9 @@ impl yyParser {
     }
 
     fn yy_move(&mut self, shift: i8) -> yyStackEntry {
-         use std::mem::replace;
+         use std::mem::take;
         let idx = self.shift(shift);
-        replace(&mut self.yystack[idx], yyStackEntry::default())
+        take(&mut self.yystack[idx])
     }
 
     fn push(&mut self, entry: yyStackEntry) {
@@ -337,8 +337,8 @@ impl yyParser {
 */
 impl yyParser {
     fn yy_pop_parser_stack(&mut self) {
-        use std::mem::replace;
-        let yytos = replace(&mut self.yystack[self.yyidx], yyStackEntry::default());
+        use std::mem::take;
+        let yytos = take(&mut self.yystack[self.yyidx]);
         self.yyidx = self.yyidx.checked_sub(1).unwrap();
         //assert_eq!(self.yyidx+1, self.yystack.len());
         #[cfg(not(feature = "NDEBUG"))] {

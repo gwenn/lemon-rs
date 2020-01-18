@@ -343,7 +343,7 @@ impl Splitter for Tokenizer {
                         Ok((Some((&data[..2], TokenType::TK_NE)), 2))
                     } else {
                         Err(Error::ExpectedEqualsSign(None))
-                    }
+                    };
                 } else if eof {
                     return Err(Error::ExpectedEqualsSign(None));
                 } // else ask more data
