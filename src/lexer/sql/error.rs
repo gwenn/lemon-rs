@@ -50,21 +50,6 @@ impl fmt::Display for Error {
 }
 
 impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Io(ref err) => err.description(),
-            Error::UnrecognizedToken(_) => "Unrecognized token",
-            Error::UnterminatedLiteral(_) => "Unterminated literal",
-            Error::UnterminatedBracket(_) => "Unterminated bracket",
-            Error::UnterminatedBlockComment(_) => "Unterminated block comment",
-            Error::BadVariableName(_) => "Bad variable name",
-            Error::BadNumber(_) => "Bad number",
-            Error::ExpectedEqualsSign(_) => "Expected = sign",
-            Error::MalformedBlobLiteral(_) => "Malformed blob literal",
-            Error::MalformedHexInteger(_) => "Malformed hex integer",
-            Error::SyntaxError(_, _) => "Syntax error",
-        }
-    }
 }
 
 impl From<io::Error> for Error {
