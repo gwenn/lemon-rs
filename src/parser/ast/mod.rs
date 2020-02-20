@@ -1882,6 +1882,10 @@ pub enum ColumnConstraint {
         clause: ForeignKeyClause,
         deref_clause: Option<DeferSubclause>,
     },
+    Generated {
+        expr: Expr,
+        typ: Option<Id>,
+    },
 }
 
 impl Display for ColumnConstraint {
@@ -1951,6 +1955,16 @@ impl Display for ColumnConstraint {
                 if let Some(deref_clause) = deref_clause {
                     f.write_char(' ')?;
                     deref_clause.fmt(f)?;
+                }
+                Ok(())
+            }
+            ColumnConstraint::Generated { expr, typ } => {
+                f.write_char('(')?;
+                expr.fmt(f)?;
+                f.write_char(')')?;
+                if let Some(typ) = typ {
+                    f.write_char(' ')?;
+                    typ.fmt(f)?;
                 }
                 Ok(())
             }

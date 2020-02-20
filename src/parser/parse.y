@@ -66,7 +66,7 @@ cmdlist ::= ecmd.
 ecmd ::= SEMI.
 ecmd ::= cmdx SEMI.
 %ifndef SQLITE_OMIT_EXPLAIN
-ecmd ::= explain cmdx.
+ecmd ::= explain cmdx SEMI.       {NEVER-REDUCE}
 explain ::= EXPLAIN.              { self.ctx.explain = Some(ExplainKind::Explain); }
 explain ::= EXPLAIN QUERY PLAN.   { self.ctx.explain = Some(ExplainKind::QueryPlan); }
 %endif  SQLITE_OMIT_EXPLAIN
@@ -177,6 +177,9 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
   CURRENT FOLLOWING PARTITION PRECEDING RANGE UNBOUNDED
   EXCLUDE GROUPS OTHERS TIES
 %endif SQLITE_OMIT_WINDOWFUNC
+%ifndef SQLITE_OMIT_GENERATED_COLUMNS
+  GENERATED ALWAYS
+%endif
   REINDEX RENAME CTIME_KW IF
   .
 %wildcard ANY.
@@ -333,6 +336,23 @@ ccons(A) ::= COLLATE ids(C).        {
   let name = self.ctx.constraint_name();
   let constraint = ColumnConstraint::Collate{ collation_name: Name::from_token(@C, C) };
   A = NamedColumnConstraint{ name, constraint };
+}
+ccons(A) ::= GENERATED ALWAYS AS generated(X). {
+  let name = self.ctx.constraint_name();
+  let constraint = X;
+  A = NamedColumnConstraint{ name, constraint };
+}
+ccons(A) ::= AS generated(X). {
+  let name = self.ctx.constraint_name();
+  let constraint = X;
+  A = NamedColumnConstraint{ name, constraint };
+}
+%type generated {ColumnConstraint}
+generated(X) ::= LP expr(E) RP. {
+  X = ColumnConstraint::Generated{ expr: E, typ: None };
+}
+generated(X) ::= LP expr(E) RP ID(TYPE). {
+  X = ColumnConstraint::Generated{ expr: E, typ: Some(Id::from_token(@TYPE, TYPE)) };
 }
 
 // The optional AUTOINCREMENT keyword

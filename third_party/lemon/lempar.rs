@@ -633,20 +633,23 @@ impl yyParser {
 #[cfg(not(feature = "NDEBUG"))] {
         if (yyruleno as usize) < yyRuleName.len() {
             let yysize = yyRuleInfoNRhs[yyruleno as usize];
+            let action = if yyruleno < YYNRULE_WITH_ACTION { "" } else { " without external action" };
             if yysize != 0 {
                 debug!(
                 target: TARGET,
-                "Reduce {} [{}], go to state {}.",
+                "Reduce {} [{}]{}, pop back to state {}.",
                 yyruleno,
                 yyRuleName[yyruleno as usize],
+                action,
                 self[yysize].stateno
                 );
             } else {
                 debug!(
                 target: TARGET,
-                "Reduce {} [{}].",
+                "Reduce {} [{}]{}.",
                 yyruleno,
-                yyRuleName[yyruleno as usize]
+                yyRuleName[yyruleno as usize],
+                action
                 );
             }
         }
