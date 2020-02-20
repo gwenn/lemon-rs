@@ -4698,7 +4698,7 @@ void ReportTable(
     fprintf(out,"      /* (%d) ", rp->iRule);
     writeRuleText(out, rp);
     if( rp->neverReduce ){
-      fprintf(out, " (NEVER REDUCES) */ debug_assert_ne!(yyruleno, %d);\n",
+      fprintf(out, " (NEVER REDUCES) * debug_assert_ne!(yyruleno, %d); FIXME */\n",
               rp->iRule); lineno++;
     }else if( rp->doesReduce ){
       fprintf(out, " * debug_assert_eq!(yyruleno, %d); */\n", rp->iRule); lineno++;
