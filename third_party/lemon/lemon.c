@@ -417,6 +417,7 @@ struct lemon {
   int nlookaheadtab;       /* Number of entries in yy_lookahead[] */
   int tablesize;           /* Total table size of all tables in bytes */
   int basisflag;           /* Print only basis configurations */
+  int printPreprocessed;   /* Show preprocessor output on stdout */
   int has_fallback;        /* True if any %fallback is seen in the grammar */
   int nolinenosflag;       /* True if #line statements should not be printed */
   char *argv0;             /* Name of the program */
@@ -1630,12 +1631,14 @@ int main(int argc, char **argv)
   static int nolinenosflag = 0;
   static int noResort = 0;
   static int sqlFlag = 0;
+  static int printPP = 0;
 
   static struct s_options options[] = {
     {OPT_FLAG, "b", (char*)&basisflag, "Print only the basis in report."},
     {OPT_FLAG, "c", (char*)&compress, "Don't compress the action table."},
     {OPT_FSTR, "d", (char*)&handle_d_option, "Output directory.  Default '.'"},
     {OPT_FSTR, "D", (char*)handle_D_option, "Define an %ifdef macro."},
+    {OPT_FLAG, "E", (char*)&printPP, "Print input file after preprocessing."},
     {OPT_FSTR, "f", 0, "Ignored.  (Placeholder for -f compiler options.)"},
     {OPT_FLAG, "g", (char*)&rpflag, "Print grammar without actions."},
     {OPT_FSTR, "I", 0, "Ignored.  (Placeholder for '-I' compiler options.)"},
@@ -1680,11 +1683,12 @@ int main(int argc, char **argv)
   lem.filename = OptArg(0);
   lem.basisflag = basisflag;
   lem.nolinenosflag = nolinenosflag;
+  lem.printPreprocessed = printPP;
   Symbol_new("$");
 
   /* Parse the input file */
   Parse(&lem);
-  if( lem.errorcnt ) exit(lem.errorcnt);
+  if( lem.printPreprocessed || lem.errorcnt ) exit(lem.errorcnt);
   if( lem.nrule==0 ){
     fprintf(stderr,"Empty grammar.\n");
     exit(1);
@@ -2415,7 +2419,7 @@ static void parseonetoken(struct pstate *psp)
           psp->alias[psp->nrhs] = 0;
           psp->nrhs++;
         }
-      }else if( (x[0]=='|' || x[0]=='/') && psp->nrhs>0 ){
+      }else if( (x[0]=='|' || x[0]=='/') && psp->nrhs>0 && ISUPPER(x[1]) ){
         struct symbol *msp = psp->rhs[psp->nrhs-1];
         if( msp->type!=MULTITERMINAL ){
           struct symbol *origsp = msp;
@@ -2607,8 +2611,10 @@ static void parseonetoken(struct pstate *psp)
         }
         nOld = lemonStrlen(zOld);
         n = nOld + nNew + 20;
-        addLineMacro = !psp->gp->nolinenosflag && psp->insertLineMacro &&
-                        (psp->decllinenoslot==0 || psp->decllinenoslot[0]!=0);
+        addLineMacro = !psp->gp->nolinenosflag
+                       && psp->insertLineMacro
+                       && psp->tokenlineno>1
+                       && (psp->decllinenoslot==0 || psp->decllinenoslot[0]!=0);
         if( addLineMacro ){
           for(z=psp->filename, nBack=0; *z; z++){
             if( *z=='\\' ) nBack++;
@@ -2752,13 +2758,108 @@ static void parseonetoken(struct pstate *psp)
   }
 }
 
+/* The text in the input is part of the argument to an %ifdef or %ifndef.
+** Evaluate the text as a boolean expression.  Return true or false.
+*/
+static int eval_preprocessor_boolean(char *z, int lineno){
+  int neg = 0;
+  int res = 0;
+  int okTerm = 1;
+  int i;
+  for(i=0; z[i]!=0; i++){
+    if( ISSPACE(z[i]) ) continue;
+    if( z[i]=='!' ){
+      if( !okTerm ) goto pp_syntax_error;
+      neg = !neg;
+      continue;
+    }
+    if( z[i]=='|' && z[i+1]=='|' ){
+      if( okTerm ) goto pp_syntax_error;
+      if( res ) return 1;
+      i++;
+      okTerm = 1;
+      continue;
+    }
+    if( z[i]=='&' && z[i+1]=='&' ){
+      if( okTerm ) goto pp_syntax_error;
+      if( !res ) return 0;
+      i++;
+      okTerm = 1;
+      continue;
+    }
+    if( z[i]=='(' ){
+      int k;
+      int n = 1;
+      if( !okTerm ) goto pp_syntax_error;
+      for(k=i+1; z[k]; k++){
+        if( z[k]==')' ){
+          n--;
+          if( n==0 ){
+            z[k] = 0;
+            res = eval_preprocessor_boolean(&z[i+1], -1);
+            z[k] = ')';
+            if( res<0 ){
+              i = i-res;
+              goto pp_syntax_error;
+            }
+            i = k;
+            break;
+          }
+        }else if( z[k]=='(' ){
+          n++;
+        }else if( z[k]==0 ){
+          i = k;
+          goto pp_syntax_error;
+        }
+      }
+      if( neg ){
+        res = !res;
+        neg = 0;
+      }
+      okTerm = 0;
+      continue;
+    }
+    if( ISALPHA(z[i]) ){
+      int j, k, n;
+      if( !okTerm ) goto pp_syntax_error;
+      for(k=i+1; ISALNUM(z[k]) || z[k]=='_'; k++){}
+      n = k - i;
+      res = 0;
+      for(j=0; j<nDefine; j++){
+        if( strncmp(azDefine[j],&z[i],n)==0 && azDefine[j][n]==0 ){
+          res = 1;
+          break;
+        }
+      }
+      i = k-1;
+      if( neg ){
+        res = !res;
+        neg = 0;
+      }
+      okTerm = 0;
+      continue;
+    }
+    goto pp_syntax_error;
+  }
+  return res;
+
+pp_syntax_error:
+  if( lineno>0 ){
+    fprintf(stderr, "%%if syntax error on line %d.\n", lineno);
+    fprintf(stderr, "  %.*s <-- syntax error here\n", i+1, z);
+    exit(1);
+  }else{
+    return -(i+1);
+  }
+}
+
 /* Run the preprocessor over the input file text.  The global variables
 ** azDefine[0] through azDefine[nDefine-1] contains the names of all defined
 ** macros.  This routine looks for "%ifdef" and "%ifndef" and "%endif" and
 ** comments them out.  Text in between is also commented out as appropriate.
 */
 static void preprocess_input(char *z){
-  int i, j, k, n;
+  int i, j, k;
   int exclude = 0;
   int start = 0;
   int lineno = 1;
@@ -2774,21 +2875,33 @@ static void preprocess_input(char *z){
         }
       }
       for(j=i; z[j] && z[j]!='\n'; j++) z[j] = ' ';
-    }else if( (strncmp(&z[i],"%ifdef",6)==0 && ISSPACE(z[i+6]))
-          || (strncmp(&z[i],"%ifndef",7)==0 && ISSPACE(z[i+7])) ){
+    }else if( strncmp(&z[i],"%else",5)==0 && ISSPACE(z[i+5]) ){
+      if( exclude==1){
+        exclude = 0;
+        for(j=start; j<i; j++) if( z[j]!='\n' ) z[j] = ' ';
+      }else if( exclude==0 ){
+        exclude = 1;
+        start = i;
+        start_lineno = lineno;
+      }
+      for(j=i; z[j] && z[j]!='\n'; j++) z[j] = ' ';
+    }else if( strncmp(&z[i],"%ifdef ",7)==0
+          || strncmp(&z[i],"%if ",4)==0
+          || strncmp(&z[i],"%ifndef ",8)==0 ){
       if( exclude ){
         exclude++;
       }else{
-        for(j=i+7; ISSPACE(z[j]); j++){}
-        for(n=0; z[j+n] && !ISSPACE(z[j+n]); n++){}
-        exclude = 1;
-        for(k=0; k<nDefine; k++){
-          if( strncmp(azDefine[k],&z[j],n)==0 && lemonStrlen(azDefine[k])==n ){
-            exclude = 0;
-            break;
-          }
-        }
-        if( z[i+3]=='n' ) exclude = !exclude;
+        int isNot;
+        int iBool;
+        for(j=i; z[j] && !ISSPACE(z[j]); j++){}
+        iBool = j;
+        isNot = (j==i+7);
+        while( z[j] && z[j]!='\n' ){ j++; }
+        k = z[j];
+        z[j] = 0;
+        exclude = eval_preprocessor_boolean(&z[iBool], lineno);
+        z[j] = k;
+        if( !isNot ) exclude = !exclude;
         if( exclude ){
           start = i;
           start_lineno = lineno;
@@ -2856,6 +2969,10 @@ void Parse(struct lemon *gp)
 
   /* Make an initial pass through the file to handle %ifdef and %ifndef */
   preprocess_input(filebuf);
+  if( gp->printPreprocessed ){
+    printf("%s\n", filebuf);
+    return;
+  }
 
   /* Now scan the text of the input file */
   lineno = 1;
@@ -3472,6 +3589,16 @@ PRIVATE void tplt_xfer(char *name, FILE *in, FILE *out, int *lineno)
       }
     }
     fprintf(out,"%s",&line[iStart]);
+  }
+}
+
+/* Skip forward past the header of the template file to the first "%%"
+*/
+PRIVATE void tplt_skip_header(FILE *in, int *lineno)
+{
+  char line[LINESIZE];
+  while( fgets(line,LINESIZE,in) && (line[0]!='%' || line[1]!='%') ){
+    (*lineno)++;
   }
 }
 
@@ -4157,6 +4284,7 @@ void ReportTable(
   int mnTknOfst, mxTknOfst;
   int mnNtOfst, mxNtOfst;
   struct axset *ax;
+  char *prefix;
 
   lemp->minShiftReduce = lemp->nstate;
   lemp->errAction = lemp->minShiftReduce + lemp->nrule;
@@ -4245,17 +4373,35 @@ void ReportTable(
     fprintf(sql, "COMMIT;\n");
   }
   lineno = 1;
-  tplt_xfer(lemp->name,in,out,&lineno);
+
+  fprintf(out, 
+     "/* This file is automatically generated by Lemon from input grammar\n"
+     "** source file \"%s\". */\n", lemp->filename); lineno += 2;
+  
+  /* The first %include directive begins with a C-language comment,
+  ** then skip over the header comment of the template file
+  */
+  if( lemp->include==0 ) lemp->include = "";
+  for(i=0; ISSPACE(lemp->include[i]); i++){
+    if( lemp->include[i]=='\n' ){
+      lemp->include += i+1;
+      i = -1;
+    }
+  }
+  if( lemp->include[0]=='/' ){
+    tplt_skip_header(in,&lineno);
+  }else{
+    tplt_xfer(lemp->name,in,out,&lineno);
+  }
 
   /* Generate the include code, if any */
   tplt_print(out,lemp,lemp->include,&lineno);
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate #defines for all tokens */
+  if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
+  else                    prefix = "";
   if( mhflag ){
-    const char *prefix;
-    if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
-    else                    prefix = "";
     fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
     fprintf(out,"#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]\n"); lineno++;
     fprintf(out,"#[repr(%s)]\n",

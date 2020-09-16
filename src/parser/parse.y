@@ -1,5 +1,6 @@
+%include {
 /*
-** 2001 September 15
+** 2001-09-15
 **
 ** The author disclaims copyright to this source code.  In place of
 ** a legal notice, here is a blessing:
@@ -9,11 +10,16 @@
 **    May you share freely, never taking more than you give.
 **
 *************************************************************************
-** This file contains SQLite's grammar for SQL.  Process this file
-** using the lemon parser generator to generate C code that runs
-** the parser.  Lemon will also generate a header file containing
-** numeric codes for all of the tokens.
+** This file contains SQLite's SQL parser.
+**
+** The canonical source code to this file ("parse.y") is a Lemon grammar 
+** file that specifies the input grammar and actions to take while parsing.
+** That input file is processed by Lemon to generate a C-language 
+** implementation of a parser for the given grammer.  You might be reading
+** this comment as part of the translated C-code.  Edits should be made
+** to the original parse.y sources.
 */
+}
 
 // All token codes are small integers with #defines that begin with "TK_"
 %token_prefix TK_
@@ -736,14 +742,13 @@ limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y).
 
 /////////////////////////// The DELETE statement /////////////////////////////
 //
-%ifdef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
+%if SQLITE_ENABLE_UPDATE_DELETE_LIMIT || SQLITE_UDL_CAPABLE_PARSER
 cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt(W)
         orderby_opt(O) limit_opt(L). {
   self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W,
                                      order_by: O, limit: L });
 }
-%endif
-%ifndef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
+%else
 cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt(W). {
   self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W,
                                      order_by: None, limit: None });
@@ -757,20 +762,21 @@ where_opt(A) ::= WHERE expr(X).       {A = Some(X);}
 
 ////////////////////////// The UPDATE command ////////////////////////////////
 //
-%ifdef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
-cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y)
+%if SQLITE_ENABLE_UPDATE_DELETE_LIMIT || SQLITE_UDL_CAPABLE_PARSER
+cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from(F)
         where_opt(W) orderby_opt(O) limit_opt(L).  {
-  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y,
+  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y, from: F,
                                       where_clause: W, order_by: O, limit: L });
 }
-%endif
-%ifndef SQLITE_ENABLE_UPDATE_DELETE_LIMIT
-cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y)
-        where_opt(W).  {
-  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y,
+%else
+cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from(F)
+        where_opt(W). {
+  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y, from: F,
                                       where_clause: W, order_by: None, limit: None });
 }
 %endif
+
+
 
 %type setlist {Vec<Set>}
 
@@ -1038,7 +1044,7 @@ uniqueflag(A) ::= .        {A = false;}
 //
 // IMPORTANT COMPATIBILITY NOTE:  Some prior versions of SQLite accepted
 // COLLATE clauses and ASC or DESC keywords on ID lists in inappropriate
-// places - places that might have been stored in the sqlite_master schema.
+// places - places that might have been stored in the sqlite_schema table.
 // Those extra features were ignored.  But because they might be in some
 // (busted) old databases, we need to continue parsing them when loading
 // historical schemas.
@@ -1070,15 +1076,13 @@ cmd ::= DROP INDEX ifexists(E) fullname(X).   {self.ctx.stmt = Some(Stmt::DropIn
 
 ///////////////////////////// The VACUUM command /////////////////////////////
 //
-%ifndef SQLITE_OMIT_VACUUM
-%ifndef SQLITE_OMIT_ATTACH
+%if !SQLITE_OMIT_VACUUM && !SQLITE_OMIT_ATTACH
 %type vinto {Option<Expr>}
 cmd ::= VACUUM vinto(Y).                {self.ctx.stmt = Some(Stmt::Vacuum(None, Y));}
 cmd ::= VACUUM nm(X) vinto(Y).          {self.ctx.stmt = Some(Stmt::Vacuum(Some(X), Y));}
 vinto(A) ::= INTO expr(X).              {A = Some(X);}
 vinto(A) ::= .                          {A = None;}
-%endif  SQLITE_OMIT_ATTACH
-%endif  SQLITE_OMIT_VACUUM
+%endif
 
 ///////////////////////////// The PRAGMA command /////////////////////////////
 //
@@ -1179,8 +1183,8 @@ tridxby ::= NOT INDEXED. {
 %type trigger_cmd {TriggerCmd}
 // UPDATE 
 trigger_cmd(A) ::=
-   UPDATE orconf(R) trnm(X) tridxby SET setlist(Y) where_opt(Z).
-   {A = TriggerCmd::Update{ or_conflict: R, tbl_name: X, sets: Y, where_clause: Z };}
+   UPDATE orconf(R) trnm(X) tridxby SET setlist(Y) from(F) where_opt(Z).
+   {A = TriggerCmd::Update{ or_conflict: R, tbl_name: X, sets: Y, from: F, where_clause: Z };}
 
 // INSERT
 trigger_cmd(A) ::= insert_cmd(R) INTO

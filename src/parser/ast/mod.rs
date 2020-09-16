@@ -145,6 +145,7 @@ pub enum Stmt {
         tbl_name: QualifiedName,
         indexed: Option<Indexed>,
         sets: Vec<Set>,
+        from: Option<FromClause>,
         where_clause: Option<Expr>,
         order_by: Option<Vec<SortedColumn>>,
         limit: Option<Limit>,
@@ -486,6 +487,7 @@ impl Display for Stmt {
                 tbl_name,
                 indexed,
                 sets,
+                from,
                 where_clause,
                 order_by,
                 limit,
@@ -507,6 +509,10 @@ impl Display for Stmt {
                 }
                 f.write_str(" SET ")?;
                 comma(sets, f)?;
+                if let Some(from) = from {
+                    f.write_str(" FROM ")?;
+                    from.fmt(f)?;
+                }
                 if let Some(where_clause) = where_clause {
                     f.write_str(" WHERE ")?;
                     where_clause.fmt(f)?;
@@ -2398,6 +2404,7 @@ pub enum TriggerCmd {
         or_conflict: Option<ResolveType>,
         tbl_name: Name,
         sets: Vec<Set>,
+        from: Option<FromClause>,
         where_clause: Option<Expr>,
     },
     Insert {
@@ -2421,6 +2428,7 @@ impl Display for TriggerCmd {
                 or_conflict,
                 tbl_name,
                 sets,
+                from,
                 where_clause,
             } => {
                 f.write_str("UPDATE ")?;
@@ -2432,6 +2440,10 @@ impl Display for TriggerCmd {
                 tbl_name.fmt(f)?;
                 f.write_str(" SET ")?;
                 comma(sets, f)?;
+                if let Some(from) = from {
+                    f.write_str(" FROM ")?;
+                    from.fmt(f)?;
+                }
                 if let Some(where_clause) = where_clause {
                     f.write_str(" WHERE ")?;
                     where_clause.fmt(f)?;
