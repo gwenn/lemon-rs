@@ -170,8 +170,8 @@ pub struct yyStackEntry {
     stateno: YYACTIONTYPE, /* The state-number, or reduce action in SHIFTREDUCE */
     major: YYCODETYPE,     /* The major token value.  This is the code
                             ** number for the token at this stack level */
-    minor: YYMINORTYPE,    /* The user-supplied minor token value.  This
-                            ** is the value of the token  */
+    minor: YYMINORTYPE, /* The user-supplied minor token value.  This
+                         ** is the value of the token  */
 }
 
 use smallvec::SmallVec;
@@ -189,8 +189,8 @@ pub struct yyParser {
     yystack: SmallVec<[yyStackEntry; YYSTACKDEPTH]>, /* The parser's stack */
 }
 
-use std::ops::Neg;
 use std::cmp::Ordering;
+use std::ops::Neg;
 impl yyParser {
     fn shift(&self, shift: i8) -> usize {
         assert!(shift <= 1);
@@ -245,7 +245,6 @@ use log::Level::Debug;
 #[cfg(not(feature = "NDEBUG"))]
 static TARGET: &str = "Parse";
 
-
 /* For tracing shifts, the names of all terminals and nonterminals
 ** are required.  The following table supplies these names */
 #[cfg(any(feature = "YYCOVERAGE", not(feature = "NDEBUG")))]
@@ -281,7 +280,7 @@ impl yyParser {
         // yystack is not prefilled with zero value like in C.
         if self.yyidx == self.yystack.len() {
             self.yystack.push(yyStackEntry::default());
-        } else if self.yyidx+1 == self.yystack.len() {
+        } else if self.yyidx + 1 == self.yystack.len() {
             self.yystack.push(yyStackEntry::default());
         }
         false
@@ -293,7 +292,8 @@ impl yyParser {
         let capacity = self.yystack.capacity();
         let additional = capacity + 100;
         self.yystack.reserve(additional);
-        #[cfg(not(feature = "NDEBUG"))] {
+        #[cfg(not(feature = "NDEBUG"))]
+        {
             debug!(
                 target: TARGET,
                 "Stack grows from {} to {} entries.",
@@ -339,11 +339,11 @@ impl yyParser {
         let yytos = take(&mut self.yystack[self.yyidx]);
         self.yyidx = self.yyidx.checked_sub(1).unwrap();
         //assert_eq!(self.yyidx+1, self.yystack.len());
-        #[cfg(not(feature = "NDEBUG"))] {
+        #[cfg(not(feature = "NDEBUG"))]
+        {
             debug!(
                 target: TARGET,
-                "Popping {}",
-                yyTokenName[yytos.major as usize]
+                "Popping {}", yyTokenName[yytos.major as usize]
             );
         }
     }
@@ -402,21 +402,21 @@ static yycoverage: [[bool; YYNTOKEN]; YYNSTATE] = [];
 */
 #[cfg(feature = "YYCOVERAGE")]
 fn ParseCoverage(/*FILE *out*/) -> i32 {
-  //int stateno, iLookAhead, i;
-  let mut nMissed = 0;
-  /*for(stateno=0; stateno<YYNSTATE; stateno++){
-    i = yy_shift_ofst[stateno];
-    for(iLookAhead=0; iLookAhead<YYNTOKEN; iLookAhead++){
-      if( yy_lookahead[i+iLookAhead]!=iLookAhead ) continue;
-      if( yycoverage[stateno][iLookAhead]==0 ) nMissed++;
-      if( out ){
-        fprintf(out,"State %d lookahead %s %s\n", stateno,
-                yyTokenName[iLookAhead],
-                yycoverage[stateno][iLookAhead] ? "ok" : "missed");
+    //int stateno, iLookAhead, i;
+    let mut nMissed = 0;
+    /*for(stateno=0; stateno<YYNSTATE; stateno++){
+      i = yy_shift_ofst[stateno];
+      for(iLookAhead=0; iLookAhead<YYNTOKEN; iLookAhead++){
+        if( yy_lookahead[i+iLookAhead]!=iLookAhead ) continue;
+        if( yycoverage[stateno][iLookAhead]==0 ) nMissed++;
+        if( out ){
+          fprintf(out,"State %d lookahead %s %s\n", stateno,
+                  yyTokenName[iLookAhead],
+                  yycoverage[stateno][iLookAhead] ? "ok" : "missed");
+        }
       }
-    }
-  }*/
-  return nMissed;
+    }*/
+    return nMissed;
 }
 
 /*
@@ -426,19 +426,20 @@ fn ParseCoverage(/*FILE *out*/) -> i32 {
 #[allow(non_snake_case)]
 fn yy_find_shift_action(
     mut iLookAhead: YYCODETYPE, /* The look-ahead token */
-    stateno: YYACTIONTYPE, /* Current state number */
+    stateno: YYACTIONTYPE,      /* Current state number */
 ) -> YYACTIONTYPE {
     if stateno > YY_MAX_SHIFT {
         return stateno;
     }
     assert!(stateno <= YY_SHIFT_COUNT);
-    #[cfg(feature = "YYCOVERAGE")] {
+    #[cfg(feature = "YYCOVERAGE")]
+    {
         //yycoverage[stateno][iLookAhead] = true;
     }
     loop {
         let mut i = yy_shift_ofst[stateno as usize] as usize;
         assert!(i <= YY_ACTTAB_COUNT!());
-        assert!(i+usize::from(YYNTOKEN) <= yy_lookahead.len());
+        assert!(i + usize::from(YYNTOKEN) <= yy_lookahead.len());
         assert_ne!(iLookAhead, YYNOCODE);
         assert!((iLookAhead as YYACTIONTYPE) < YYNTOKEN);
         i += iLookAhead as usize;
@@ -446,7 +447,8 @@ fn yy_find_shift_action(
             if YYFALLBACK {
                 let iFallback = yyFallback[iLookAhead as usize]; /* Fallback token */
                 if iFallback != 0 {
-                    #[cfg(not(feature = "NDEBUG"))] {
+                    #[cfg(not(feature = "NDEBUG"))]
+                    {
                         debug!(
                             target: TARGET,
                             "FALLBACK {} => {}",
@@ -462,7 +464,8 @@ fn yy_find_shift_action(
             if YYWILDCARD > 0 {
                 let j = i - iLookAhead as usize + YYWILDCARD as usize;
                 if yy_lookahead[j] == YYWILDCARD && iLookAhead > 0 {
-                    #[cfg(not(feature = "NDEBUG"))] {
+                    #[cfg(not(feature = "NDEBUG"))]
+                    {
                         debug!(
                             target: TARGET,
                             "WILDCARD {} => {}",
@@ -517,7 +520,8 @@ fn yy_find_reduce_action(
 impl yyParser {
     #[allow(non_snake_case)]
     fn yyStackOverflow(&mut self) {
-        #[cfg(not(feature = "NDEBUG"))] {
+        #[cfg(not(feature = "NDEBUG"))]
+        {
             error!(target: TARGET, "Stack Overflow!");
         }
         while self.yyidx > 0 {
@@ -537,15 +541,13 @@ impl yyParser {
 impl yyParser {
     #[allow(non_snake_case)]
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE, zTag: &str) {
-        #[cfg(not(feature = "NDEBUG"))] {
+        #[cfg(not(feature = "NDEBUG"))]
+        {
             let yytos = &self[0];
             if yyNewState < YYNSTATE {
                 debug!(
                     target: TARGET,
-                    "{} '{}', go to state {}",
-                    zTag,
-                    yyTokenName[yytos.major as usize],
-                    yyNewState
+                    "{} '{}', go to state {}", zTag, yyTokenName[yytos.major as usize], yyNewState
                 );
             } else {
                 debug!(
@@ -567,9 +569,9 @@ impl yyParser {
     #[allow(non_snake_case)]
     fn yy_shift(
         &mut self,
-        mut yyNewState: YYACTIONTYPE, /* The new state to shift in */
-        yyMajor: YYCODETYPE,      /* The major token to shift in */
-        yyMinor: Option<ParseTOKENTYPE>,  /* The minor token to shift in */
+        mut yyNewState: YYACTIONTYPE,    /* The new state to shift in */
+        yyMajor: YYCODETYPE,             /* The major token to shift in */
+        yyMinor: Option<ParseTOKENTYPE>, /* The minor token to shift in */
     ) {
         self.yyidx_shift(1);
         if self.yy_grow_stack_if_needed() {
@@ -609,39 +611,41 @@ impl yyParser {
 impl yyParser {
     fn yy_reduce(
         &mut self,
-        yyruleno: YYACTIONTYPE, /* Number of the rule by which to reduce */
-        yy_look_ahead: YYCODETYPE,             /* Lookahead token, or YYNOCODE if none */
-        yy_lookahead_token: Option<&ParseTOKENTYPE>,  /* Value of the lookahead token */
+        yyruleno: YYACTIONTYPE,    /* Number of the rule by which to reduce */
+        yy_look_ahead: YYCODETYPE, /* Lookahead token, or YYNOCODE if none */
+        yy_lookahead_token: Option<&ParseTOKENTYPE>, /* Value of the lookahead token */
     ) -> YYACTIONTYPE {
         let yygoto: YYCODETYPE; /* The next state */
         let yyact: YYACTIONTYPE; /* The next action */
         let yysize: i8; /* Amount to pop the stack */
         let _ = yy_look_ahead;
         let _ = yy_lookahead_token;
-#[cfg(not(feature = "NDEBUG"))] {
-        if (yyruleno as usize) < yyRuleName.len() {
-            let yysize = yyRuleInfoNRhs[yyruleno as usize];
-            let action = if yyruleno < YYNRULE_WITH_ACTION { "" } else { " without external action" };
-            if yysize != 0 {
-                debug!(
-                target: TARGET,
-                "Reduce {} [{}]{}, pop back to state {}.",
-                yyruleno,
-                yyRuleName[yyruleno as usize],
-                action,
-                self[yysize].stateno
-                );
-            } else {
-                debug!(
-                target: TARGET,
-                "Reduce {} [{}]{}.",
-                yyruleno,
-                yyRuleName[yyruleno as usize],
-                action
-                );
+        #[cfg(not(feature = "NDEBUG"))]
+        {
+            if (yyruleno as usize) < yyRuleName.len() {
+                let yysize = yyRuleInfoNRhs[yyruleno as usize];
+                let action = if yyruleno < YYNRULE_WITH_ACTION {
+                    ""
+                } else {
+                    " without external action"
+                };
+                if yysize != 0 {
+                    debug!(
+                        target: TARGET,
+                        "Reduce {} [{}]{}, pop back to state {}.",
+                        yyruleno,
+                        yyRuleName[yyruleno as usize],
+                        action,
+                        self[yysize].stateno
+                    );
+                } else {
+                    debug!(
+                        target: TARGET,
+                        "Reduce {} [{}]{}.", yyruleno, yyRuleName[yyruleno as usize], action
+                    );
+                }
             }
         }
-}
         /* Check that the stack is large enough to grow by a single entry
          ** if the RHS of the rule is empty.  This ensures that there is room
          ** enough on the stack to push the LHS value */
@@ -649,8 +653,8 @@ impl yyParser {
             self.yyhwm_incr();
             if self.yy_grow_stack_for_push() {
                 /* The call to yyStackOverflow() above pops the stack until it is
-                ** empty, causing the main parser loop to exit.  So the return value
-                ** is never used and does not matter. */
+                 ** empty, causing the main parser loop to exit.  So the return value
+                 ** is never used and does not matter. */
                 return 0;
             }
         }
@@ -697,7 +701,8 @@ impl yyParser {
 impl yyParser {
     #[cfg(not(feature = "YYNOERRORRECOVERY"))]
     fn yy_parse_failed(&mut self) {
-        #[cfg(not(feature = "NDEBUG"))] {
+        #[cfg(not(feature = "NDEBUG"))]
+        {
             error!(target: TARGET, "Fail!");
         }
         while self.yyidx > 0 {
@@ -710,8 +715,7 @@ impl yyParser {
         /************ End %parse_failure code *****************************************/
     }
     #[cfg(feature = "YYNOERRORRECOVERY")]
-    fn yy_parse_failed(&mut self) {
-    }
+    fn yy_parse_failed(&mut self) {}
 }
 
 /*
@@ -720,7 +724,7 @@ impl yyParser {
 impl yyParser {
     fn yy_syntax_error(
         &mut self,
-        yymajor: YYCODETYPE,    /* The major type of the error token */
+        yymajor: YYCODETYPE,              /* The major type of the error token */
         yyminor: Option<&ParseTOKENTYPE>, /* The minor type of the error token */
     ) {
         /************ Begin %syntax_error code ****************************************/
@@ -734,7 +738,8 @@ impl yyParser {
 */
 impl yyParser {
     fn yy_accept(&mut self) {
-        #[cfg(not(feature = "NDEBUG"))] {
+        #[cfg(not(feature = "NDEBUG"))]
+        {
             debug!(target: TARGET, "Accept!");
         }
         if cfg!(not(feature = "YYNOERRORRECOVERY")) {
@@ -772,7 +777,7 @@ impl yyParser {
     #[allow(non_snake_case)]
     pub fn Parse(
         &mut self,
-        yymajor: TokenType,     /* The major token code number */
+        yymajor: TokenType,                  /* The major token code number */
         mut yyminor: Option<ParseTOKENTYPE>, /* The value for the token */
     ) {
         let mut yymajor = yymajor as YYCODETYPE;
@@ -788,21 +793,28 @@ impl yyParser {
         }
 
         yyact = self[0].stateno;
-        #[cfg(not(feature = "NDEBUG"))] {
+        #[cfg(not(feature = "NDEBUG"))]
+        {
             if yyact < YY_MIN_REDUCE {
-                debug!(target: TARGET, "Input '{}' in state {}",
-                        yyTokenName[yymajor as usize],yyact);
+                debug!(
+                    target: TARGET,
+                    "Input '{}' in state {}", yyTokenName[yymajor as usize], yyact
+                );
             } else {
-                debug!(target: TARGET, "Input '{}' with pending reduce {}",
-                        yyTokenName[yymajor as usize],yyact-YY_MIN_REDUCE);
+                debug!(
+                    target: TARGET,
+                    "Input '{}' with pending reduce {}",
+                    yyTokenName[yymajor as usize],
+                    yyact - YY_MIN_REDUCE
+                );
             }
         }
 
         loop {
             assert_eq!(yyact, self[0].stateno);
-            yyact = yy_find_shift_action(yymajor,yyact);
+            yyact = yy_find_shift_action(yymajor, yyact);
             if yyact >= YY_MIN_REDUCE {
-                yyact = self.yy_reduce(yyact - YY_MIN_REDUCE,yymajor,yyminor.as_ref());
+                yyact = self.yy_reduce(yyact - YY_MIN_REDUCE, yymajor, yyminor.as_ref());
             } else if yyact <= YY_MAX_SHIFTREDUCE {
                 self.yy_shift(yyact, yymajor, yyminor.take());
                 if cfg!(not(feature = "YYNOERRORRECOVERY")) {
@@ -815,7 +827,8 @@ impl yyParser {
                 return;
             } else {
                 assert_eq!(yyact, YY_ERROR_ACTION);
-                #[cfg(not(feature = "NDEBUG"))] {
+                #[cfg(not(feature = "NDEBUG"))]
+                {
                     debug!(target: TARGET, "Syntax Error!");
                 }
                 if YYERRORSYMBOL > 0 {
@@ -843,11 +856,11 @@ impl yyParser {
                     }
                     let yymx = self[0].major;
                     if yymx == YYERRORSYMBOL || yyerrorhit {
-                        #[cfg(not(feature = "NDEBUG"))] {
+                        #[cfg(not(feature = "NDEBUG"))]
+                        {
                             debug!(
                                 target: TARGET,
-                                "Discard input token {}",
-                                yyTokenName[yymajor as usize]
+                                "Discard input token {}", yyTokenName[yymajor as usize]
                             );
                         }
                         yymajor = YYNOCODE;
@@ -871,7 +884,9 @@ impl yyParser {
                     }
                     self.yyerrcnt = 3;
                     yyerrorhit = true;
-                    if yymajor==YYNOCODE { break; }
+                    if yymajor == YYNOCODE {
+                        break;
+                    }
                     yyact = self[0].stateno;
                 } else if cfg!(feature = "YYNOERRORRECOVERY") {
                     /* If the YYNOERRORRECOVERY macro is defined, then do not attempt to
@@ -911,21 +926,24 @@ impl yyParser {
                 break;
             }
         }
-        #[cfg(not(feature = "NDEBUG"))] {
+        #[cfg(not(feature = "NDEBUG"))]
+        {
             if log_enabled!(target: TARGET, Debug) {
-                let msg = self.yystack[1..=self.yyidx].iter()
+                let msg = self.yystack[1..=self.yyidx]
+                    .iter()
                     .map(|entry| yyTokenName[entry.major as usize])
-                    .collect::<Vec<&str>>().join(" ");
+                    .collect::<Vec<&str>>()
+                    .join(" ");
                 debug!(target: TARGET, "Return. Stack=[{}]", msg);
             }
         }
         return;
     }
 
-/*
-** Return the fallback token corresponding to canonical token iToken, or
-** 0 if iToken has no fallback.
-*/
+    /*
+     ** Return the fallback token corresponding to canonical token iToken, or
+     ** 0 if iToken has no fallback.
+     */
     pub fn parse_fallback(i_token: YYCODETYPE) -> YYCODETYPE {
         if YYFALLBACK {
             return yyFallback[i_token as usize];
