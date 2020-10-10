@@ -210,7 +210,7 @@ impl yyParser {
     }
 
     fn yy_move(&mut self, shift: i8) -> yyStackEntry {
-         use std::mem::take;
+        use std::mem::take;
         let idx = self.shift(shift);
         take(&mut self.yystack[idx])
     }
@@ -423,68 +423,59 @@ fn ParseCoverage(/*FILE *out*/) -> i32 {
 ** Find the appropriate action for a parser given the terminal
 ** look-ahead token iLookAhead.
 */
-impl yyParser {
-    #[allow(non_snake_case)]
-    fn yy_find_shift_action(
-        &self,
-        mut iLookAhead: YYCODETYPE, /* The look-ahead token */
-        stateno: YYACTIONTYPE, /* Current state number */
-    ) -> YYACTIONTYPE {
-        let mut i: usize;
-
-        if stateno > YY_MAX_SHIFT {
-            return stateno;
-        }
-        assert!(stateno <= YY_SHIFT_COUNT);
-        #[cfg(feature = "YYCOVERAGE")] {
-            //yycoverage[stateno][iLookAhead] = true;
-        }
-        loop {
-            i = yy_shift_ofst[stateno as usize] as usize;
-            assert!(i <= YY_ACTTAB_COUNT!());
-            assert!(i+usize::from(YYNTOKEN) <= yy_lookahead.len());
-            assert_ne!(iLookAhead, YYNOCODE);
-            assert!((iLookAhead as YYACTIONTYPE) < YYNTOKEN);
-            i += iLookAhead as usize;
-            assert!(i < yy_lookahead.len());
-            if yy_lookahead[i] != iLookAhead {
-                if YYFALLBACK {
-                    assert!((iLookAhead as usize) < yyFallback.len());
-                    let iFallback = yyFallback[iLookAhead as usize]; /* Fallback token */
-                    if iFallback != 0 {
-                        #[cfg(not(feature = "NDEBUG"))] {
-                            debug!(
-                                target: TARGET,
-                                "FALLBACK {} => {}",
-                                yyTokenName[iLookAhead as usize],
-                                yyTokenName[iFallback as usize]
-                            );
-                        }
-                        assert_eq!(yyFallback[iFallback as usize], 0); /* Fallback loop must terminate */
-                        iLookAhead = iFallback;
-                        continue;
+#[allow(non_snake_case)]
+fn yy_find_shift_action(
+    mut iLookAhead: YYCODETYPE, /* The look-ahead token */
+    stateno: YYACTIONTYPE, /* Current state number */
+) -> YYACTIONTYPE {
+    if stateno > YY_MAX_SHIFT {
+        return stateno;
+    }
+    assert!(stateno <= YY_SHIFT_COUNT);
+    #[cfg(feature = "YYCOVERAGE")] {
+        //yycoverage[stateno][iLookAhead] = true;
+    }
+    loop {
+        let mut i = yy_shift_ofst[stateno as usize] as usize;
+        assert!(i <= YY_ACTTAB_COUNT!());
+        assert!(i+usize::from(YYNTOKEN) <= yy_lookahead.len());
+        assert_ne!(iLookAhead, YYNOCODE);
+        assert!((iLookAhead as YYACTIONTYPE) < YYNTOKEN);
+        i += iLookAhead as usize;
+        if yy_lookahead[i] != iLookAhead {
+            if YYFALLBACK {
+                let iFallback = yyFallback[iLookAhead as usize]; /* Fallback token */
+                if iFallback != 0 {
+                    #[cfg(not(feature = "NDEBUG"))] {
+                        debug!(
+                            target: TARGET,
+                            "FALLBACK {} => {}",
+                            yyTokenName[iLookAhead as usize],
+                            yyTokenName[iFallback as usize]
+                        );
                     }
+                    assert_eq!(yyFallback[iFallback as usize], 0); /* Fallback loop must terminate */
+                    iLookAhead = iFallback;
+                    continue;
                 }
-                if YYWILDCARD > 0 {
-                    let j = i as i32 - i32::from(iLookAhead) + i32::from(YYWILDCARD);
-                    assert!((j as usize) < yy_lookahead.len());
-                    if yy_lookahead[j as usize] == YYWILDCARD && iLookAhead > 0 {
-                        #[cfg(not(feature = "NDEBUG"))] {
-                            debug!(
-                                target: TARGET,
-                                "WILDCARD {} => {}",
-                                yyTokenName[iLookAhead as usize],
-                                yyTokenName[YYWILDCARD as usize]
-                            );
-                        }
-                        return yy_action[j as usize];
-                    }
-                } /* YYWILDCARD */
-                return yy_default[stateno as usize];
-            } else {
-                assert!(i >= 0 && i < yy_action.len());
-                return yy_action[i];
             }
+            if YYWILDCARD > 0 {
+                let j = i - iLookAhead as usize + YYWILDCARD as usize;
+                if yy_lookahead[j] == YYWILDCARD && iLookAhead > 0 {
+                    #[cfg(not(feature = "NDEBUG"))] {
+                        debug!(
+                            target: TARGET,
+                            "WILDCARD {} => {}",
+                            yyTokenName[iLookAhead as usize],
+                            yyTokenName[YYWILDCARD as usize]
+                        );
+                    }
+                    return yy_action[j];
+                }
+            } /* YYWILDCARD */
+            return yy_default[stateno as usize];
+        } else {
+            return yy_action[i];
         }
     }
 }
@@ -576,11 +567,10 @@ impl yyParser {
     #[allow(non_snake_case)]
     fn yy_shift(
         &mut self,
-        yyNewState: YYACTIONTYPE, /* The new state to shift in */
+        mut yyNewState: YYACTIONTYPE, /* The new state to shift in */
         yyMajor: YYCODETYPE,      /* The major token to shift in */
         yyMinor: Option<ParseTOKENTYPE>,  /* The minor token to shift in */
     ) {
-        let mut yyNewState = yyNewState;
         self.yyidx_shift(1);
         if self.yy_grow_stack_if_needed() {
             return;
@@ -679,7 +669,6 @@ impl yyParser {
 %%
 /********** End reduce actions ************************************************/
         };
-        assert!((yyruleno as usize) < yyRuleInfoLhs.len());
         yygoto = yyRuleInfoLhs[yyruleno as usize];
         yysize = yyRuleInfoNRhs[yyruleno as usize];
         yyact = yy_find_reduce_action(self[yysize].stateno, yygoto);
@@ -811,7 +800,7 @@ impl yyParser {
 
         loop {
             assert_eq!(yyact, self[0].stateno);
-            yyact = self.yy_find_shift_action(yymajor,yyact);
+            yyact = yy_find_shift_action(yymajor,yyact);
             if yyact >= YY_MIN_REDUCE {
                 yyact = self.yy_reduce(yyact - YY_MIN_REDUCE,yymajor,yyminor.as_ref());
             } else if yyact <= YY_MAX_SHIFTREDUCE {
@@ -939,7 +928,6 @@ impl yyParser {
 */
     pub fn parse_fallback(i_token: YYCODETYPE) -> YYCODETYPE {
         if YYFALLBACK {
-            assert!((i_token as usize) < yyFallback.len());
             return yyFallback[i_token as usize];
         }
         0
