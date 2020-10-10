@@ -578,6 +578,7 @@ impl yyParser {
         yyMinor: Option<ParseTOKENTYPE>, /* The minor token to shift in */
     ) {
         self.yyidx_shift(1);
+        self.yyhwm_incr();
         if self.yy_grow_stack_if_needed() {
             return;
         }
