@@ -253,7 +253,11 @@ static TARGET: &str = "Parse";
 /* For tracing reduce actions, the names of all rules are required.
 */
 #[cfg(not(feature = "NDEBUG"))]
+#[rustfmt::skip]
+#[allow(non_upper_case_globals)]
+static yyRuleName: [&str; YYNRULE] = [
 %%
+];
 
 /*
 ** Try to increase the size of the parser stack.  Return the number
@@ -592,11 +596,17 @@ impl yyParser {
 
 /* For rule J, yyRuleInfoLhs[J] contains the symbol on the left-hand side
 ** of that rule */
+#[allow(non_upper_case_globals)]
+static yyRuleInfoLhs: [YYCODETYPE; YYNRULE] = [
 %%
+];
 
 /* For rule J, yyRuleInfoNRhs[J] contains the negative of the number
 ** of symbols on the right-hand side of that rule. */
+#[allow(non_upper_case_globals)]
+static yyRuleInfoNRhs: [i8; YYNRULE] = [
 %%
+];
 
 /*
 ** Perform a reduce action and the shift that must immediately

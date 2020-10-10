@@ -4527,7 +4527,7 @@ void ReportTable(
   /* Finish rendering the constants now that the action table has
   ** been computed */
   fprintf(out,"const YYNSTATE: YYACTIONTYPE =             %d;\n",lemp->nxstate);  lineno++;
-  fprintf(out,"//const YYNRULE: YYACTIONTYPE =             %d;\n",lemp->nrule);  lineno++;
+  fprintf(out,"const YYNRULE: usize =             %d;\n",lemp->nrule);  lineno++;
   fprintf(out,"const YYNRULE_WITH_ACTION: YYACTIONTYPE =  %d;\n",lemp->nruleWithAction);
          lineno++;
   fprintf(out,"const YYNTOKEN: YYACTIONTYPE =             %d;\n",lemp->nterminal); lineno++;
@@ -4746,16 +4746,12 @@ void ReportTable(
   ** rule in the rule set of the grammar.  This information is used
   ** when tracing REDUCE actions.
   */
-  fprintf(out, "#[rustfmt::skip]\n"); lineno++;
-  fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
-  fprintf(out, "static yyRuleName: [&str; %d] = [\n", lemp->nrule); lineno++;
   for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){
     assert( rp->iRule==i );
     fprintf(out," /* %3d */ \"", i);
     writeRuleText(out, rp);
     fprintf(out,"\",\n"); lineno++;
   }
-  fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate %extra_context parameter declaration */
@@ -4783,23 +4779,17 @@ void ReportTable(
   ** Note: This code depends on the fact that rules are number
   ** sequentually beginning with 0.
   */
-  fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
-  fprintf(out, "static yyRuleInfoLhs: [YYCODETYPE; %d] = [\n", lemp->nrule); lineno++;
   for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){
     fprintf(out,"    %4d, /* (%d)", rp->lhs->index, i);
     rule_print(out, rp);
     fprintf(out," */\n"); lineno++;
   }
-  fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
-  fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
-  fprintf(out, "static yyRuleInfoNRhs: [i8; %d] = [\n", lemp->nrule); lineno++;
   for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){
     fprintf(out,"    %3d,  /* (%d)", -rp->nrhs, i);
     rule_print(out, rp);
     fprintf(out," */\n"); lineno++;
   }
-  fprintf(out, "];\n"); lineno++;
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate code which execution during each REDUCE action */
