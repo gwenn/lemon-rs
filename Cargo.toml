@@ -34,7 +34,7 @@ pretty = "0.10"
 buf_redux = { version = "0.8", features = ["default"] }
 
 [dev-dependencies]
-env_logger = "0.7"
+env_logger = "0.8"
 trybuild = "1.0"
 
 #[build-dependencies]
