@@ -29,7 +29,9 @@ fn main() {
                     TokenType::TK_ALL => debug_assert!(b"ALL".eq_ignore_ascii_case(token)),
                     TokenType::TK_ALTER => debug_assert!(b"ALTER".eq_ignore_ascii_case(token)),
                     TokenType::TK_ANALYZE => debug_assert!(b"ANALYZE".eq_ignore_ascii_case(token)),
+                    TokenType::TK_ALWAYS => debug_assert!(b"ALWAYS".eq_ignore_ascii_case(token)),
                     TokenType::TK_AND => debug_assert!(b"AND".eq_ignore_ascii_case(token)),
+                    TokenType::TK_ANY => debug_assert!(b"ANY".eq_ignore_ascii_case(token)),
                     TokenType::TK_AS => debug_assert!(b"AS".eq_ignore_ascii_case(token)),
                     TokenType::TK_ASC => debug_assert!(b"ASC".eq_ignore_ascii_case(token)),
                     TokenType::TK_ATTACH => debug_assert!(b"ATTACH".eq_ignore_ascii_case(token)),
@@ -78,6 +80,7 @@ fn main() {
                     TokenType::TK_END => debug_assert!(b"END".eq_ignore_ascii_case(token)),
                     TokenType::TK_ESCAPE => debug_assert!(b"ESCAPE".eq_ignore_ascii_case(token)),
                     TokenType::TK_EXCEPT => debug_assert!(b"EXCEPT".eq_ignore_ascii_case(token)),
+                    TokenType::TK_EXCLUDE => debug_assert!(b"EXCLUDE".eq_ignore_ascii_case(token)),
                     TokenType::TK_EXCLUSIVE => {
                         debug_assert!(b"EXCLUSIVE".eq_ignore_ascii_case(token))
                     }
@@ -85,13 +88,18 @@ fn main() {
                     TokenType::TK_EXPLAIN => debug_assert!(b"EXPLAIN".eq_ignore_ascii_case(token)),
                     TokenType::TK_FAIL => debug_assert!(b"FAIL".eq_ignore_ascii_case(token)),
                     TokenType::TK_FILTER => debug_assert!(b"FILTER".eq_ignore_ascii_case(token)),
+                    TokenType::TK_FIRST => debug_assert!(b"FIRST".eq_ignore_ascii_case(token)),
                     TokenType::TK_FOLLOWING => {
                         debug_assert!(b"FOLLOWING".eq_ignore_ascii_case(token))
                     }
                     TokenType::TK_FOR => debug_assert!(b"FOR".eq_ignore_ascii_case(token)),
                     TokenType::TK_FOREIGN => debug_assert!(b"FOREIGN".eq_ignore_ascii_case(token)),
                     TokenType::TK_FROM => debug_assert!(b"FROM".eq_ignore_ascii_case(token)),
+                    TokenType::TK_GENERATED => {
+                        debug_assert!(b"GENERATED".eq_ignore_ascii_case(token))
+                    }
                     TokenType::TK_GROUP => debug_assert!(b"GROUP".eq_ignore_ascii_case(token)),
+                    TokenType::TK_GROUPS => debug_assert!(b"GROUPS".eq_ignore_ascii_case(token)),
                     TokenType::TK_HAVING => debug_assert!(b"HAVING".eq_ignore_ascii_case(token)),
                     TokenType::TK_IF => debug_assert!(b"IF".eq_ignore_ascii_case(token)),
                     TokenType::TK_IGNORE => debug_assert!(b"IGNORE".eq_ignore_ascii_case(token)),
@@ -114,6 +122,7 @@ fn main() {
                     TokenType::TK_ISNULL => debug_assert!(b"ISNULL".eq_ignore_ascii_case(token)),
                     TokenType::TK_JOIN => debug_assert!(b"JOIN".eq_ignore_ascii_case(token)),
                     TokenType::TK_KEY => debug_assert!(b"KEY".eq_ignore_ascii_case(token)),
+                    TokenType::TK_LAST => debug_assert!(b"LAST".eq_ignore_ascii_case(token)),
                     TokenType::TK_LIMIT => debug_assert!(b"LIMIT".eq_ignore_ascii_case(token)),
                     TokenType::TK_MATCH => debug_assert!(b"MATCH".eq_ignore_ascii_case(token)),
                     TokenType::TK_NO => debug_assert!(b"NO".eq_ignore_ascii_case(token)),
@@ -121,11 +130,13 @@ fn main() {
                     TokenType::TK_NOTHING => debug_assert!(b"NOTHING".eq_ignore_ascii_case(token)),
                     TokenType::TK_NOTNULL => debug_assert!(b"NOTNULL".eq_ignore_ascii_case(token)),
                     TokenType::TK_NULL => debug_assert!(b"NULL".eq_ignore_ascii_case(token)),
+                    TokenType::TK_NULLS => debug_assert!(b"NULLS".eq_ignore_ascii_case(token)),
                     TokenType::TK_OF => debug_assert!(b"OF".eq_ignore_ascii_case(token)),
                     TokenType::TK_OFFSET => debug_assert!(b"OFFSET".eq_ignore_ascii_case(token)),
                     TokenType::TK_ON => debug_assert!(b"ON".eq_ignore_ascii_case(token)),
                     TokenType::TK_OR => debug_assert!(b"OR".eq_ignore_ascii_case(token)),
                     TokenType::TK_ORDER => debug_assert!(b"ORDER".eq_ignore_ascii_case(token)),
+                    TokenType::TK_OTHERS => debug_assert!(b"OTHERS".eq_ignore_ascii_case(token)),
                     TokenType::TK_OVER => debug_assert!(b"OVER".eq_ignore_ascii_case(token)),
                     TokenType::TK_PARTITION => {
                         debug_assert!(b"PARTITION".eq_ignore_ascii_case(token))
@@ -163,11 +174,11 @@ fn main() {
                     TokenType::TK_SELECT => debug_assert!(b"SELECT".eq_ignore_ascii_case(token)),
                     TokenType::TK_SET => debug_assert!(b"SET".eq_ignore_ascii_case(token)),
                     TokenType::TK_TABLE => debug_assert!(b"TABLE".eq_ignore_ascii_case(token)),
-                    //TokenType::TK_TEMP => debug_assert!(b"TEMP".eq_ignore_ascii_case(token)),
                     TokenType::TK_TEMP => debug_assert!(
                         b"TEMP".eq_ignore_ascii_case(token)
                             || b"TEMPORARY".eq_ignore_ascii_case(token)
                     ),
+                    TokenType::TK_TIES => debug_assert!(b"TIES".eq_ignore_ascii_case(token)),
                     TokenType::TK_THEN => debug_assert!(b"THEN".eq_ignore_ascii_case(token)),
                     TokenType::TK_TO => debug_assert!(b"TO".eq_ignore_ascii_case(token)),
                     TokenType::TK_TRANSACTION => {
@@ -212,7 +223,7 @@ fn main() {
                     TokenType::TK_SEMI => debug_assert_eq!(b";", token),
                     TokenType::TK_SLASH => debug_assert_eq!(b"/", token),
                     TokenType::TK_STAR => debug_assert_eq!(b"*", token),
-                    //TokenType::TK_STRINGLITERAL => debug_assert!(),
+                    //TokenType::TK_STRING => debug_assert!(),
                     //TokenType::TK_ID => debug_assert!(),
                     //TokenType::TK_VARIABLE => debug_assert!(),
                     TokenType::TK_BLOB => debug_assert!(
