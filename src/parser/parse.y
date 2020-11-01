@@ -1329,18 +1329,16 @@ wqlist(A) ::= wqlist(A) COMMA nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
 // tokens that may be output by the tokenizer except TK_SPACE and TK_ILLEGAL.
 //
 %ifndef SQLITE_OMIT_WINDOWFUNC
-%type windowdefn_list {Vec<Window>}
+%type windowdefn_list {Vec<WindowDef>}
 windowdefn_list(A) ::= windowdefn(Z). { A = vec![Z]; }
 windowdefn_list(A) ::= windowdefn_list(A) COMMA windowdefn(Z). {
   let w = Z;
   A.push(w);
 }
 
-%type windowdefn {Window}
+%type windowdefn {WindowDef}
 windowdefn(A) ::= nm(X) AS LP window(Y) RP. {
-  let mut w = Y;
-  w.name = Some(X);
-  A = w;
+  A = WindowDef { name: X, window: Y};
 }
 
 %type window {Window}
@@ -1360,22 +1358,22 @@ windowdefn(A) ::= nm(X) AS LP window(Y) RP. {
 %type frame_bound_e {FrameBound}
 
 window(A) ::= PARTITION BY nexprlist(X) orderby_opt(Y) frame_opt(Z). {
-  A = Window{ name: None,  partition_by: Some(X), order_by: Y, frame_clause: Z};
+  A = Window{ base: None,  partition_by: Some(X), order_by: Y, frame_clause: Z};
 }
 window(A) ::= nm(W) PARTITION BY nexprlist(X) orderby_opt(Y) frame_opt(Z). {
-  A = Window{ name: Some(W),  partition_by: Some(X), order_by: Y, frame_clause: Z};
+  A = Window{ base: Some(W),  partition_by: Some(X), order_by: Y, frame_clause: Z};
 }
 window(A) ::= ORDER BY sortlist(Y) frame_opt(Z). {
-  A = Window{ name: None,  partition_by: None, order_by: Some(Y), frame_clause: Z};
+  A = Window{ base: None,  partition_by: None, order_by: Some(Y), frame_clause: Z};
 }
 window(A) ::= nm(W) ORDER BY sortlist(Y) frame_opt(Z). {
-  A = Window{ name: Some(W),  partition_by: None, order_by: Some(Y), frame_clause: Z};
+  A = Window{ base: Some(W),  partition_by: None, order_by: Some(Y), frame_clause: Z};
 }
 window(A) ::= frame_opt(Z). {
-  A = Window{ name: None,  partition_by: None, order_by: None, frame_clause: Z};
+  A = Window{ base: None,  partition_by: None, order_by: None, frame_clause: Z};
 }
 window(A) ::= nm(W) frame_opt(Z). {
-  A = Window{ name: Some(W),  partition_by: None, order_by: None, frame_clause: Z};
+  A = Window{ base: Some(W),  partition_by: None, order_by: None, frame_clause: Z};
 }
 
 frame_opt(A) ::= .                             {
@@ -1413,7 +1411,7 @@ frame_exclude(A) ::= CURRENT ROW. { A = FrameExclude::CurrentRow;  /*A-overwrite
 frame_exclude(A) ::= GROUP.       { A = FrameExclude::Group;  /*A-overwrites-X*/}
 frame_exclude(A) ::= TIES.        { A = FrameExclude::Ties;  /*A-overwrites-X*/}
 
-%type window_clause {Vec<Window>}
+%type window_clause {Vec<WindowDef>}
 window_clause(A) ::= WINDOW windowdefn_list(B). { A = B; }
 
 filter_over(A) ::= filter_clause(F) over_clause(O). {

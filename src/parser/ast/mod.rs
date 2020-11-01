@@ -1246,7 +1246,7 @@ pub enum OneSelect {
         from: Option<FromClause>,
         where_clause: Option<Expr>,
         group_by: Option<GroupBy>,
-        window_clause: Option<Vec<Window>>,
+        window_clause: Option<Vec<WindowDef>>,
     },
     Values(Vec<Vec<Expr>>),
 }
@@ -2742,10 +2742,24 @@ impl Display for Over {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WindowDef {
+    pub name: Name,
+    pub window: Window,
+}
+
+impl Display for WindowDef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        self.name.fmt(f)?;
+        f.write_str(" AS ")?;
+        self.window.fmt(f)
+    }
+}
+
 // https://sqlite.org/syntax/window-defn.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Window {
-    pub name: Option<Name>,
+    pub base: Option<Name>,
     pub partition_by: Option<Vec<Expr>>,
     pub order_by: Option<Vec<SortedColumn>>,
     pub frame_clause: Option<FrameClause>,
@@ -2753,11 +2767,11 @@ pub struct Window {
 
 impl Display for Window {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        if let Some(ref name) = self.name {
-            name.fmt(f)?;
-            f.write_str(" AS ")?;
-        }
         f.write_char('(')?;
+        if let Some(ref base) = self.base {
+            base.fmt(f)?;
+            f.write_char(' ')?;
+        }
         if let Some(ref partition_by) = self.partition_by {
             f.write_str("PARTITION BY ")?;
             comma(partition_by, f)?;
