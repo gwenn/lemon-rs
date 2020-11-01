@@ -1979,7 +1979,7 @@ impl Display for ColumnConstraint {
                 Ok(())
             }
             ColumnConstraint::Generated { expr, typ } => {
-                f.write_char('(')?;
+                f.write_str("AS (")?;
                 expr.fmt(f)?;
                 f.write_char(')')?;
                 if let Some(typ) = typ {
