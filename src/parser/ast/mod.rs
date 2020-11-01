@@ -5,6 +5,7 @@ use crate::parser::parse::YYCODETYPE;
 use pretty::{DocAllocator, DocBuilder};
 use std::fmt::{Display, Formatter, Result, Write};
 
+// https://sqlite.org/syntax/sql-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cmd {
     Explain(Stmt),
@@ -38,6 +39,7 @@ pub(crate) enum ExplainKind {
     QueryPlan,
 }
 
+// https://sqlite.org/syntax/sql-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stmt {
     // table name, body
@@ -543,6 +545,7 @@ impl Display for Stmt {
     }
 }
 
+// https://sqlite.org/syntax/expr.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
     Between {
@@ -1142,6 +1145,8 @@ impl Display for UnaryOperator {
     }
 }
 
+// https://sqlite.org/lang_select.html
+// https://sqlite.org/syntax/factored-select-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Select {
     pub with: Option<With>,
@@ -1212,6 +1217,7 @@ impl Display for CompoundSelect {
     }
 }
 
+// https://sqlite.org/syntax/compound-operator.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CompoundOperator {
     Union,
@@ -1231,6 +1237,7 @@ impl Display for CompoundOperator {
     }
 }
 
+// https://sqlite.org/syntax/select-core.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OneSelect {
     Select {
@@ -1367,6 +1374,7 @@ impl Display for Distinctness {
     }
 }
 
+// https://sqlite.org/syntax/result-column.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResultColumn {
     Expr(Expr, Option<As>),
@@ -1495,6 +1503,7 @@ impl Display for SelectTable {
     }
 }
 
+// https://sqlite.org/syntax/join-operator.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum JoinOperator {
     Comma,
@@ -1504,7 +1513,6 @@ pub enum JoinOperator {
     },
 }
 
-// https://sqlite.org/syntax/join-operator.html
 impl JoinOperator {
     pub(crate) fn from_single(token: Token) -> JoinOperator {
         if let Some(ref jt) = token {
@@ -1760,6 +1768,7 @@ impl Display for QualifiedName {
     }
 }
 
+// https://sqlite.org/lang_altertable.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AlterTableBody {
     // new table name
@@ -1789,6 +1798,8 @@ impl Display for AlterTableBody {
     }
 }
 
+// https://sqlite.org/lang_createtable.html
+// https://sqlite.org/syntax/create-table-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CreateTableBody {
     ColumnsAndConstraints {
@@ -1827,6 +1838,7 @@ impl Display for CreateTableBody {
     }
 }
 
+// https://sqlite.org/syntax/column-def.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ColumnDefinition {
     pub col_name: Name,
@@ -1849,6 +1861,7 @@ impl Display for ColumnDefinition {
     }
 }
 
+// https://sqlite.org/syntax/column-constraint.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NamedColumnConstraint {
     pub name: Option<Name>,
@@ -1866,6 +1879,7 @@ impl Display for NamedColumnConstraint {
     }
 }
 
+// https://sqlite.org/syntax/column-constraint.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ColumnConstraint {
     PrimaryKey {
@@ -1978,6 +1992,7 @@ impl Display for ColumnConstraint {
     }
 }
 
+// https://sqlite.org/syntax/table-constraint.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NamedTableConstraint {
     pub name: Option<Name>,
@@ -1995,6 +2010,7 @@ impl Display for NamedTableConstraint {
     }
 }
 
+// https://sqlite.org/syntax/table-constraint.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TableConstraint {
     PrimaryKey {
@@ -2101,6 +2117,7 @@ impl Display for NullsOrder {
     }
 }
 
+// https://sqlite.org/syntax/foreign-key-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ForeignKeyClause {
     pub tbl_name: Name,
@@ -2211,6 +2228,7 @@ impl Display for InitDeferredPred {
     }
 }
 
+// https://sqlite.org/syntax/indexed-column.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IndexedColumn {
     pub col_name: Name,
@@ -2292,6 +2310,8 @@ impl Display for Limit {
     }
 }
 
+// https://sqlite.org/lang_insert.html
+// https://sqlite.org/syntax/insert-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InsertBody {
     Select(Select, Option<Upsert>),
@@ -2334,6 +2354,7 @@ impl Display for Set {
     }
 }
 
+// https://sqlite.org/syntax/pragma-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PragmaBody {
     Equals(PragmaValue),
@@ -2356,6 +2377,7 @@ impl Display for PragmaBody {
     }
 }
 
+// https://sqlite.org/syntax/pragma-value.html
 pub type PragmaValue = Expr; // TODO
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -2398,6 +2420,8 @@ impl Display for TriggerEvent {
     }
 }
 
+// https://sqlite.org/lang_createtrigger.html
+// https://sqlite.org/syntax/create-trigger-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TriggerCmd {
     Update {
@@ -2519,6 +2543,8 @@ impl Display for ResolveType {
     }
 }
 
+// https://sqlite.org/lang_with.html
+// https://sqlite.org/syntax/with-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct With {
     pub recursive: bool,
@@ -2535,6 +2561,7 @@ impl Display for With {
     }
 }
 
+// https://sqlite.org/syntax/common-table-expression.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommonTableExpr {
     pub tbl_name: Name,
@@ -2556,6 +2583,7 @@ impl Display for CommonTableExpr {
     }
 }
 
+// https://sqlite.org/syntax/type-name.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Type {
     pub name: String, // TODO Validate: Ids+
@@ -2576,6 +2604,7 @@ impl Display for Type {
     }
 }
 
+// https://sqlite.org/syntax/type-name.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeSize {
     MaxSize(Box<Expr>),
@@ -2612,6 +2641,8 @@ impl Display for TransactionType {
     }
 }
 
+// https://sqlite.org/lang_upsert.html
+// https://sqlite.org/syntax/upsert-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Upsert {
     pub index: Option<UpsertIndex>,
@@ -2695,6 +2726,7 @@ impl Display for FunctionTail {
     }
 }
 
+// https://sqlite.org/syntax/over-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Over {
     Window(Window),
