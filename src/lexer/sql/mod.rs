@@ -1,5 +1,5 @@
 //! Adaptation/port of [`SQLite` tokenizer](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/tokenize.c)
-pub use fallible_iterator::FallibleIterator;
+use fallible_iterator::FallibleIterator;
 use memchr::memchr;
 use std::collections::VecDeque;
 use std::io::Read;
@@ -16,7 +16,7 @@ use crate::parser::Context;
 mod error;
 
 use crate::lexer::scan::ScanError;
-pub use crate::lexer::scan::Splitter;
+use crate::lexer::scan::Splitter;
 use crate::lexer::Scanner;
 pub use error::Error;
 
