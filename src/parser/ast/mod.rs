@@ -2,7 +2,6 @@
 
 use crate::dialect::{from_token, is_identifier, Token, TokenType};
 use crate::parser::parse::YYCODETYPE;
-use pretty::{DocAllocator, DocBuilder};
 use std::fmt::{Display, Formatter, Result, Write};
 
 // https://sqlite.org/syntax/sql-stmt.html
@@ -945,32 +944,6 @@ impl Literal {
             }
         } else {
             unreachable!()
-        }
-    }
-
-    pub fn pretty<'b, D, A>(&'b self, da: &'b D) -> DocBuilder<'b, D, A>
-    where
-        D: DocAllocator<'b, A>,
-        D::Doc: Clone,
-        A: Clone,
-    {
-        match self {
-            Literal::Numeric(ref num) => da.text(num),
-            Literal::String(ref str) => {
-                if str.contains('\'') || str.contains('\n') {
-                    da.text("'")
-                        .append(da.text(str.replace('\'', "''").replace('\n', "\\n")))
-                        .append(da.text("'"))
-                } else {
-                    da.text("'").append(da.text(str)).append(da.text("'"))
-                }
-            }
-            Literal::Blob(ref blob) => da.text("X'").append(da.text(blob)).append(da.text("'")),
-            Literal::Keyword(ref str) => da.text(str),
-            Literal::Null => da.text("NULL"),
-            Literal::CurrentDate => da.text("CURRENT_DATE"),
-            Literal::CurrentTime => da.text("CURRENT_TIME"),
-            Literal::CurrentTimestamp => da.text("CURRENT_TIMESTAMP"),
         }
     }
 }
