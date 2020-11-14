@@ -1,6 +1,7 @@
 //! Abstract Syntax Tree
 
-use crate::dialect::{from_token, is_identifier, Token, TokenType};
+use crate::dialect::TokenType::*;
+use crate::dialect::{from_token, is_identifier, Token};
 use crate::parser::parse::YYCODETYPE;
 use std::fmt::{Display, Formatter, Result, Write};
 
@@ -656,9 +657,9 @@ impl Expr {
         }
     }
     pub fn not_null(x: Expr, op: YYCODETYPE) -> Expr {
-        if op == TokenType::TK_ISNULL as YYCODETYPE {
+        if op == TK_ISNULL as YYCODETYPE {
             Expr::IsNull(Box::new(x))
-        } else if op == TokenType::TK_NOTNULL as YYCODETYPE {
+        } else if op == TK_NOTNULL as YYCODETYPE {
             Expr::NotNull(Box::new(x))
         } else {
             unreachable!()
@@ -976,9 +977,9 @@ pub enum LikeOperator {
 
 impl LikeOperator {
     pub fn from_token(token_type: YYCODETYPE, token: Token) -> LikeOperator {
-        if token_type == TokenType::TK_MATCH as YYCODETYPE {
+        if token_type == TK_MATCH as YYCODETYPE {
             return LikeOperator::Match;
-        } else if token_type == TokenType::TK_LIKE_KW as YYCODETYPE {
+        } else if token_type == TK_LIKE_KW as YYCODETYPE {
             if let Some(ref token) = token {
                 if "LIKE".eq_ignore_ascii_case(token) {
                     return LikeOperator::Like;
@@ -1031,26 +1032,26 @@ pub enum Operator {
 impl From<YYCODETYPE> for Operator {
     fn from(token_type: YYCODETYPE) -> Operator {
         match token_type {
-            x if x == TokenType::TK_AND as YYCODETYPE => Operator::And,
-            x if x == TokenType::TK_OR as YYCODETYPE => Operator::Or,
-            x if x == TokenType::TK_LT as YYCODETYPE => Operator::Less,
-            x if x == TokenType::TK_GT as YYCODETYPE => Operator::Greater,
-            x if x == TokenType::TK_GE as YYCODETYPE => Operator::GreaterEquals,
-            x if x == TokenType::TK_LE as YYCODETYPE => Operator::LessEquals,
-            x if x == TokenType::TK_EQ as YYCODETYPE => Operator::Equals,
-            x if x == TokenType::TK_NE as YYCODETYPE => Operator::NotEquals,
-            x if x == TokenType::TK_BITAND as YYCODETYPE => Operator::BitwiseAnd,
-            x if x == TokenType::TK_BITOR as YYCODETYPE => Operator::BitwiseOr,
-            x if x == TokenType::TK_LSHIFT as YYCODETYPE => Operator::LeftShift,
-            x if x == TokenType::TK_RSHIFT as YYCODETYPE => Operator::RightShift,
-            x if x == TokenType::TK_PLUS as YYCODETYPE => Operator::Add,
-            x if x == TokenType::TK_MINUS as YYCODETYPE => Operator::Substract,
-            x if x == TokenType::TK_STAR as YYCODETYPE => Operator::Multiply,
-            x if x == TokenType::TK_SLASH as YYCODETYPE => Operator::Divide,
-            x if x == TokenType::TK_REM as YYCODETYPE => Operator::Modulus,
-            x if x == TokenType::TK_CONCAT as YYCODETYPE => Operator::Concat,
-            x if x == TokenType::TK_IS as YYCODETYPE => Operator::Is,
-            x if x == TokenType::TK_NOT as YYCODETYPE => Operator::IsNot,
+            x if x == TK_AND as YYCODETYPE => Operator::And,
+            x if x == TK_OR as YYCODETYPE => Operator::Or,
+            x if x == TK_LT as YYCODETYPE => Operator::Less,
+            x if x == TK_GT as YYCODETYPE => Operator::Greater,
+            x if x == TK_GE as YYCODETYPE => Operator::GreaterEquals,
+            x if x == TK_LE as YYCODETYPE => Operator::LessEquals,
+            x if x == TK_EQ as YYCODETYPE => Operator::Equals,
+            x if x == TK_NE as YYCODETYPE => Operator::NotEquals,
+            x if x == TK_BITAND as YYCODETYPE => Operator::BitwiseAnd,
+            x if x == TK_BITOR as YYCODETYPE => Operator::BitwiseOr,
+            x if x == TK_LSHIFT as YYCODETYPE => Operator::LeftShift,
+            x if x == TK_RSHIFT as YYCODETYPE => Operator::RightShift,
+            x if x == TK_PLUS as YYCODETYPE => Operator::Add,
+            x if x == TK_MINUS as YYCODETYPE => Operator::Substract,
+            x if x == TK_STAR as YYCODETYPE => Operator::Multiply,
+            x if x == TK_SLASH as YYCODETYPE => Operator::Divide,
+            x if x == TK_REM as YYCODETYPE => Operator::Modulus,
+            x if x == TK_CONCAT as YYCODETYPE => Operator::Concat,
+            x if x == TK_IS as YYCODETYPE => Operator::Is,
+            x if x == TK_NOT as YYCODETYPE => Operator::IsNot,
             _ => unreachable!(),
         }
     }
@@ -1098,10 +1099,10 @@ pub enum UnaryOperator {
 impl From<YYCODETYPE> for UnaryOperator {
     fn from(token_type: YYCODETYPE) -> UnaryOperator {
         match token_type {
-            x if x == TokenType::TK_BITNOT as YYCODETYPE => UnaryOperator::BitwiseNot,
-            x if x == TokenType::TK_MINUS as YYCODETYPE => UnaryOperator::Negative,
-            x if x == TokenType::TK_NOT as YYCODETYPE => UnaryOperator::Not,
-            x if x == TokenType::TK_PLUS as YYCODETYPE => UnaryOperator::Positive,
+            x if x == TK_BITNOT as YYCODETYPE => UnaryOperator::BitwiseNot,
+            x if x == TK_MINUS as YYCODETYPE => UnaryOperator::Negative,
+            x if x == TK_NOT as YYCODETYPE => UnaryOperator::Not,
+            x if x == TK_PLUS as YYCODETYPE => UnaryOperator::Positive,
             _ => unreachable!(),
         }
     }
