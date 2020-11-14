@@ -1,4 +1,3 @@
-use env_logger;
 use fallible_iterator::FallibleIterator;
 use std::env;
 use std::fs::File;

@@ -200,15 +200,15 @@ pub fn is_identifier(name: &str) -> bool {
 }
 
 pub fn is_identifier_start(b: u8) -> bool {
-    (b >= b'A' && b <= b'Z') || b == b'_' || (b >= b'a' && b <= b'z') || b > b'\x7F'
+    (b'A'..=b'Z').contains(&b) || b == b'_' || (b'a'..=b'z').contains(&b) || b > b'\x7F'
 }
 
 pub fn is_identifier_continue(b: u8) -> bool {
     b == b'$'
-        || (b >= b'0' && b <= b'9')
-        || (b >= b'A' && b <= b'Z')
+        || (b'0'..=b'9').contains(&b)
+        || (b'A'..=b'Z').contains(&b)
         || b == b'_'
-        || (b >= b'a' && b <= b'z')
+        || (b'a'..=b'z').contains(&b)
         || b > b'\x7F'
 }
 
