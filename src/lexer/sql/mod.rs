@@ -376,7 +376,7 @@ impl Splitter for Tokenizer {
             b'0'..=b'9' => return number(data, eof),
             b'[' => {
                 if let Some(i) = memchr(b']', data) {
-                    // FIXME do not include the '['/']' in the token
+                    // Keep original quotes / '[' ... ’]'
                     return Ok((Some((&data[0..i + 1], TK_ID)), i + 1));
                 } else if eof {
                     return Err(Error::UnterminatedBracket(None));
@@ -441,14 +441,12 @@ fn literal(data: &[u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, usiz
     let tt = if quote == b'\'' { TK_STRING } else { TK_ID };
     let mut pb = 0;
     let mut end = None;
-    //let mut escaped_quotes = false;
     // data[0] == quote => skip(1)
     for (i, b) in data.iter().enumerate().skip(1) {
         if *b == quote {
             if pb == quote {
                 // escaped quote
                 pb = 0;
-                //escaped_quotes = true;
                 continue;
             }
         } else if pb == quote {
@@ -462,37 +460,14 @@ fn literal(data: &[u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, usiz
             Some(i) => i,
             _ => data.len(),
         };
-        // do not include the quote in the token
-        return Ok((
-            Some((
-                /*if escaped_quotes {
-                    unescape_quotes(&mut data[1..i - 1], quote)
-                } else */
-                { &data[0..i] },
-                tt,
-            )),
-            i,
-        ));
+        // keep original quotes in the token
+        return Ok((Some((&data[0..i], tt)), i));
     } else if eof {
         return Err(Error::UnterminatedLiteral(None));
     }
     // else ask more data until closing quote
     Ok((None, 0))
 }
-
-/*fn unescape_quotes(data: &mut [u8], quote: u8) -> &[u8] {
-    let mut i = 0;
-    let mut j = 0;
-    while i < data.len() {
-        data[j] = data[i];
-        if data[i] == quote {
-            i += 1;
-        }
-        i += 1;
-        j += 1;
-    }
-    &data[..j]
-}*/
 
 fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert!(data[0] == b'x' || data[0] == b'X');

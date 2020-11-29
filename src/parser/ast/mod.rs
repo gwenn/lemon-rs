@@ -922,7 +922,9 @@ impl Display for Expr {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     Numeric(String),
+    // TODO Check that string is already quoted and correctly escaped
     String(String),
+    // TODO Check that string is valid (only hexa)
     Blob(String),
     Keyword(String),
     Null,
@@ -2879,10 +2881,12 @@ fn double_quote(name: &str, f: &mut Formatter<'_>) -> Result {
     }
     if is_identifier(name) {
         // identifier must be quoted when they match a keyword...
-        //if is_keyword(name) {
+        /*if is_keyword(name) {
+            f.write_char('`')?;
+            f.write_str(name)?;
+            return f.write_char('`');
+        }*/
         return f.write_str(name);
-        //}
-        //return f.write_str(name);
     }
     /*f.write_char('"')?;
     for c in name.chars() {
@@ -2891,8 +2895,7 @@ fn double_quote(name: &str, f: &mut Formatter<'_>) -> Result {
         }
         f.write_char(c)?;
     }
-    f.write_char('"')
-    */
+    f.write_char('"')*/
     f.write_str(name)
 }
 
