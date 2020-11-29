@@ -3,6 +3,7 @@ use std::env;
 use std::fs::File;
 use std::panic;
 
+use sqlite_parser::lexer::InputStream;
 use sqlite_parser::lexer::sql::Parser;
 
 /// Parse specified files and check all commands.
@@ -13,7 +14,8 @@ fn main() {
         println!("{}", arg);
         let result = panic::catch_unwind(|| {
             let f = File::open(arg.clone()).unwrap();
-            let mut parser = Parser::new(f);
+            let input = InputStream::new(f);
+            let mut parser = Parser::new(input);
             loop {
                 match parser.next() {
                     Ok(None) => break,

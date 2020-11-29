@@ -2,7 +2,6 @@
 use fallible_iterator::FallibleIterator;
 use memchr::memchr;
 use std::collections::VecDeque;
-use std::io::Read;
 use std::result::Result;
 
 pub use crate::dialect::TokenType;
@@ -18,21 +17,21 @@ mod error;
 
 use crate::lexer::scan::ScanError;
 use crate::lexer::scan::Splitter;
-use crate::lexer::Scanner;
+use crate::lexer::{Input, Scanner};
 pub use error::Error;
 
 // TODO Extract scanning stuff and move this into the parser crate
 // to make possible to use the tokenizer without depending on the parser...
 
-pub struct Parser<R: Read> {
-    scanner: Scanner<R, Tokenizer>,
+pub struct Parser<I: Input> {
+    scanner: Scanner<I, Tokenizer>,
     parser: yyParser,
     buffer: Vec<u8>,
     lookahead: VecDeque<(TokenType, String)>,
 }
 
-impl<R: Read> Parser<R> {
-    pub fn new(input: R) -> Parser<R> {
+impl<I: Input> Parser<I> {
+    pub fn new(input: I) -> Parser<I> {
         let lexer = Tokenizer::new();
         let scanner = super::Scanner::new(input, lexer);
         let ctx = Context::new();
@@ -47,7 +46,7 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    pub fn reset(&mut self, input: R) {
+    pub fn reset(&mut self, input: I) {
         self.scanner.reset(input);
     }
 
@@ -144,7 +143,7 @@ impl<R: Read> Parser<R> {
     }
 }
 
-impl<R: Read> FallibleIterator for Parser<R> {
+impl<I: Input> FallibleIterator for Parser<I> {
     type Item = Cmd;
     type Error = Error;
 

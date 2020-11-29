@@ -3,4 +3,4 @@
 mod scan;
 pub mod sql;
 
-pub use scan::{ScanError, Scanner, Splitter};
+pub use scan::{Input, InputStream, ScanError, Scanner, Splitter};
