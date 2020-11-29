@@ -5,11 +5,12 @@ use log::debug;
 use std::convert::From;
 use std::error::Error;
 use std::fmt;
-use std::io::{self, Read};
+use std::io;
 use std::result::Result;
 
+#[cfg(feature = "buf_redux")]
 use buf_redux::Buffer;
-
+#[cfg(feature = "buf_redux")]
 const MAX_CAPACITY: usize = 1024 * 1024 * 1024;
 
 pub trait Input: fmt::Debug {
@@ -55,7 +56,8 @@ impl Input for &[u8] {
 }
 
 /// Streaming input
-pub struct InputStream<R: Read> {
+#[cfg(feature = "buf_redux")]
+pub struct InputStream<R> {
     /// The reader provided by the client.
     inner: R,
     /// Buffer used as argument to split.
@@ -63,7 +65,8 @@ pub struct InputStream<R: Read> {
     eof: bool,
 }
 
-impl<R: Read> InputStream<R> {
+#[cfg(feature = "buf_redux")]
+impl<R: io::Read> InputStream<R> {
     pub fn new(inner: R) -> Self {
         Self::with_capacity(inner, 4096)
     }
@@ -78,7 +81,8 @@ impl<R: Read> InputStream<R> {
     }
 }
 
-impl<R: Read> Input for InputStream<R> {
+#[cfg(feature = "buf_redux")]
+impl<R: io::Read> Input for InputStream<R> {
     fn fill_buf(&mut self) -> io::Result<()> {
         debug!(target: "scanner", "fill_buf: {}", self.buf.capacity());
         // Is the buffer full? If so, resize.
@@ -126,7 +130,8 @@ impl<R: Read> Input for InputStream<R> {
     }
 }
 
-impl<R: Read> fmt::Debug for InputStream<R> {
+#[cfg(feature = "buf_redux")]
+impl<R> fmt::Debug for InputStream<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("InputStream")
             .field("input", &self.buf)

@@ -3,4 +3,6 @@
 mod scan;
 pub mod sql;
 
-pub use scan::{Input, InputStream, ScanError, Scanner, Splitter};
+#[cfg(feature = "buf_redux")]
+pub use scan::InputStream;
+pub use scan::{Input, ScanError, Scanner, Splitter};

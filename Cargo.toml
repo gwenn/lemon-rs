@@ -21,8 +21,9 @@ maintenance = { status = "experimental" }
 YYTRACKMAXSTACKDEPTH = []
 YYNOERRORRECOVERY = []
 YYSTACKDYNAMIC = []
+YYCOVERAGE = []
 NDEBUG = []
-default = ["YYNOERRORRECOVERY"]
+default = ["YYNOERRORRECOVERY", "buf_redux"]
 
 [dependencies]
 phf = { version = "0.8", features = ["macros"] }
@@ -30,7 +31,7 @@ log = "0.4"
 memchr = "2.0"
 fallible-iterator = "0.2"
 smallvec = "1.0"
-buf_redux = { version = "0.8", features = ["default"] }
+buf_redux = { version = "0.8", optional = true }
 
 [dev-dependencies]
 env_logger = "0.8"
