@@ -34,7 +34,7 @@ smallvec = "1.0"
 buf_redux = { version = "0.8", optional = true }
 
 [dev-dependencies]
-env_logger = "0.8"
+env_logger = { version = "0.8", default-features = false }
 trybuild = "1.0"
 
 #[build-dependencies]
