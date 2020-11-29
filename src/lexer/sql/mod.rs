@@ -238,7 +238,7 @@ impl Splitter for Tokenizer {
 
     fn split<'input>(
         &mut self,
-        data: &'input mut [u8],
+        data: &'input [u8],
         eof: bool,
     ) -> Result<(Option<Token<'input>>, usize), Error> {
         if eof && data.is_empty() {
@@ -376,8 +376,8 @@ impl Splitter for Tokenizer {
             b'0'..=b'9' => return number(data, eof),
             b'[' => {
                 if let Some(i) = memchr(b']', data) {
-                    // do not include the '['/']' in the token
-                    return Ok((Some((&data[1..i], TK_ID)), i + 1));
+                    // FIXME do not include the '['/']' in the token
+                    return Ok((Some((&data[0..i + 1], TK_ID)), i + 1));
                 } else if eof {
                     return Err(Error::UnterminatedBracket(None));
                 } // else ask more data until ']'
@@ -436,19 +436,19 @@ impl Splitter for Tokenizer {
     }
 }
 
-fn literal(data: &mut [u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, usize), Error> {
+fn literal(data: &[u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert_eq!(data[0], quote);
     let tt = if quote == b'\'' { TK_STRING } else { TK_ID };
     let mut pb = 0;
     let mut end = None;
-    let mut escaped_quotes = false;
+    //let mut escaped_quotes = false;
     // data[0] == quote => skip(1)
     for (i, b) in data.iter().enumerate().skip(1) {
         if *b == quote {
             if pb == quote {
                 // escaped quote
                 pb = 0;
-                escaped_quotes = true;
+                //escaped_quotes = true;
                 continue;
             }
         } else if pb == quote {
@@ -465,11 +465,10 @@ fn literal(data: &mut [u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, 
         // do not include the quote in the token
         return Ok((
             Some((
-                if escaped_quotes {
+                /*if escaped_quotes {
                     unescape_quotes(&mut data[1..i - 1], quote)
-                } else {
-                    &data[1..i - 1]
-                },
+                } else */
+                { &data[0..i] },
                 tt,
             )),
             i,
@@ -481,7 +480,7 @@ fn literal(data: &mut [u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, 
     Ok((None, 0))
 }
 
-fn unescape_quotes(data: &mut [u8], quote: u8) -> &[u8] {
+/*fn unescape_quotes(data: &mut [u8], quote: u8) -> &[u8] {
     let mut i = 0;
     let mut j = 0;
     while i < data.len() {
@@ -493,7 +492,7 @@ fn unescape_quotes(data: &mut [u8], quote: u8) -> &[u8] {
         j += 1;
     }
     &data[..j]
-}
+}*/
 
 fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert!(data[0] == b'x' || data[0] == b'X');

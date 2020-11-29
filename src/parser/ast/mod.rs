@@ -956,7 +956,9 @@ impl Display for Literal {
             Literal::String(ref str) => single_quote(str, f),
             Literal::Blob(ref blob) => {
                 f.write_char('X')?;
-                single_quote(blob, f)
+                f.write_char('\'')?;
+                f.write_str(blob)?;
+                f.write_char('\'')
             }
             Literal::Keyword(ref str) => f.write_str(str),
             Literal::Null => f.write_str("NULL"),
@@ -2878,13 +2880,11 @@ fn double_quote(name: &str, f: &mut Formatter<'_>) -> Result {
     if is_identifier(name) {
         // identifier must be quoted when they match a keyword...
         //if is_keyword(name) {
-        f.write_char('`')?;
-        f.write_str(name)?;
-        return f.write_char('`');
+        return f.write_str(name);
         //}
         //return f.write_str(name);
     }
-    f.write_char('"')?;
+    /*f.write_char('"')?;
     for c in name.chars() {
         if c == '"' {
             f.write_char(c)?;
@@ -2892,16 +2892,19 @@ fn double_quote(name: &str, f: &mut Formatter<'_>) -> Result {
         f.write_char(c)?;
     }
     f.write_char('"')
+    */
+    f.write_str(name)
 }
 
 // TK_STRING
 fn single_quote(name: &str, f: &mut Formatter<'_>) -> Result {
-    f.write_char('\'')?;
+    /*f.write_char('\'')?;
     for c in name.chars() {
         if c == '\'' {
             f.write_char(c)?;
         }
         f.write_char(c)?;
     }
-    f.write_char('\'')
+    f.write_char('\'')*/
+    f.write_str(name)
 }

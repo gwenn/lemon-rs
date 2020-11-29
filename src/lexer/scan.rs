@@ -39,7 +39,7 @@ pub trait Splitter: Sized {
     /// as always, holds unprocessed text.
     fn split<'input>(
         &mut self,
-        data: &'input mut [u8],
+        data: &'input [u8],
         eof: bool,
     ) -> SplitResult<'input, Self::TokenType, Self::Error>;
 }
@@ -121,7 +121,7 @@ impl<R: Read, S: Splitter> Scanner<R, S> {
             // See if we can get a token with what we already have.
             if !self.buf.is_empty() || self.eof {
                 // TODO: I don't know how to make the borrow checker happy!
-                let data = unsafe { mem::transmute(self.buf.buf_mut()) };
+                let data = unsafe { mem::transmute(self.buf.buf()) };
                 match self.splitter.split(data, self.eof) {
                     Err(mut e) => {
                         e.position(self.line, self.column);
