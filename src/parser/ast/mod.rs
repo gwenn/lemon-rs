@@ -18,7 +18,14 @@ impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
             self.f.write_char(' ')?;
             self.spaced = true;
         }
-        if let Some(str) = ty.as_str() {
+        if ty == TK_BLOB {
+            self.f.write_char('X')?;
+            self.f.write_char('\'')?;
+            if let Some(str) = value {
+                self.f.write_str(str)?;
+            }
+            return self.f.write_char('\'');
+        } else if let Some(str) = ty.as_str() {
             self.f.write_str(str)?;
             self.spaced = ty == TK_LP; // str should not be whitespace
         }
@@ -292,7 +299,7 @@ impl ToTokens for Stmt {
                 s.append(TK_ON, None)?;
                 tbl_name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
-                comma_(columns, s)?;
+                comma(columns, s)?;
                 s.append(TK_RP, None)?;
                 if let Some(where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
@@ -383,7 +390,7 @@ impl ToTokens for Stmt {
                 view_name.to_tokens(s)?;
                 if let Some(columns) = columns {
                     s.append(TK_LP, None)?;
-                    comma_(columns, s)?;
+                    comma(columns, s)?;
                     s.append(TK_RP, None)?;
                 }
                 s.append(TK_AS, None)?;
@@ -436,7 +443,7 @@ impl ToTokens for Stmt {
                 if let Some(order_by) = order_by {
                     s.append(TK_ORDER, None)?;
                     s.append(TK_BY, None)?;
-                    comma_(order_by, s)?;
+                    comma(order_by, s)?;
                 }
                 if let Some(limit) = limit {
                     limit.to_tokens(s)?;
@@ -518,7 +525,7 @@ impl ToTokens for Stmt {
                 tbl_name.to_tokens(s)?;
                 if let Some(columns) = columns {
                     s.append(TK_LP, None)?;
-                    comma_(columns, s)?;
+                    comma(columns, s)?;
                     s.append(TK_RP, None)?;
                 }
                 body.to_tokens(s)
@@ -586,7 +593,7 @@ impl ToTokens for Stmt {
                     indexed.to_tokens(s)?;
                 }
                 s.append(TK_SET, None)?;
-                comma_(sets, s)?;
+                comma(sets, s)?;
                 if let Some(from) = from {
                     s.append(TK_FROM, None)?;
                     from.to_tokens(s)?;
@@ -598,7 +605,7 @@ impl ToTokens for Stmt {
                 if let Some(order_by) = order_by {
                     s.append(TK_ORDER, None)?;
                     s.append(TK_BY, None)?;
-                    comma_(order_by, s)?;
+                    comma(order_by, s)?;
                 }
                 if let Some(limit) = limit {
                     limit.to_tokens(s)?;
@@ -832,7 +839,7 @@ impl ToTokens for Expr {
             Expr::Collate(expr, collation) => {
                 expr.to_tokens(s)?;
                 s.append(TK_COLLATE, None)?;
-                double_quote(collation, f)
+                double_quote(collation, s)
             }
             Expr::DoublyQualified(db_name, tbl_name, col_name) => {
                 db_name.to_tokens(s)?;
@@ -859,7 +866,7 @@ impl ToTokens for Expr {
                     distinctness.to_tokens(s)?;
                 }
                 if let Some(args) = args {
-                    comma_(args, s)?;
+                    comma(args, s)?;
                 }
                 s.append(TK_RP, None)?;
                 if let Some(filter_over) = filter_over {
@@ -886,7 +893,7 @@ impl ToTokens for Expr {
                 s.append(TK_IN, None)?;
                 s.append(TK_LP, None)?;
                 if let Some(rhs) = rhs {
-                    comma_(rhs, s)?;
+                    comma(rhs, s)?;
                 }
                 s.append(TK_RP, None)
             }
@@ -914,7 +921,7 @@ impl ToTokens for Expr {
                 rhs.to_tokens(s)?;
                 if let Some(args) = args {
                     s.append(TK_LP, None)?;
-                    comma_(args, s)?;
+                    comma(args, s)?;
                     s.append(TK_RP, None)?;
                 }
                 Ok(())
@@ -950,7 +957,7 @@ impl ToTokens for Expr {
             }
             Expr::Parenthesized(exprs) => {
                 s.append(TK_LP, None)?;
-                comma_(exprs, s)?;
+                comma(exprs, s)?;
                 s.append(TK_RP, None)
             }
             Expr::Qualified(qualifier, qualified) => {
@@ -981,10 +988,10 @@ impl ToTokens for Expr {
                 sub_expr.to_tokens(s)
             }
             Expr::Variable(var) => match var.chars().next() {
-                Some(c) if c == '$' || c == '@' || c == '#' || c == ':' => s.append(TK_VARIABLE, Some(var)),
-                Some(_) => {
-                    s.append(TK_VARIABLE, Some(&("?".to_owned() + var)))
+                Some(c) if c == '$' || c == '@' || c == '#' || c == ':' => {
+                    s.append(TK_VARIABLE, Some(var))
                 }
+                Some(_) => s.append(TK_VARIABLE, Some(&("?".to_owned() + var))),
                 None => s.append(TK_VARIABLE, Some("?")),
             },
         }
@@ -1030,25 +1037,15 @@ impl Literal {
 }
 impl ToTokens for Literal {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Literal {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Literal::Numeric(ref num) => f.write_str(num),
-            Literal::String(ref str) => single_quote(str, f),
-            Literal::Blob(ref blob) => {
-                f.write_char('X')?;
-                f.write_char('\'')?;
-                f.write_str(blob)?;
-                f.write_char('\'')
-            }
-            Literal::Keyword(ref str) => f.write_str(str),
-            Literal::Null => f.write_str("NULL"),
-            Literal::CurrentDate => f.write_str("CURRENT_DATE"),
-            Literal::CurrentTime => f.write_str("CURRENT_TIME"),
-            Literal::CurrentTimestamp => f.write_str("CURRENT_TIMESTAMP"),
+            Literal::Numeric(ref num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
+            Literal::String(ref str) => s.append(TK_STRING, Some(str)),
+            Literal::Blob(ref blob) => s.append(TK_BLOB, Some(blob)),
+            Literal::Keyword(ref str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
+            Literal::Null => s.append(TK_NULL, None),
+            Literal::CurrentDate => s.append(TK_CTIME_KW, Some("CURRENT_DATE")),
+            Literal::CurrentTime => s.append(TK_CTIME_KW, Some("CURRENT_TIME")),
+            Literal::CurrentTimestamp => s.append(TK_CTIME_KW, Some("CURRENT_TIMESTAMP")),
         }
     }
 }
@@ -1081,17 +1078,15 @@ impl LikeOperator {
 }
 impl ToTokens for LikeOperator {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for LikeOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            LikeOperator::Glob => "GLOB",
-            LikeOperator::Like => "LIKE",
-            LikeOperator::Match => "MATCH",
-            LikeOperator::Regexp => "REGEXP",
-        })
+        s.append(
+            TK_LIKE_KW,
+            Some(match self {
+                LikeOperator::Glob => "GLOB",
+                LikeOperator::Like => "LIKE",
+                LikeOperator::Match => "MATCH",
+                LikeOperator::Regexp => "REGEXP",
+            }),
+        )
     }
 }
 
@@ -1148,33 +1143,31 @@ impl From<YYCODETYPE> for Operator {
 }
 impl ToTokens for Operator {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Operator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Operator::Add => "+",
-            Operator::And => "AND",
-            Operator::BitwiseAnd => "&",
-            Operator::BitwiseOr => "|",
-            Operator::Concat => "||",
-            Operator::Equals => "=",
-            Operator::Divide => "/",
-            Operator::Greater => ">",
-            Operator::GreaterEquals => ">=",
-            Operator::Is => "IS",
-            Operator::IsNot => "IS NOT",
-            Operator::LeftShift => "<<",
-            Operator::Less => "<",
-            Operator::LessEquals => "<=",
-            Operator::Modulus => "%",
-            Operator::Multiply => "*",
-            Operator::NotEquals => "<>",
-            Operator::Or => "OR",
-            Operator::RightShift => ">>",
-            Operator::Substract => "-",
-        })
+        match self {
+            Operator::Add => s.append(TK_PLUS, None),
+            Operator::And => s.append(TK_AND, None),
+            Operator::BitwiseAnd => s.append(TK_BITAND, None),
+            Operator::BitwiseOr => s.append(TK_BITOR, None),
+            Operator::Concat => s.append(TK_CONCAT, None),
+            Operator::Equals => s.append(TK_EQ, None),
+            Operator::Divide => s.append(TK_SLASH, None),
+            Operator::Greater => s.append(TK_GT, None),
+            Operator::GreaterEquals => s.append(TK_GE, None),
+            Operator::Is => s.append(TK_IS, None),
+            Operator::IsNot => {
+                s.append(TK_IS, None)?;
+                s.append(TK_NOT, None)
+            }
+            Operator::LeftShift => s.append(TK_LSHIFT, None),
+            Operator::Less => s.append(TK_LT, None),
+            Operator::LessEquals => s.append(TK_LE, None),
+            Operator::Modulus => s.append(TK_REM, None),
+            Operator::Multiply => s.append(TK_STAR, None),
+            Operator::NotEquals => s.append(TK_NE, None),
+            Operator::Or => s.append(TK_OR, None),
+            Operator::RightShift => s.append(TK_RSHIFT, None),
+            Operator::Substract => s.append(TK_MINUS, None),
+        }
     }
 }
 
@@ -1203,17 +1196,15 @@ impl From<YYCODETYPE> for UnaryOperator {
 }
 impl ToTokens for UnaryOperator {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for UnaryOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            UnaryOperator::BitwiseNot => "~",
-            UnaryOperator::Negative => "-",
-            UnaryOperator::Not => "NOT",
-            UnaryOperator::Positive => "+",
-        })
+        s.append(
+            match self {
+                UnaryOperator::BitwiseNot => TK_BITNOT,
+                UnaryOperator::Negative => TK_MINUS,
+                UnaryOperator::Not => TK_NOT,
+                UnaryOperator::Positive => TK_PLUS,
+            },
+            None,
+        )
     }
 }
 
@@ -1228,23 +1219,17 @@ pub struct Select {
 }
 impl ToTokens for Select {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Select {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(ref with) = self.with {
-            with.fmt(f)?;
-            f.write_char(' ')?;
+            with.to_tokens(s)?;
         }
-        self.body.fmt(f)?;
+        self.body.to_tokens(s)?;
         if let Some(ref order_by) = self.order_by {
-            f.write_str(" ORDER BY ")?;
-            comma(order_by, f)?;
+            s.append(TK_ORDER, None)?;
+            s.append(TK_BY, None)?;
+            comma(order_by, s)?;
         }
         if let Some(ref limit) = self.limit {
-            f.write_char(' ')?;
-            limit.fmt(f)?;
+            limit.to_tokens(s)?;
         }
         Ok(())
     }
@@ -1265,14 +1250,12 @@ impl SelectBody {
         }
     }
 }
-
-impl Display for SelectBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.select.fmt(f)?;
+impl ToTokens for SelectBody {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        self.select.to_tokens(s)?;
         if let Some(ref compounds) = self.compounds {
             for compound in compounds {
-                f.write_char(' ')?;
-                compound.fmt(f)?;
+                compound.to_tokens(s)?;
             }
         }
         Ok(())
@@ -1284,12 +1267,10 @@ pub struct CompoundSelect {
     pub operator: CompoundOperator,
     pub select: OneSelect,
 }
-
-impl Display for CompoundSelect {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.operator.fmt(f)?;
-        f.write_char(' ')?;
-        self.select.fmt(f)
+impl ToTokens for CompoundSelect {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        self.operator.to_tokens(s)?;
+        self.select.to_tokens(s)
     }
 }
 
@@ -1301,15 +1282,17 @@ pub enum CompoundOperator {
     Except,
     Intersect,
 }
-
-impl Display for CompoundOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            CompoundOperator::Union => "UNION",
-            CompoundOperator::UnionAll => "UNION ALL",
-            CompoundOperator::Except => "EXCEPT",
-            CompoundOperator::Intersect => "INTERSECT",
-        })
+impl ToTokens for CompoundOperator {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        match self {
+            CompoundOperator::Union => s.append(TK_UNION, None),
+            CompoundOperator::UnionAll => {
+                s.append(TK_UNION, None)?;
+                s.append(TK_ALL, None)
+            }
+            CompoundOperator::Except => s.append(TK_EXCEPT, None),
+            CompoundOperator::Intersect => s.append(TK_INTERSECT, None),
+        }
     }
 }
 
@@ -1326,9 +1309,8 @@ pub enum OneSelect {
     },
     Values(Vec<Vec<Expr>>),
 }
-
-impl Display for OneSelect {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for OneSelect {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             OneSelect::Select {
                 distinctness,
@@ -1338,40 +1320,39 @@ impl Display for OneSelect {
                 group_by,
                 window_clause,
             } => {
-                f.write_str("SELECT")?;
+                s.append(TK_SELECT, None)?;
                 if let Some(ref distinctness) = distinctness {
-                    f.write_char(' ')?;
-                    distinctness.fmt(f)?;
+                    distinctness.to_tokens(s)?;
                 }
-                f.write_char(' ')?;
-                comma(columns, f)?;
+                comma(columns, s)?;
                 if let Some(ref from) = from {
-                    f.write_str(" FROM ")?;
-                    from.fmt(f)?;
+                    s.append(TK_FROM, None)?;
+                    from.to_tokens(s)?;
                 }
                 if let Some(ref where_clause) = where_clause {
-                    f.write_str(" WHERE ")?;
-                    where_clause.fmt(f)?;
+                    s.append(TK_WHERE, None)?;
+                    where_clause.to_tokens(s)?;
                 }
                 if let Some(ref group_by) = group_by {
-                    f.write_char(' ')?;
-                    group_by.fmt(f)?;
+                    group_by.to_tokens(s)?;
                 }
                 if let Some(ref window_clause) = window_clause {
-                    f.write_str(" WINDOW ")?;
-                    comma(window_clause, f)?;
+                    s.append(TK_WINDOW, None)?;
+                    comma(window_clause, s)?;
                 }
                 Ok(())
             }
             OneSelect::Values(values) => {
                 for (i, vals) in values.iter().enumerate() {
                     if i == 0 {
-                        f.write_str("VALUES (")?;
+                        s.append(TK_VALUES, None)?;
+                        s.append(TK_LP, None)?;
                     } else {
-                        f.write_str(", (")?;
+                        s.append(TK_COMMA, None)?;
+                        s.append(TK_LP, None)?;
                     }
-                    comma(vals, f)?;
-                    f.write_char(')')?;
+                    comma(vals, s)?;
+                    s.append(TK_RP, None)?;
                 }
                 Ok(())
             }
@@ -1385,11 +1366,6 @@ pub struct FromClause {
     pub select: Option<Box<SelectTable>>, // FIXME mandatory
     pub joins: Option<Vec<JoinedSelectTable>>,
     op: Option<JoinOperator>, // FIXME transient
-}
-impl ToTokens for FromClause {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
 }
 impl FromClause {
     pub(crate) fn empty() -> FromClause {
@@ -1425,14 +1401,12 @@ impl FromClause {
         self.op = Some(op);
     }
 }
-
-impl Display for FromClause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.select.as_ref().unwrap().fmt(f)?;
+impl ToTokens for FromClause {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        self.select.as_ref().unwrap().to_tokens(s)?;
         if let Some(ref joins) = self.joins {
             for join in joins {
-                f.write_char(' ')?;
-                join.fmt(f)?;
+                join.to_tokens(s)?;
             }
         }
         Ok(())
@@ -1446,15 +1420,13 @@ pub enum Distinctness {
 }
 impl ToTokens for Distinctness {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Distinctness {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Distinctness::Distinct => "DISTINCT",
-            Distinctness::All => "ALL",
-        })
+        s.append(
+            match self {
+                Distinctness::Distinct => TK_DISTINCT,
+                Distinctness::All => TK_ALL,
+            },
+            None,
+        )
     }
 }
 
@@ -1466,22 +1438,21 @@ pub enum ResultColumn {
     // table name
     TableStar(Name),
 }
-
-impl Display for ResultColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for ResultColumn {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             ResultColumn::Expr(expr, alias) => {
-                expr.fmt(f)?;
+                expr.to_tokens(s)?;
                 if let Some(alias) = alias {
-                    f.write_char(' ')?;
-                    alias.fmt(f)?;
+                    alias.to_tokens(s)?;
                 }
                 Ok(())
             }
-            ResultColumn::Star => f.write_char('*'),
+            ResultColumn::Star => s.append(TK_STAR, None),
             ResultColumn::TableStar(tbl_name) => {
-                tbl_name.fmt(f)?;
-                f.write_str(".*")
+                tbl_name.to_tokens(s)?;
+                s.append(TK_DOT, None)?;
+                s.append(TK_STAR, None)
             }
         }
     }
@@ -1492,15 +1463,14 @@ pub enum As {
     As(Name),
     Elided(Name), // FIXME Ids
 }
-
-impl Display for As {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for As {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             As::As(ref name) => {
-                f.write_str("AS ")?;
-                name.fmt(f)
+                s.append(TK_AS, None)?;
+                name.to_tokens(s)
             }
-            As::Elided(ref name) => name.fmt(f),
+            As::Elided(ref name) => name.to_tokens(s),
         }
     }
 }
@@ -1512,15 +1482,12 @@ pub struct JoinedSelectTable {
     pub table: SelectTable,
     pub constraint: Option<JoinConstraint>,
 }
-
-impl Display for JoinedSelectTable {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.operator.fmt(f)?;
-        f.write_char(' ')?;
-        self.table.fmt(f)?;
+impl ToTokens for JoinedSelectTable {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        self.operator.to_tokens(s)?;
+        self.table.to_tokens(s)?;
         if let Some(ref constraint) = self.constraint {
-            f.write_char(' ')?;
-            constraint.fmt(f)?;
+            constraint.to_tokens(s)?;
         }
         Ok(())
     }
@@ -1534,52 +1501,46 @@ pub enum SelectTable {
     Select(Select, Option<As>),
     Sub(FromClause, Option<As>),
 }
-
-impl Display for SelectTable {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for SelectTable {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             SelectTable::Table(name, alias, indexed) => {
-                name.fmt(f)?;
+                name.to_tokens(s)?;
                 if let Some(alias) = alias {
-                    f.write_char(' ')?;
-                    alias.fmt(f)?;
+                    alias.to_tokens(s)?;
                 }
                 if let Some(indexed) = indexed {
-                    f.write_char(' ')?;
-                    indexed.fmt(f)?;
+                    indexed.to_tokens(s)?;
                 }
                 Ok(())
             }
             SelectTable::TableCall(name, exprs, alias) => {
-                name.fmt(f)?;
-                f.write_char('(')?;
+                name.to_tokens(s)?;
+                s.append(TK_LP, None)?;
                 if let Some(exprs) = exprs {
-                    comma(exprs, f)?;
+                    comma(exprs, s)?;
                 }
-                f.write_char(')')?;
+                s.append(TK_RP, None)?;
                 if let Some(alias) = alias {
-                    f.write_char(' ')?;
-                    alias.fmt(f)?;
+                    alias.to_tokens(s)?;
                 }
                 Ok(())
             }
             SelectTable::Select(select, alias) => {
-                f.write_char('(')?;
-                select.fmt(f)?;
-                f.write_char(')')?;
+                s.append(TK_LP, None)?;
+                select.to_tokens(s)?;
+                s.append(TK_RP, None)?;
                 if let Some(alias) = alias {
-                    f.write_char(' ')?;
-                    alias.fmt(f)?;
+                    alias.to_tokens(s)?;
                 }
                 Ok(())
             }
             SelectTable::Sub(from, alias) => {
-                f.write_char('(')?;
-                from.fmt(f)?;
-                f.write_char(')')?;
+                s.append(TK_LP, None)?;
+                from.to_tokens(s)?;
+                s.append(TK_RP, None)?;
                 if let Some(alias) = alias {
-                    f.write_char(' ')?;
-                    alias.fmt(f)?;
+                    alias.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -1673,20 +1634,18 @@ impl JoinOperator {
         }
     }
 }
-
-impl Display for JoinOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for JoinOperator {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            JoinOperator::Comma => f.write_char(','),
+            JoinOperator::Comma => s.append(TK_COMMA, None),
             JoinOperator::TypedJoin { natural, join_type } => {
                 if *natural {
-                    f.write_str(" NATURAL")?;
+                    s.append(TK_JOIN_KW, Some("NATURAL"))?;
                 }
                 if let Some(ref join_type) = join_type {
-                    f.write_char(' ')?;
-                    join_type.fmt(f)?;
+                    join_type.to_tokens(s)?;
                 }
-                f.write_str(" JOIN")
+                s.append(TK_JOIN, None)
             }
         }
     }
@@ -1699,15 +1658,17 @@ pub enum JoinType {
     Inner,
     Cross,
 }
-
-impl Display for JoinType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            JoinType::Left => "LEFT",
-            JoinType::LeftOuter => "LEFT OUTER",
-            JoinType::Inner => "INNER",
-            JoinType::Cross => "CROSS",
-        })
+impl ToTokens for JoinType {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(
+            TK_JOIN_KW,
+            match self {
+                JoinType::Left => Some("LEFT"),
+                JoinType::LeftOuter => Some("LEFT OUTER"),
+                JoinType::Inner => Some("INNER"),
+                JoinType::Cross => Some("CROSS"),
+            },
+        )
     }
 }
 
@@ -1730,18 +1691,18 @@ impl JoinConstraint {
         }
     }
 }
-
-impl Display for JoinConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for JoinConstraint {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             JoinConstraint::On(expr) => {
-                f.write_str("ON ")?;
-                expr.fmt(f)
+                s.append(TK_ON, None)?;
+                expr.to_tokens(s)
             }
             JoinConstraint::Using(col_names) => {
-                f.write_str("USING (")?;
-                comma(col_names, f)?;
-                f.write_char(')')
+                s.append(TK_USING, None)?;
+                s.append(TK_LP, None)?;
+                comma(col_names, s)?;
+                s.append(TK_RP, None)
             }
         }
     }
@@ -1752,14 +1713,14 @@ pub struct GroupBy {
     pub exprs: Vec<Expr>,
     pub having: Option<Expr>,
 }
-
-impl Display for GroupBy {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str("GROUP BY ")?;
-        comma(&self.exprs, f)?;
+impl ToTokens for GroupBy {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_GROUP, None)?;
+        s.append(TK_BY, None)?;
+        comma(&self.exprs, s)?;
         if let Some(ref having) = self.having {
-            f.write_str(" HAVING ")?;
-            having.fmt(f)?;
+            s.append(TK_HAVING, None)?;
+            having.to_tokens(s)?;
         }
         Ok(())
     }
@@ -1776,12 +1737,7 @@ impl Id {
 }
 impl ToTokens for Id {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Id {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        double_quote(&self.0, f)
+        double_quote(&self.0, s)
     }
 }
 
@@ -1798,12 +1754,7 @@ impl Name {
 }
 impl ToTokens for Name {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Name {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        double_quote(&self.0, f)
+        double_quote(&self.0, s)
     }
 }
 
@@ -1846,19 +1797,14 @@ impl QualifiedName {
 }
 impl ToTokens for QualifiedName {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for QualifiedName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(ref db_name) = self.db_name {
-            db_name.fmt(f)?;
-            f.write_char('.')?;
+            db_name.to_tokens(s)?;
+            s.append(TK_DOT, None)?;
         }
-        self.name.fmt(f)?;
+        self.name.to_tokens(s)?;
         if let Some(ref alias) = self.alias {
-            f.write_str(" AS ")?;
-            alias.fmt(f)?;
+            s.append(TK_AS, None)?;
+            alias.to_tokens(s)?;
         }
         Ok(())
     }
@@ -1874,25 +1820,22 @@ pub enum AlterTableBody {
 }
 impl ToTokens for AlterTableBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for AlterTableBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             AlterTableBody::RenameTo(name) => {
-                f.write_str("RENAME TO ")?;
-                name.fmt(f)
+                s.append(TK_RENAME, None)?;
+                s.append(TK_TO, None)?;
+                name.to_tokens(s)
             }
             AlterTableBody::AddColumn(def) => {
-                f.write_str("ADD COLUMN ")?;
-                def.fmt(f)
+                s.append(TK_ADD, None)?;
+                s.append(TK_COLUMNKW, None)?;
+                def.to_tokens(s)
             }
             AlterTableBody::RenameColumn { old, new } => {
-                f.write_str("RENAME ")?;
-                old.fmt(f)?;
-                f.write_str(" TO ")?;
-                new.fmt(f)
+                s.append(TK_RENAME, None)?;
+                old.to_tokens(s)?;
+                s.append(TK_TO, None)?;
+                new.to_tokens(s)
             }
         }
     }
@@ -1911,32 +1854,28 @@ pub enum CreateTableBody {
 }
 impl ToTokens for CreateTableBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for CreateTableBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             CreateTableBody::ColumnsAndConstraints {
                 columns,
                 constraints,
                 without,
             } => {
-                f.write_char('(')?;
-                comma(columns, f)?;
+                s.append(TK_LP, None)?;
+                comma(columns, s)?;
                 if let Some(constraints) = constraints {
-                    f.write_str(", ")?;
-                    comma(constraints, f)?;
+                    s.append(TK_COMMA, None)?;
+                    comma(constraints, s)?;
                 }
-                f.write_char(')')?;
+                s.append(TK_RP, None)?;
                 if *without {
-                    f.write_str(" WITHOUT ROWID")?;
+                    s.append(TK_WITHOUT, None)?;
+                    s.append(TK_ID, Some("ROWID"))?;
                 }
                 Ok(())
             }
             CreateTableBody::AsSelect(select) => {
-                f.write_str(" AS ")?;
-                select.fmt(f)
+                s.append(TK_AS, None)?;
+                select.to_tokens(s)
             }
         }
     }
@@ -1949,17 +1888,14 @@ pub struct ColumnDefinition {
     pub col_type: Option<Type>,
     pub constraints: Vec<NamedColumnConstraint>,
 }
-
-impl Display for ColumnDefinition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.col_name.fmt(f)?;
+impl ToTokens for ColumnDefinition {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        self.col_name.to_tokens(s)?;
         if let Some(ref col_type) = self.col_type {
-            f.write_char(' ')?;
-            col_type.fmt(f)?;
+            col_type.to_tokens(s)?;
         }
         for constraint in self.constraints.iter() {
-            f.write_char(' ')?;
-            constraint.fmt(f)?;
+            constraint.to_tokens(s)?;
         }
         Ok(())
     }
@@ -1971,15 +1907,13 @@ pub struct NamedColumnConstraint {
     pub name: Option<Name>,
     pub constraint: ColumnConstraint,
 }
-
-impl Display for NamedColumnConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for NamedColumnConstraint {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if let Some(ref name) = self.name {
-            f.write_str("CONSTRAINT ")?;
-            name.fmt(f)?;
-            f.write_char(' ')?;
+            s.append(TK_CONSTRAINT, None)?;
+            name.to_tokens(s)?;
         }
-        self.constraint.fmt(f)
+        self.constraint.to_tokens(s)
     }
 }
 
@@ -2011,26 +1945,26 @@ pub enum ColumnConstraint {
         typ: Option<Id>,
     },
 }
-
-impl Display for ColumnConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for ColumnConstraint {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             ColumnConstraint::PrimaryKey {
                 order,
                 conflict_clause,
                 auto_increment,
             } => {
-                f.write_str("PRIMARY KEY")?;
+                s.append(TK_PRIMARY, None)?;
+                s.append(TK_KEY, None)?;
                 if let Some(order) = order {
-                    f.write_char(' ')?;
-                    order.fmt(f)?;
+                    order.to_tokens(s)?;
                 }
                 if let Some(conflict_clause) = conflict_clause {
-                    f.write_str(" ON CONFLICT ")?;
-                    conflict_clause.fmt(f)?;
+                    s.append(TK_ON, None)?;
+                    s.append(TK_CONFLICT, None)?;
+                    conflict_clause.to_tokens(s)?;
                 }
                 if *auto_increment {
-                    f.write_str(" AUTOINCREMENT")?;
+                    s.append(TK_AUTOINCR, None)?;
                 }
                 Ok(())
             }
@@ -2039,56 +1973,58 @@ impl Display for ColumnConstraint {
                 conflict_clause,
             } => {
                 if !nullable {
-                    f.write_str("NOT ")?;
+                    s.append(TK_NOT, None)?;
                 }
-                f.write_str("NULL")?;
+                s.append(TK_NULL, None)?;
                 if let Some(conflict_clause) = conflict_clause {
-                    f.write_str(" ON CONFLICT ")?;
-                    conflict_clause.fmt(f)?;
+                    s.append(TK_ON, None)?;
+                    s.append(TK_CONFLICT, None)?;
+                    conflict_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
             ColumnConstraint::Unique(conflict_clause) => {
-                f.write_str("UNIQUE")?;
+                s.append(TK_UNIQUE, None)?;
                 if let Some(conflict_clause) = conflict_clause {
-                    f.write_str(" ON CONFLICT ")?;
-                    conflict_clause.fmt(f)?;
+                    s.append(TK_ON, None)?;
+                    s.append(TK_CONFLICT, None)?;
+                    conflict_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
             ColumnConstraint::Check(expr) => {
-                f.write_str("CHECK (")?;
-                expr.fmt(f)?;
-                f.write_char(')')
+                s.append(TK_CHECK, None)?;
+                s.append(TK_LP, None)?;
+                expr.to_tokens(s)?;
+                s.append(TK_RP, None)
             }
             ColumnConstraint::Default(expr) => {
-                f.write_str("DEFAULT ")?;
-                expr.fmt(f)
+                s.append(TK_DEFAULT, None)?;
+                expr.to_tokens(s)
             }
-            ColumnConstraint::Defer(deref_clause) => deref_clause.fmt(f),
+            ColumnConstraint::Defer(deref_clause) => deref_clause.to_tokens(s),
             ColumnConstraint::Collate { collation_name } => {
-                f.write_str("COLLATE ")?;
-                collation_name.fmt(f)
+                s.append(TK_COLLATE, None)?;
+                collation_name.to_tokens(s)
             }
             ColumnConstraint::ForeignKey {
                 clause,
                 deref_clause,
             } => {
-                f.write_str("REFERENCES ")?;
-                clause.fmt(f)?;
+                s.append(TK_REFERENCES, None)?;
+                clause.to_tokens(s)?;
                 if let Some(deref_clause) = deref_clause {
-                    f.write_char(' ')?;
-                    deref_clause.fmt(f)?;
+                    deref_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
             ColumnConstraint::Generated { expr, typ } => {
-                f.write_str("AS (")?;
-                expr.fmt(f)?;
-                f.write_char(')')?;
+                s.append(TK_AS, None)?;
+                s.append(TK_LP, None)?;
+                expr.to_tokens(s)?;
+                s.append(TK_RP, None)?;
                 if let Some(typ) = typ {
-                    f.write_char(' ')?;
-                    typ.fmt(f)?;
+                    typ.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -2102,15 +2038,13 @@ pub struct NamedTableConstraint {
     pub name: Option<Name>,
     pub constraint: TableConstraint,
 }
-
-impl Display for NamedTableConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for NamedTableConstraint {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if let Some(ref name) = self.name {
-            f.write_str("CONSTRAINT ")?;
-            name.fmt(f)?;
-            f.write_char(' ')?;
+            s.append(TK_CONSTRAINT, None)?;
+            name.to_tokens(s)?;
         }
-        self.constraint.fmt(f)
+        self.constraint.to_tokens(s)
     }
 }
 
@@ -2133,24 +2067,26 @@ pub enum TableConstraint {
         deref_clause: Option<DeferSubclause>,
     },
 }
-
-impl Display for TableConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for TableConstraint {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             TableConstraint::PrimaryKey {
                 columns,
                 auto_increment,
                 conflict_clause,
             } => {
-                f.write_str("PRIMARY KEY (")?;
-                comma(columns, f)?;
+                s.append(TK_PRIMARY, None)?;
+                s.append(TK_KEY, None)?;
+                s.append(TK_LP, None)?;
+                comma(columns, s)?;
                 if *auto_increment {
-                    f.write_str(" AUTOINCREMENT")?;
+                    s.append(TK_AUTOINCR, None)?;
                 }
-                f.write_char(')')?;
+                s.append(TK_RP, None)?;
                 if let Some(conflict_clause) = conflict_clause {
-                    f.write_str(" ON CONFLICT ")?;
-                    conflict_clause.fmt(f)?;
+                    s.append(TK_ON, None)?;
+                    s.append(TK_CONFLICT, None)?;
+                    conflict_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -2158,32 +2094,37 @@ impl Display for TableConstraint {
                 columns,
                 conflict_clause,
             } => {
-                f.write_str("UNIQUE (")?;
-                comma(columns, f)?;
-                f.write_char(')')?;
+                s.append(TK_UNIQUE, None)?;
+                s.append(TK_LP, None)?;
+                comma(columns, s)?;
+                s.append(TK_RP, None)?;
                 if let Some(conflict_clause) = conflict_clause {
-                    f.write_str(" ON CONFLICT ")?;
-                    conflict_clause.fmt(f)?;
+                    s.append(TK_ON, None)?;
+                    s.append(TK_CONFLICT, None)?;
+                    conflict_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
             TableConstraint::Check(expr) => {
-                f.write_str("CHECK (")?;
-                expr.fmt(f)?;
-                f.write_char(')')
+                s.append(TK_CHECK, None)?;
+                s.append(TK_LP, None)?;
+                expr.to_tokens(s)?;
+                s.append(TK_RP, None)
             }
             TableConstraint::ForeignKey {
                 columns,
                 clause,
                 deref_clause,
             } => {
-                f.write_str("FOREIGN KEY (")?;
-                comma(columns, f)?;
-                f.write_str(") REFERENCES ")?;
-                clause.fmt(f)?;
+                s.append(TK_FOREIGN, None)?;
+                s.append(TK_KEY, None)?;
+                s.append(TK_LP, None)?;
+                comma(columns, s)?;
+                s.append(TK_RP, None)?;
+                s.append(TK_REFERENCES, None)?;
+                clause.to_tokens(s)?;
                 if let Some(deref_clause) = deref_clause {
-                    f.write_char(' ')?;
-                    deref_clause.fmt(f)?;
+                    deref_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -2196,13 +2137,15 @@ pub enum SortOrder {
     Asc,
     Desc,
 }
-
-impl Display for SortOrder {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            SortOrder::Asc => "ASC",
-            SortOrder::Desc => "DESC",
-        })
+impl ToTokens for SortOrder {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(
+            match self {
+                SortOrder::Asc => TK_ASC,
+                SortOrder::Desc => TK_DESC,
+            },
+            None,
+        )
     }
 }
 
@@ -2211,13 +2154,13 @@ pub enum NullsOrder {
     First,
     Last,
 }
-
-impl Display for NullsOrder {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            NullsOrder::First => "NULLS FIRST",
-            NullsOrder::Last => "NULLS LAST",
-        })
+impl ToTokens for NullsOrder {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_NULLS, None)?;
+        s.append(match self {
+            NullsOrder::First => TK_FIRST,
+            NullsOrder::Last => TK_LAST,
+        }, None)
     }
 }
 
@@ -2228,18 +2171,16 @@ pub struct ForeignKeyClause {
     pub columns: Option<Vec<IndexedColumn>>,
     pub args: Vec<RefArg>,
 }
-
-impl Display for ForeignKeyClause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.tbl_name.fmt(f)?;
+impl ToTokens for ForeignKeyClause {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        self.tbl_name.to_tokens(s)?;
         if let Some(ref columns) = self.columns {
-            f.write_char('(')?;
-            comma(columns, f)?;
-            f.write_char(')')?;
+            s.append(TK_LP, None)?;
+            comma(columns, s)?;
+            s.append(TK_RP, None)?;
         }
         for arg in self.args.iter() {
-            f.write_char(' ')?;
-            arg.fmt(f)?;
+            arg.to_tokens(s)?;
         }
         Ok(())
     }
@@ -2252,25 +2193,27 @@ pub enum RefArg {
     OnUpdate(RefAct),
     Match(Name),
 }
-
-impl Display for RefArg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for RefArg {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             RefArg::OnDelete(ref action) => {
-                f.write_str("ON DELETE ")?;
-                action.fmt(f)
+                s.append(TK_ON, None)?;
+                s.append(TK_DELETE, None)?;
+                action.to_tokens(s)
             }
             RefArg::OnInsert(ref action) => {
-                f.write_str("ON INSERT ")?;
-                action.fmt(f)
+                s.append(TK_ON, None)?;
+                s.append(TK_INSERT, None)?;
+                action.to_tokens(s)
             }
             RefArg::OnUpdate(ref action) => {
-                f.write_str("ON UPDATE ")?;
-                action.fmt(f)
+                s.append(TK_ON, None)?;
+                s.append(TK_UPDATE, None)?;
+                action.to_tokens(s)
             }
             RefArg::Match(ref name) => {
-                f.write_str("MATCH ")?;
-                name.fmt(f)
+                s.append(TK_MATCH, None)?;
+                name.to_tokens(s)
             }
         }
     }
@@ -2284,16 +2227,24 @@ pub enum RefAct {
     Restrict,
     NoAction,
 }
-
-impl Display for RefAct {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            RefAct::SetNull => "SET NULL",
-            RefAct::SetDefault => "SET DEFAULT",
-            RefAct::Cascade => "CASCADE",
-            RefAct::Restrict => "RESTRICT",
-            RefAct::NoAction => "NO ACTION",
-        })
+impl ToTokens for RefAct {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        match self {
+            RefAct::SetNull => {
+                s.append(TK_SET, None)?;
+                s.append(TK_NULL, None)
+            }
+            RefAct::SetDefault => {
+                s.append(TK_SET, None)?;
+                s.append(TK_DEFAULT, None)
+            }
+            RefAct::Cascade => s.append(TK_CASCADE, None),
+            RefAct::Restrict => s.append(TK_RESTRICT, None),
+            RefAct::NoAction => {
+                s.append(TK_NO, None)?;
+                s.append(TK_ACTION, None)
+            }
+        }
     }
 }
 
@@ -2302,16 +2253,14 @@ pub struct DeferSubclause {
     pub deferrable: bool,
     pub init_deferred: Option<InitDeferredPred>,
 }
-
-impl Display for DeferSubclause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for DeferSubclause {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if !self.deferrable {
-            f.write_str("NOT ")?;
+            s.append(TK_NOT, None)?;
         }
-        f.write_str("DEFERRABLE")?;
+        s.append(TK_DEFERRABLE, None)?;
         if let Some(init_deferred) = self.init_deferred {
-            f.write_char(' ')?;
-            init_deferred.fmt(f)?;
+            init_deferred.to_tokens(s)?;
         }
         Ok(())
     }
@@ -2322,13 +2271,16 @@ pub enum InitDeferredPred {
     InitiallyDeferred,
     InitiallyImmediate, // default
 }
-
-impl Display for InitDeferredPred {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            InitDeferredPred::InitiallyDeferred => "INITIALLY DEFERRED",
-            InitDeferredPred::InitiallyImmediate => "INITIALLY IMMEDIATE",
-        })
+impl ToTokens for InitDeferredPred {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_INITIALLY, None)?;
+        s.append(
+            match self {
+                InitDeferredPred::InitiallyDeferred => TK_DEFERRED,
+                InitDeferredPred::InitiallyImmediate => TK_IMMEDIATE,
+            },
+            None,
+        )
     }
 }
 
@@ -2341,19 +2293,13 @@ pub struct IndexedColumn {
 }
 impl ToTokens for IndexedColumn {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for IndexedColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.col_name.fmt(f)?;
+        self.col_name.to_tokens(s)?;
         if let Some(ref collation_name) = self.collation_name {
-            f.write_str(" COLLATE ")?;
-            collation_name.fmt(f)?;
+            s.append(TK_COLLATE, None)?;
+            collation_name.to_tokens(s)?;
         }
         if let Some(order) = self.order {
-            f.write_char(' ')?;
-            order.fmt(f)?;
+            order.to_tokens(s)?;
         }
         Ok(())
     }
@@ -2367,17 +2313,16 @@ pub enum Indexed {
 }
 impl ToTokens for Indexed {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Indexed {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Indexed::IndexedBy(ref name) => {
-                f.write_str("INDEXED BY ")?;
-                name.fmt(f)
+                s.append(TK_INDEXED, None)?;
+                s.append(TK_BY, None)?;
+                name.to_tokens(s)
             }
-            Indexed::NotIndexed => f.write_str("NOT INDEXED"),
+            Indexed::NotIndexed => {
+                s.append(TK_NOT, None)?;
+                s.append(TK_INDEXED, None)
+            }
         }
     }
 }
@@ -2390,19 +2335,12 @@ pub struct SortedColumn {
 }
 impl ToTokens for SortedColumn {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for SortedColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.expr.fmt(f)?;
+        self.expr.to_tokens(s)?;
         if let Some(ref order) = self.order {
-            f.write_char(' ')?;
-            order.fmt(f)?;
+            order.to_tokens(s)?;
         }
         if let Some(ref nulls) = self.nulls {
-            f.write_char(' ')?;
-            nulls.fmt(f)?;
+            nulls.to_tokens(s)?;
         }
         Ok(())
     }
@@ -2439,11 +2377,6 @@ pub enum InsertBody {
 }
 impl ToTokens for InsertBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for InsertBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             InsertBody::Select(select, upsert) => {
                 select.fmt(f)?;
@@ -2911,7 +2844,11 @@ pub struct WindowDef {
     pub name: Name,
     pub window: Window,
 }
-
+impl ToTokens for WindowDef {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for WindowDef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.name.fmt(f)?;
@@ -3045,21 +2982,7 @@ impl Display for FrameExclude {
     }
 }
 
-fn comma<I>(items: I, f: &mut Formatter<'_>) -> fmt::Result
-where
-    I: IntoIterator,
-    I::Item: Display,
-{
-    let iter = items.into_iter();
-    for (i, item) in iter.enumerate() {
-        if i != 0 {
-            f.write_str(", ")?;
-        }
-        item.fmt(f)?;
-    }
-    Ok(())
-}
-fn comma_<I, S: TokenStream>(items: I, s: &mut S) -> Result<(), S::Error>
+fn comma<I, S: TokenStream>(items: I, s: &mut S) -> Result<(), S::Error>
 where
     I: IntoIterator,
     I::Item: ToTokens,
@@ -3075,9 +2998,9 @@ where
 }
 
 // TK_ID: [...] / `...` / "..." / some keywords / non keywords
-fn double_quote(name: &str, f: &mut Formatter<'_>) -> fmt::Result {
+fn double_quote<S: TokenStream>(name: &str, s: &mut S) -> Result<(), S::Error> {
     if name.is_empty() {
-        return f.write_str("\"\"");
+        return s.append(TK_ID, Some("\"\""));
     }
     if is_identifier(name) {
         // identifier must be quoted when they match a keyword...
@@ -3086,7 +3009,7 @@ fn double_quote(name: &str, f: &mut Formatter<'_>) -> fmt::Result {
             f.write_str(name)?;
             return f.write_char('`');
         }*/
-        return f.write_str(name);
+        return s.append(TK_ID, Some(name));
     }
     /*f.write_char('"')?;
     for c in name.chars() {
@@ -3096,18 +3019,5 @@ fn double_quote(name: &str, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_char(c)?;
     }
     f.write_char('"')*/
-    f.write_str(name)
-}
-
-// TK_STRING
-fn single_quote(name: &str, f: &mut Formatter<'_>) -> fmt::Result {
-    /*f.write_char('\'')?;
-    for c in name.chars() {
-        if c == '\'' {
-            f.write_char(c)?;
-        }
-        f.write_char(c)?;
-    }
-    f.write_char('\'')*/
-    f.write_str(name)
+    s.append(TK_ID, Some(name))
 }
