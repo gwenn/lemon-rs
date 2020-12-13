@@ -1,9 +1,71 @@
 //! Abstract Syntax Tree
 
-use crate::dialect::TokenType::*;
+use crate::dialect::TokenType::{self, *};
 use crate::dialect::{from_token, is_identifier, Token};
 use crate::parser::parse::YYCODETYPE;
-use std::fmt::{Display, Formatter, Result, Write};
+use std::fmt::{self, Display, Formatter, Write};
+use std::result::Result;
+
+struct FmtTokenStream<'a, 'b> {
+    f: &'a mut Formatter<'b>,
+    spaced: bool,
+}
+impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
+    type Error = fmt::Error;
+
+    fn append(&mut self, ty: TokenType, value: Option<&str>) -> fmt::Result {
+        if !self.spaced {
+            self.f.write_char(' ')?;
+            self.spaced = true;
+        }
+        if let Some(str) = ty.as_str() {
+            self.f.write_str(str)?;
+            self.spaced = ty == TK_LP; // str should not be whitespace
+        }
+        if let Some(str) = value {
+            // trick for pretty-print
+            self.spaced = self.spaced || str.bytes().all(|b| b.is_ascii_whitespace());
+            /*if !self.spaced {
+                self.f.write_char(' ')?;
+            }*/
+            self.f.write_str(str)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+pub trait TokenStream {
+    type Error;
+
+    fn append(&mut self, ty: TokenType, value: Option<&str>) -> Result<(), Self::Error>;
+}
+
+pub trait ToTokens {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error>;
+
+    fn to_fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut s = FmtTokenStream { f, spaced: true };
+        self.to_tokens(&mut s)
+    }
+}
+
+impl<T: ?Sized + ToTokens> ToTokens for &T {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        ToTokens::to_tokens(&**self, s)
+    }
+}
+/* FIXME: does not work, find why
+impl Display for dyn ToTokens {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut s = FmtTokenStream { f, spaced: true };
+        match self.to_tokens(&mut s) {
+            Err(_) => Err(fmt::Error),
+            Ok(()) => Ok(()),
+        }
+    }
+}
+*/
 
 // https://sqlite.org/syntax/sql-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -13,24 +75,30 @@ pub enum Cmd {
     Stmt(Stmt),
 }
 
-impl Display for Cmd {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+impl ToTokens for Cmd {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Cmd::Explain(stmt) => {
-                f.write_str("EXPLAIN ")?;
-                stmt.fmt(f)?;
-                f.write_char(';')
+                s.append(TK_EXPLAIN, None)?;
+                stmt.to_tokens(s)?;
             }
             Cmd::ExplainQueryPlan(stmt) => {
-                f.write_str("EXPLAIN QUERY PLAN ")?;
-                stmt.fmt(f)?;
-                f.write_char(';')
+                s.append(TK_EXPLAIN, None)?;
+                s.append(TK_QUERY, None)?;
+                s.append(TK_PLAN, None)?;
+                stmt.to_tokens(s)?;
             }
             Cmd::Stmt(stmt) => {
-                stmt.fmt(f)?;
-                f.write_char(';')
+                stmt.to_tokens(s)?;
             }
         }
+        s.append(TK_SEMI, None)
+    }
+}
+
+impl Display for Cmd {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.to_fmt(f)
     }
 }
 
@@ -156,51 +224,49 @@ pub enum Stmt {
     Vacuum(Option<Name>, Option<Expr>),
 }
 
-impl Display for Stmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+impl ToTokens for Stmt {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Stmt::AlterTable(tbl_name, body) => {
-                f.write_str("ALTER TABLE ")?;
-                tbl_name.fmt(f)?;
-                f.write_char(' ')?;
-                body.fmt(f)
+                s.append(TK_ALTER, None)?;
+                s.append(TK_TABLE, None)?;
+                tbl_name.to_tokens(s)?;
+                body.to_tokens(s)
             }
             Stmt::Analyze(obj_name) => {
-                f.write_str("ANALYZE")?;
+                s.append(TK_ANALYZE, None)?;
                 if let Some(obj_name) = obj_name {
-                    f.write_char(' ')?;
-                    obj_name.fmt(f)?;
+                    obj_name.to_tokens(s)?;
                 }
                 Ok(())
             }
             Stmt::Attach { expr, db_name, key } => {
-                f.write_str("ATTACH ")?;
-                expr.fmt(f)?;
-                f.write_str(" AS ")?;
-                db_name.fmt(f)?;
+                s.append(TK_ATTACH, None)?;
+                expr.to_tokens(s)?;
+                s.append(TK_AS, None)?;
+                db_name.to_tokens(s)?;
                 if let Some(key) = key {
-                    f.write_str(" KEY ")?;
-                    key.fmt(f)?;
+                    s.append(TK_KEY, None)?;
+                    key.to_tokens(s)?;
                 }
                 Ok(())
             }
             Stmt::Begin(tx_type, tx_name) => {
-                f.write_str("BEGIN")?;
+                s.append(TK_BEGIN, None)?;
                 if let Some(tx_type) = tx_type {
-                    f.write_char(' ')?;
-                    tx_type.fmt(f)?;
+                    tx_type.to_tokens(s)?;
                 }
                 if let Some(tx_name) = tx_name {
-                    f.write_str(" TRANSACTION ")?;
-                    tx_name.fmt(f)?;
+                    s.append(TK_TRANSACTION, None)?;
+                    tx_name.to_tokens(s)?;
                 }
                 Ok(())
             }
             Stmt::Commit(tx_name) => {
-                f.write_str("COMMIT ")?;
+                s.append(TK_COMMIT, None)?;
                 if let Some(tx_name) = tx_name {
-                    f.write_str(" TRANSACTION ")?;
-                    tx_name.fmt(f)?;
+                    s.append(TK_TRANSACTION, None)?;
+                    tx_name.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -212,23 +278,25 @@ impl Display for Stmt {
                 columns,
                 where_clause,
             } => {
-                f.write_str("CREATE ")?;
+                s.append(TK_CREATE, None)?;
                 if *unique {
-                    f.write_str("UNIQUE ")?;
+                    s.append(TK_UNIQUE, None)?;
                 }
-                f.write_str("INDEX ")?;
+                s.append(TK_INDEX, None)?;
                 if *if_not_exists {
-                    f.write_str("IF NOT EXISTS ")?;
+                    s.append(TK_IF, None)?;
+                    s.append(TK_NOT, None)?;
+                    s.append(TK_EXISTS, None)?;
                 }
-                idx_name.fmt(f)?;
-                f.write_str(" ON ")?;
-                tbl_name.fmt(f)?;
-                f.write_char('(')?;
-                comma(columns, f)?;
-                f.write_char(')')?;
+                idx_name.to_tokens(s)?;
+                s.append(TK_ON, None)?;
+                tbl_name.to_tokens(s)?;
+                s.append(TK_LP, None)?;
+                comma_(columns, s)?;
+                s.append(TK_RP, None)?;
                 if let Some(where_clause) = where_clause {
-                    f.write_str(" WHERE ")?;
-                    where_clause.fmt(f)?;
+                    s.append(TK_WHERE, None)?;
+                    where_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -238,16 +306,18 @@ impl Display for Stmt {
                 tbl_name,
                 body,
             } => {
-                f.write_str("CREATE ")?;
+                s.append(TK_CREATE, None)?;
                 if *temporary {
-                    f.write_str("TEMP ")?;
+                    s.append(TK_TEMP, None)?;
                 }
-                f.write_str("TABLE ")?;
+                s.append(TK_TABLE, None)?;
                 if *if_not_exists {
-                    f.write_str("IF NOT EXISTS ")?;
+                    s.append(TK_IF, None)?;
+                    s.append(TK_NOT, None)?;
+                    s.append(TK_EXISTS, None)?;
                 }
-                tbl_name.fmt(f)?;
-                body.fmt(f)
+                tbl_name.to_tokens(s)?;
+                body.to_tokens(s)
             }
             Stmt::CreateTrigger {
                 temporary,
@@ -260,39 +330,38 @@ impl Display for Stmt {
                 when_clause,
                 commands,
             } => {
-                f.write_str("CREATE ")?;
+                s.append(TK_CREATE, None)?;
                 if *temporary {
-                    f.write_str("TEMP ")?;
+                    s.append(TK_TEMP, None)?;
                 }
-                f.write_str("TRIGGER ")?;
+                s.append(TK_TRIGGER, None)?;
                 if *if_not_exists {
-                    f.write_str("IF NOT EXISTS ")?;
+                    s.append(TK_IF, None)?;
+                    s.append(TK_NOT, None)?;
+                    s.append(TK_EXISTS, None)?;
                 }
-                trigger_name.fmt(f)?;
+                trigger_name.to_tokens(s)?;
                 if let Some(time) = time {
-                    f.write_char(' ')?;
-                    time.fmt(f)?;
+                    time.to_tokens(s)?;
                 }
-                f.write_char(' ')?;
-                event.fmt(f)?;
-                f.write_str(" ON ")?;
-                tbl_name.fmt(f)?;
+                event.to_tokens(s)?;
+                s.append(TK_ON, None)?;
+                tbl_name.to_tokens(s)?;
                 if *for_each_row {
-                    f.write_str(" FOR EACH ROW")?;
+                    s.append(TK_FOR, None)?;
+                    s.append(TK_EACH, None)?;
+                    s.append(TK_ROW, None)?;
                 }
                 if let Some(when_clause) = when_clause {
-                    f.write_str(" WHEN ")?;
-                    when_clause.fmt(f)?;
+                    s.append(TK_WHEN, None)?;
+                    when_clause.to_tokens(s)?;
                 }
-                f.write_str(" BEGIN\n")?;
+                s.append(TK_BEGIN, Some("\n"))?;
                 for (i, command) in commands.iter().enumerate() {
-                    if i != 0 {
-                        f.write_char('\n')?;
-                    }
-                    command.fmt(f)?;
-                    f.write_char(';')?;
+                    command.to_tokens(s)?;
+                    s.append(TK_SEMI, Some("\n"))?;
                 }
-                f.write_str("END")
+                s.append(TK_END, None)
             }
             Stmt::CreateView {
                 temporary,
@@ -301,22 +370,24 @@ impl Display for Stmt {
                 columns,
                 select,
             } => {
-                f.write_str("CREATE ")?;
+                s.append(TK_CREATE, None)?;
                 if *temporary {
-                    f.write_str("TEMP ")?;
+                    s.append(TK_TEMP, None)?;
                 }
-                f.write_str("VIEW ")?;
+                s.append(TK_VIEW, None)?;
                 if *if_not_exists {
-                    f.write_str("IF NOT EXISTS ")?;
+                    s.append(TK_IF, None)?;
+                    s.append(TK_NOT, None)?;
+                    s.append(TK_EXISTS, None)?;
                 }
-                view_name.fmt(f)?;
+                view_name.to_tokens(s)?;
                 if let Some(columns) = columns {
-                    f.write_str(" (")?;
-                    comma(columns, f)?;
-                    f.write_char(')')?;
+                    s.append(TK_LP, None)?;
+                    comma_(columns, s)?;
+                    s.append(TK_RP, None)?;
                 }
-                f.write_str(" AS ")?;
-                select.fmt(f)
+                s.append(TK_AS, None)?;
+                select.to_tokens(s)
             }
             Stmt::CreateVirtualTable {
                 if_not_exists,
@@ -324,18 +395,22 @@ impl Display for Stmt {
                 module_name,
                 args,
             } => {
-                f.write_str("CREATE VIRTUAL TABLE ")?;
+                s.append(TK_CREATE, None)?;
+                s.append(TK_VIRTUAL, None)?;
+                s.append(TK_TABLE, None)?;
                 if *if_not_exists {
-                    f.write_str("IF NOT EXISTS ")?;
+                    s.append(TK_IF, None)?;
+                    s.append(TK_NOT, None)?;
+                    s.append(TK_EXISTS, None)?;
                 }
-                tbl_name.fmt(f)?;
-                f.write_str(" USING ")?;
-                module_name.fmt(f)?;
-                f.write_char('(')?;
+                tbl_name.to_tokens(s)?;
+                s.append(TK_USING, None)?;
+                module_name.to_tokens(s)?;
+                s.append(TK_LP, None)?;
                 if let Some(args) = args {
-                    f.write_str(args)?;
+                    s.append(TK_ANY, Some(args))?;
                 }
-                f.write_char(')')
+                s.append(TK_RP, None)
             }
             Stmt::Delete {
                 with,
@@ -346,72 +421,79 @@ impl Display for Stmt {
                 limit,
             } => {
                 if let Some(with) = with {
-                    with.fmt(f)?;
-                    f.write_char(' ')?;
+                    with.to_tokens(s)?;
                 }
-                f.write_str("DELETE FROM ")?;
-                tbl_name.fmt(f)?;
+                s.append(TK_DELETE, None)?;
+                s.append(TK_FROM, None)?;
+                tbl_name.to_tokens(s)?;
                 if let Some(indexed) = indexed {
-                    f.write_char(' ')?;
-                    indexed.fmt(f)?;
+                    indexed.to_tokens(s)?;
                 }
                 if let Some(where_clause) = where_clause {
-                    f.write_str(" WHERE ")?;
-                    where_clause.fmt(f)?;
+                    s.append(TK_WHERE, None)?;
+                    where_clause.to_tokens(s)?;
                 }
                 if let Some(order_by) = order_by {
-                    f.write_str(" ORDER BY ")?;
-                    comma(order_by, f)?;
+                    s.append(TK_ORDER, None)?;
+                    s.append(TK_BY, None)?;
+                    comma_(order_by, s)?;
                 }
                 if let Some(limit) = limit {
-                    f.write_char(' ')?;
-                    limit.fmt(f)?;
+                    limit.to_tokens(s)?;
                 }
                 Ok(())
             }
             Stmt::Detach(expr) => {
-                f.write_str("DETACH ")?;
-                expr.fmt(f)
+                s.append(TK_DETACH, None)?;
+                expr.to_tokens(s)
             }
             Stmt::DropIndex {
                 if_exists,
                 idx_name,
             } => {
-                f.write_str("DROP INDEX ")?;
+                s.append(TK_DROP, None)?;
+                s.append(TK_INDEX, None)?;
                 if *if_exists {
-                    f.write_str("IF EXISTS ")?;
+                    s.append(TK_IF, None)?;
+                    s.append(TK_EXISTS, None)?;
                 }
-                idx_name.fmt(f)
+                idx_name.to_tokens(s)
             }
             Stmt::DropTable {
                 if_exists,
                 tbl_name,
             } => {
-                f.write_str("DROP TABLE ")?;
+                s.append(TK_DROP, None)?;
+                s.append(TK_TABLE, None)?;
                 if *if_exists {
-                    f.write_str("IF EXISTS ")?;
+                    s.append(TK_IF, None)?;
+                    s.append(TK_EXISTS, None)?;
                 }
-                tbl_name.fmt(f)
+                tbl_name.to_tokens(s)
             }
             Stmt::DropTrigger {
                 if_exists,
                 trigger_name,
             } => {
-                f.write_str("DROP TRIGGER ")?;
+                s.append(TK_DROP, None)?;
+                s.append(TK_TRIGGER, None)?;
                 if *if_exists {
-                    f.write_str("IF EXISTS ")?;
+                    s.append(TK_IF, None)?;
+                    s.append(TK_EXISTS, None)?;
                 }
-                trigger_name.fmt(f)
+                trigger_name.to_tokens(s)
             }
             Stmt::DropView {
                 if_exists,
                 view_name,
             } => {
-                f.write_str("DROP VIEW ")?;
+                s.append(TK_DROP, None)?;
+                s.append(TK_VIEW, None)?;
                 if *if_exists {
-                    f.write_str("IF EXISTS ")?;
+                    s.append(TK_IF, None)?;
+                    s.append(TK_EXISTS, None)?;
                 }
-                view_name.fmt(f)
+                view_name.to_tokens(s)
             }
             Stmt::Insert {
                 with,
@@ -421,68 +503,65 @@ impl Display for Stmt {
                 body,
             } => {
                 if let Some(with) = with {
-                    with.fmt(f)?;
-                    f.write_char(' ')?;
+                    with.to_tokens(s)?;
                 }
                 if let Some(ResolveType::Replace) = or_conflict {
-                    f.write_str("REPLACE")?;
+                    s.append(TK_REPLACE, None)?;
                 } else {
-                    f.write_str("INSERT")?;
+                    s.append(TK_INSERT, None)?;
                     if let Some(or_conflict) = or_conflict {
-                        f.write_str(" OR ")?;
-                        or_conflict.fmt(f)?;
+                        s.append(TK_OR, None)?;
+                        or_conflict.to_tokens(s)?;
                     }
                 }
-                f.write_str(" INTO ")?;
-                tbl_name.fmt(f)?;
+                s.append(TK_INTO, None)?;
+                tbl_name.to_tokens(s)?;
                 if let Some(columns) = columns {
-                    f.write_str(" (")?;
-                    comma(columns, f)?;
-                    f.write_char(')')?;
+                    s.append(TK_LP, None)?;
+                    comma_(columns, s)?;
+                    s.append(TK_RP, None)?;
                 }
-                f.write_char(' ')?;
-                body.fmt(f)
+                body.to_tokens(s)
             }
             Stmt::Pragma(name, value) => {
-                f.write_str("PRAGMA ")?;
-                name.fmt(f)?;
+                s.append(TK_PRAGMA, None)?;
+                name.to_tokens(s)?;
                 if let Some(value) = value {
-                    value.fmt(f)?;
+                    value.to_tokens(s)?;
                 }
                 Ok(())
             }
             Stmt::Reindex { obj_name } => {
-                f.write_str("REINDEX")?;
+                s.append(TK_REINDEX, None)?;
                 if let Some(obj_name) = obj_name {
-                    f.write_char(' ')?;
-                    obj_name.fmt(f)?;
+                    obj_name.to_tokens(s)?;
                 }
                 Ok(())
             }
             Stmt::Release(name) => {
-                f.write_str("RELEASE ")?;
-                name.fmt(f)
+                s.append(TK_RELEASE, None)?;
+                name.to_tokens(s)
             }
             Stmt::Rollback {
                 tx_name,
                 savepoint_name,
             } => {
-                f.write_str("ROLLBACK")?;
+                s.append(TK_ROLLBACK, None)?;
                 if let Some(tx_name) = tx_name {
-                    f.write_str(" TRANSACTION ")?;
-                    tx_name.fmt(f)?;
+                    s.append(TK_TRANSACTION, None)?;
+                    tx_name.to_tokens(s)?;
                 }
                 if let Some(savepoint_name) = savepoint_name {
-                    f.write_str(" TO ")?;
-                    savepoint_name.fmt(f)?;
+                    s.append(TK_TO, None)?;
+                    savepoint_name.to_tokens(s)?;
                 }
                 Ok(())
             }
             Stmt::Savepoint(name) => {
-                f.write_str("SAVEPOINT ")?;
-                name.fmt(f)
+                s.append(TK_SAVEPOINT, None)?;
+                name.to_tokens(s)
             }
-            Stmt::Select(select) => select.fmt(f),
+            Stmt::Select(select) => select.to_tokens(s),
             Stmt::Update {
                 with,
                 or_conflict,
@@ -495,49 +574,45 @@ impl Display for Stmt {
                 limit,
             } => {
                 if let Some(with) = with {
-                    with.fmt(f)?;
-                    f.write_char(' ')?;
+                    with.to_tokens(s)?;
                 }
-                f.write_str("UPDATE ")?;
+                s.append(TK_UPDATE, None)?;
                 if let Some(or_conflict) = or_conflict {
-                    f.write_str("OR ")?;
-                    or_conflict.fmt(f)?;
-                    f.write_char(' ')?;
+                    s.append(TK_OR, None)?;
+                    or_conflict.to_tokens(s)?;
                 }
-                tbl_name.fmt(f)?;
+                tbl_name.to_tokens(s)?;
                 if let Some(indexed) = indexed {
-                    f.write_char(' ')?;
-                    indexed.fmt(f)?;
+                    indexed.to_tokens(s)?;
                 }
-                f.write_str(" SET ")?;
-                comma(sets, f)?;
+                s.append(TK_SET, None)?;
+                comma_(sets, s)?;
                 if let Some(from) = from {
-                    f.write_str(" FROM ")?;
-                    from.fmt(f)?;
+                    s.append(TK_FROM, None)?;
+                    from.to_tokens(s)?;
                 }
                 if let Some(where_clause) = where_clause {
-                    f.write_str(" WHERE ")?;
-                    where_clause.fmt(f)?;
+                    s.append(TK_WHERE, None)?;
+                    where_clause.to_tokens(s)?;
                 }
                 if let Some(order_by) = order_by {
-                    f.write_str(" ORDER BY ")?;
-                    comma(order_by, f)?;
+                    s.append(TK_ORDER, None)?;
+                    s.append(TK_BY, None)?;
+                    comma_(order_by, s)?;
                 }
                 if let Some(limit) = limit {
-                    f.write_char(' ')?;
-                    limit.fmt(f)?;
+                    limit.to_tokens(s)?;
                 }
                 Ok(())
             }
             Stmt::Vacuum(name, expr) => {
-                f.write_str("VACUUM")?;
+                s.append(TK_VACUUM, None)?;
                 if let Some(ref name) = name {
-                    f.write_char(' ')?;
-                    name.fmt(f)?;
+                    name.to_tokens(s)?;
                 }
                 if let Some(ref expr) = expr {
-                    f.write_str(" INTO ")?;
-                    expr.fmt(f)?;
+                    s.append(TK_INTO, None)?;
+                    expr.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -702,9 +777,8 @@ impl Expr {
         Expr::Subquery(Box::new(query))
     }
 }
-
-impl Display for Expr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+impl ToTokens for Expr {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Expr::Between {
                 lhs,
@@ -712,67 +786,66 @@ impl Display for Expr {
                 start,
                 end,
             } => {
-                lhs.fmt(f)?;
+                lhs.to_tokens(s)?;
                 if *not {
-                    f.write_str(" NOT")?;
+                    s.append(TK_NOT, None)?;
                 }
-                f.write_str(" BETWEEN ")?;
-                start.fmt(f)?;
-                f.write_str(" AND ")?;
-                end.fmt(f)
+                s.append(TK_BETWEEN, None)?;
+                start.to_tokens(s)?;
+                s.append(TK_AND, None)?;
+                end.to_tokens(s)
             }
             Expr::Binary(lhs, op, rhs) => {
-                lhs.fmt(f)?;
-                f.write_char(' ')?;
-                op.fmt(f)?;
-                f.write_char(' ')?;
-                rhs.fmt(f)
+                lhs.to_tokens(s)?;
+                op.to_tokens(s)?;
+                rhs.to_tokens(s)
             }
             Expr::Case {
                 base,
                 when_then_pairs,
                 else_expr,
             } => {
-                f.write_str("CASE")?;
+                s.append(TK_CASE, None)?;
                 if let Some(ref base) = base {
-                    f.write_char(' ')?;
-                    base.fmt(f)?;
+                    base.to_tokens(s)?;
                 }
                 for (when, then) in when_then_pairs {
-                    f.write_str(" WHEN ")?;
-                    when.fmt(f)?;
-                    f.write_str(" THEN ")?;
-                    then.fmt(f)?;
+                    s.append(TK_WHEN, None)?;
+                    when.to_tokens(s)?;
+                    s.append(TK_THEN, None)?;
+                    then.to_tokens(s)?;
                 }
                 if let Some(ref else_expr) = else_expr {
-                    f.write_str(" ELSE ")?;
-                    else_expr.fmt(f)?;
+                    s.append(TK_ELSE, None)?;
+                    else_expr.to_tokens(s)?;
                 }
-                f.write_str(" END")
+                s.append(TK_END, None)
             }
             Expr::Cast { expr, type_name } => {
-                f.write_str("CAST(")?;
-                expr.fmt(f)?;
-                f.write_str(" AS ")?;
-                type_name.fmt(f)?;
-                f.write_char(')')
+                s.append(TK_CAST, None)?;
+                s.append(TK_LP, None)?;
+                expr.to_tokens(s)?;
+                s.append(TK_AS, None)?;
+                type_name.to_tokens(s)?;
+                s.append(TK_RP, None)
             }
             Expr::Collate(expr, collation) => {
-                expr.fmt(f)?;
-                f.write_str(" COLLATE ")?;
+                expr.to_tokens(s)?;
+                s.append(TK_COLLATE, None)?;
                 double_quote(collation, f)
             }
             Expr::DoublyQualified(db_name, tbl_name, col_name) => {
-                db_name.fmt(f)?;
-                f.write_char('.')?;
-                tbl_name.fmt(f)?;
-                f.write_char('.')?;
-                col_name.fmt(f)
+                db_name.to_tokens(s)?;
+                s.append(TK_DOT, None)?;
+                tbl_name.to_tokens(s)?;
+                s.append(TK_DOT, None)?;
+                col_name.to_tokens(s)
             }
             Expr::Exists(subquery) => {
-                f.write_str("EXISTS (")?;
-                subquery.fmt(f)?;
-                f.write_char(')')
+                s.append(TK_EXISTS, None)?;
+                s.append(TK_LP, None)?;
+                subquery.to_tokens(s)?;
+                s.append(TK_RP, None)
             }
             Expr::FunctionCall {
                 name,
@@ -780,49 +853,52 @@ impl Display for Expr {
                 args,
                 filter_over,
             } => {
-                name.fmt(f)?;
-                f.write_char('(')?;
+                name.to_tokens(s)?;
+                s.append(TK_LP, None)?;
                 if let Some(distinctness) = distinctness {
-                    distinctness.fmt(f)?;
-                    f.write_char(' ')?;
+                    distinctness.to_tokens(s)?;
                 }
                 if let Some(args) = args {
-                    comma(args, f)?;
+                    comma_(args, s)?;
                 }
-                f.write_char(')')?;
+                s.append(TK_RP, None)?;
                 if let Some(filter_over) = filter_over {
-                    filter_over.fmt(f)?;
+                    filter_over.to_tokens(s)?;
                 }
                 Ok(())
             }
             Expr::FunctionCallStar { name, filter_over } => {
-                name.fmt(f)?;
-                f.write_str("(*)")?;
+                name.to_tokens(s)?;
+                s.append(TK_LP, None)?;
+                s.append(TK_STAR, None)?;
+                s.append(TK_RP, None)?;
                 if let Some(filter_over) = filter_over {
-                    filter_over.fmt(f)?;
+                    filter_over.to_tokens(s)?;
                 }
                 Ok(())
             }
-            Expr::Id(id) => id.fmt(f),
+            Expr::Id(id) => id.to_tokens(s),
             Expr::InList { lhs, not, rhs } => {
-                lhs.fmt(f)?;
+                lhs.to_tokens(s)?;
                 if *not {
-                    f.write_str(" NOT")?;
+                    s.append(TK_NOT, None)?;
                 }
-                f.write_str(" IN (")?;
+                s.append(TK_IN, None)?;
+                s.append(TK_LP, None)?;
                 if let Some(rhs) = rhs {
-                    comma(rhs, f)?;
+                    comma_(rhs, s)?;
                 }
-                f.write_char(')')
+                s.append(TK_RP, None)
             }
             Expr::InSelect { lhs, not, rhs } => {
-                lhs.fmt(f)?;
+                lhs.to_tokens(s)?;
                 if *not {
-                    f.write_str(" NOT")?;
+                    s.append(TK_NOT, None)?;
                 }
-                f.write_str(" IN (")?;
-                rhs.fmt(f)?;
-                f.write_char(')')
+                s.append(TK_IN, None)?;
+                s.append(TK_LP, None)?;
+                rhs.to_tokens(s)?;
+                s.append(TK_RP, None)
             }
             Expr::InTable {
                 lhs,
@@ -830,22 +906,22 @@ impl Display for Expr {
                 rhs,
                 args,
             } => {
-                lhs.fmt(f)?;
+                lhs.to_tokens(s)?;
                 if *not {
-                    f.write_str(" NOT")?;
+                    s.append(TK_NOT, None)?;
                 }
-                f.write_str(" IN ")?;
-                rhs.fmt(f)?;
+                s.append(TK_IN, None)?;
+                rhs.to_tokens(s)?;
                 if let Some(args) = args {
-                    f.write_char('(')?;
-                    comma(args, f)?;
-                    f.write_char(')')?;
+                    s.append(TK_LP, None)?;
+                    comma_(args, s)?;
+                    s.append(TK_RP, None)?;
                 }
                 Ok(())
             }
             Expr::IsNull(sub_expr) => {
-                sub_expr.fmt(f)?;
-                f.write_str(" ISNULL")
+                sub_expr.to_tokens(s)?;
+                s.append(TK_ISNULL, None)
             }
             Expr::Like {
                 lhs,
@@ -854,68 +930,70 @@ impl Display for Expr {
                 rhs,
                 escape,
             } => {
-                lhs.fmt(f)?;
-                f.write_char(' ')?;
+                lhs.to_tokens(s)?;
                 if *not {
-                    f.write_str("NOT ")?;
+                    s.append(TK_NOT, None)?;
                 }
-                op.fmt(f)?;
-                f.write_char(' ')?;
-                rhs.fmt(f)?;
+                op.to_tokens(s)?;
+                rhs.to_tokens(s)?;
                 if let Some(escape) = escape {
-                    f.write_str(" ESCAPE ")?;
-                    escape.fmt(f)?;
+                    s.append(TK_ESCAPE, None)?;
+                    escape.to_tokens(s)?;
                 }
                 Ok(())
             }
-            Expr::Literal(lit) => lit.fmt(f),
-            Expr::Name(name) => name.fmt(f),
+            Expr::Literal(lit) => lit.to_tokens(s),
+            Expr::Name(name) => name.to_tokens(s),
             Expr::NotNull(sub_expr) => {
-                sub_expr.fmt(f)?;
-                f.write_str(" NOTNULL")
+                sub_expr.to_tokens(s)?;
+                s.append(TK_NOTNULL, None)
             }
             Expr::Parenthesized(exprs) => {
-                f.write_char('(')?;
-                comma(exprs, f)?;
-                f.write_char(')')
+                s.append(TK_LP, None)?;
+                comma_(exprs, s)?;
+                s.append(TK_RP, None)
             }
             Expr::Qualified(qualifier, qualified) => {
-                qualifier.fmt(f)?;
-                f.write_char('.')?;
-                qualified.fmt(f)
+                qualifier.to_tokens(s)?;
+                s.append(TK_DOT, None)?;
+                qualified.to_tokens(s)
             }
             Expr::Raise(rt, err) => {
-                f.write_str("RAISE(")?;
-                rt.fmt(f)?;
+                s.append(TK_RAISE, None)?;
+                s.append(TK_LP, None)?;
+                rt.to_tokens(s)?;
                 if let Some(err) = err {
-                    f.write_str(", ")?;
-                    err.fmt(f)?;
+                    s.append(TK_COMMA, None)?;
+                    err.to_tokens(s)?;
                 }
-                f.write_char(')')
+                s.append(TK_RP, None)
             }
             Expr::Subquery(query) => {
-                f.write_char('(')?;
-                query.fmt(f)?;
-                f.write_char(')')
+                s.append(TK_LP, None)?;
+                query.to_tokens(s)?;
+                s.append(TK_RP, None)
             }
             Expr::Unary(op, sub_expr) => {
-                op.fmt(f)?;
+                op.to_tokens(s)?;
                 if let UnaryOperator::Not = op {
-                    f.write_char(' ')?;
                 } else if let Expr::Unary(_, _) = sub_expr.as_ref() {
-                    f.write_char(' ')?;
                 }
-                sub_expr.fmt(f)
+                sub_expr.to_tokens(s)
             }
             Expr::Variable(var) => match var.chars().next() {
-                Some(c) if c == '$' || c == '@' || c == '#' || c == ':' => f.write_str(var),
+                Some(c) if c == '$' || c == '@' || c == '#' || c == ':' => s.append(TK_VARIABLE, Some(var)),
                 Some(_) => {
-                    f.write_char('?')?;
-                    f.write_str(var)
+                    s.append(TK_VARIABLE, Some(&("?".to_owned() + var)))
                 }
-                None => f.write_char('?'),
+                None => s.append(TK_VARIABLE, Some("?")),
             },
         }
+    }
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.to_fmt(f)
     }
 }
 
@@ -950,9 +1028,13 @@ impl Literal {
         }
     }
 }
-
+impl ToTokens for Literal {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Literal {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Literal::Numeric(ref num) => f.write_str(num),
             Literal::String(ref str) => single_quote(str, f),
@@ -997,9 +1079,13 @@ impl LikeOperator {
         unreachable!()
     }
 }
-
+impl ToTokens for LikeOperator {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for LikeOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             LikeOperator::Glob => "GLOB",
             LikeOperator::Like => "LIKE",
@@ -1060,9 +1146,13 @@ impl From<YYCODETYPE> for Operator {
         }
     }
 }
-
+impl ToTokens for Operator {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Operator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Operator::Add => "+",
             Operator::And => "AND",
@@ -1111,9 +1201,13 @@ impl From<YYCODETYPE> for UnaryOperator {
         }
     }
 }
-
+impl ToTokens for UnaryOperator {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for UnaryOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             UnaryOperator::BitwiseNot => "~",
             UnaryOperator::Negative => "-",
@@ -1132,9 +1226,13 @@ pub struct Select {
     pub order_by: Option<Vec<SortedColumn>>,
     pub limit: Option<Limit>,
 }
-
+impl ToTokens for Select {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Select {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(ref with) = self.with {
             with.fmt(f)?;
             f.write_char(' ')?;
@@ -1169,7 +1267,7 @@ impl SelectBody {
 }
 
 impl Display for SelectBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.select.fmt(f)?;
         if let Some(ref compounds) = self.compounds {
             for compound in compounds {
@@ -1188,7 +1286,7 @@ pub struct CompoundSelect {
 }
 
 impl Display for CompoundSelect {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.operator.fmt(f)?;
         f.write_char(' ')?;
         self.select.fmt(f)
@@ -1205,7 +1303,7 @@ pub enum CompoundOperator {
 }
 
 impl Display for CompoundOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             CompoundOperator::Union => "UNION",
             CompoundOperator::UnionAll => "UNION ALL",
@@ -1230,7 +1328,7 @@ pub enum OneSelect {
 }
 
 impl Display for OneSelect {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             OneSelect::Select {
                 distinctness,
@@ -1288,7 +1386,11 @@ pub struct FromClause {
     pub joins: Option<Vec<JoinedSelectTable>>,
     op: Option<JoinOperator>, // FIXME transient
 }
-
+impl ToTokens for FromClause {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl FromClause {
     pub(crate) fn empty() -> FromClause {
         FromClause {
@@ -1325,7 +1427,7 @@ impl FromClause {
 }
 
 impl Display for FromClause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.select.as_ref().unwrap().fmt(f)?;
         if let Some(ref joins) = self.joins {
             for join in joins {
@@ -1342,9 +1444,13 @@ pub enum Distinctness {
     Distinct,
     All,
 }
-
+impl ToTokens for Distinctness {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Distinctness {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Distinctness::Distinct => "DISTINCT",
             Distinctness::All => "ALL",
@@ -1362,7 +1468,7 @@ pub enum ResultColumn {
 }
 
 impl Display for ResultColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             ResultColumn::Expr(expr, alias) => {
                 expr.fmt(f)?;
@@ -1388,7 +1494,7 @@ pub enum As {
 }
 
 impl Display for As {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             As::As(ref name) => {
                 f.write_str("AS ")?;
@@ -1408,7 +1514,7 @@ pub struct JoinedSelectTable {
 }
 
 impl Display for JoinedSelectTable {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.operator.fmt(f)?;
         f.write_char(' ')?;
         self.table.fmt(f)?;
@@ -1430,7 +1536,7 @@ pub enum SelectTable {
 }
 
 impl Display for SelectTable {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             SelectTable::Table(name, alias, indexed) => {
                 name.fmt(f)?;
@@ -1569,7 +1675,7 @@ impl JoinOperator {
 }
 
 impl Display for JoinOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             JoinOperator::Comma => f.write_char(','),
             JoinOperator::TypedJoin { natural, join_type } => {
@@ -1595,7 +1701,7 @@ pub enum JoinType {
 }
 
 impl Display for JoinType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             JoinType::Left => "LEFT",
             JoinType::LeftOuter => "LEFT OUTER",
@@ -1626,7 +1732,7 @@ impl JoinConstraint {
 }
 
 impl Display for JoinConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             JoinConstraint::On(expr) => {
                 f.write_str("ON ")?;
@@ -1648,7 +1754,7 @@ pub struct GroupBy {
 }
 
 impl Display for GroupBy {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str("GROUP BY ")?;
         comma(&self.exprs, f)?;
         if let Some(ref having) = self.having {
@@ -1668,9 +1774,13 @@ impl Id {
         Id(from_token(ty, token))
     }
 }
-
+impl ToTokens for Id {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Id {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         double_quote(&self.0, f)
     }
 }
@@ -1686,9 +1796,13 @@ impl Name {
         Name(from_token(ty, token))
     }
 }
-
+impl ToTokens for Name {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Name {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         double_quote(&self.0, f)
     }
 }
@@ -1730,9 +1844,13 @@ impl QualifiedName {
         }
     }
 }
-
+impl ToTokens for QualifiedName {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for QualifiedName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(ref db_name) = self.db_name {
             db_name.fmt(f)?;
             f.write_char('.')?;
@@ -1754,9 +1872,13 @@ pub enum AlterTableBody {
     AddColumn(ColumnDefinition), // TODO distinction between ADD and ADD COLUMN
     RenameColumn { old: Name, new: Name },
 }
-
+impl ToTokens for AlterTableBody {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for AlterTableBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             AlterTableBody::RenameTo(name) => {
                 f.write_str("RENAME TO ")?;
@@ -1787,9 +1909,13 @@ pub enum CreateTableBody {
     },
     AsSelect(Select),
 }
-
+impl ToTokens for CreateTableBody {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for CreateTableBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             CreateTableBody::ColumnsAndConstraints {
                 columns,
@@ -1825,7 +1951,7 @@ pub struct ColumnDefinition {
 }
 
 impl Display for ColumnDefinition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.col_name.fmt(f)?;
         if let Some(ref col_type) = self.col_type {
             f.write_char(' ')?;
@@ -1847,7 +1973,7 @@ pub struct NamedColumnConstraint {
 }
 
 impl Display for NamedColumnConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(ref name) = self.name {
             f.write_str("CONSTRAINT ")?;
             name.fmt(f)?;
@@ -1887,7 +2013,7 @@ pub enum ColumnConstraint {
 }
 
 impl Display for ColumnConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             ColumnConstraint::PrimaryKey {
                 order,
@@ -1978,7 +2104,7 @@ pub struct NamedTableConstraint {
 }
 
 impl Display for NamedTableConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(ref name) = self.name {
             f.write_str("CONSTRAINT ")?;
             name.fmt(f)?;
@@ -2009,7 +2135,7 @@ pub enum TableConstraint {
 }
 
 impl Display for TableConstraint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             TableConstraint::PrimaryKey {
                 columns,
@@ -2072,7 +2198,7 @@ pub enum SortOrder {
 }
 
 impl Display for SortOrder {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             SortOrder::Asc => "ASC",
             SortOrder::Desc => "DESC",
@@ -2087,7 +2213,7 @@ pub enum NullsOrder {
 }
 
 impl Display for NullsOrder {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             NullsOrder::First => "NULLS FIRST",
             NullsOrder::Last => "NULLS LAST",
@@ -2104,7 +2230,7 @@ pub struct ForeignKeyClause {
 }
 
 impl Display for ForeignKeyClause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.tbl_name.fmt(f)?;
         if let Some(ref columns) = self.columns {
             f.write_char('(')?;
@@ -2128,7 +2254,7 @@ pub enum RefArg {
 }
 
 impl Display for RefArg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             RefArg::OnDelete(ref action) => {
                 f.write_str("ON DELETE ")?;
@@ -2160,7 +2286,7 @@ pub enum RefAct {
 }
 
 impl Display for RefAct {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             RefAct::SetNull => "SET NULL",
             RefAct::SetDefault => "SET DEFAULT",
@@ -2178,7 +2304,7 @@ pub struct DeferSubclause {
 }
 
 impl Display for DeferSubclause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if !self.deferrable {
             f.write_str("NOT ")?;
         }
@@ -2198,7 +2324,7 @@ pub enum InitDeferredPred {
 }
 
 impl Display for InitDeferredPred {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             InitDeferredPred::InitiallyDeferred => "INITIALLY DEFERRED",
             InitDeferredPred::InitiallyImmediate => "INITIALLY IMMEDIATE",
@@ -2213,9 +2339,13 @@ pub struct IndexedColumn {
     pub collation_name: Option<Name>, // FIXME Ids
     pub order: Option<SortOrder>,
 }
-
+impl ToTokens for IndexedColumn {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for IndexedColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.col_name.fmt(f)?;
         if let Some(ref collation_name) = self.collation_name {
             f.write_str(" COLLATE ")?;
@@ -2235,9 +2365,13 @@ pub enum Indexed {
     IndexedBy(Name),
     NotIndexed,
 }
-
+impl ToTokens for Indexed {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Indexed {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Indexed::IndexedBy(ref name) => {
                 f.write_str("INDEXED BY ")?;
@@ -2254,9 +2388,13 @@ pub struct SortedColumn {
     pub order: Option<SortOrder>,
     pub nulls: Option<NullsOrder>,
 }
-
+impl ToTokens for SortedColumn {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for SortedColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.expr.fmt(f)?;
         if let Some(ref order) = self.order {
             f.write_char(' ')?;
@@ -2275,9 +2413,13 @@ pub struct Limit {
     pub expr: Expr,
     pub offset: Option<Expr>, // TODO distinction between LIMIT offset, count and LIMIT count OFFSET offset
 }
-
+impl ToTokens for Limit {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Limit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str("LIMIT ")?;
         self.expr.fmt(f)?;
         if let Some(ref offset) = self.offset {
@@ -2295,9 +2437,13 @@ pub enum InsertBody {
     Select(Select, Option<Upsert>),
     DefaultValues,
 }
-
+impl ToTokens for InsertBody {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for InsertBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             InsertBody::Select(select, upsert) => {
                 select.fmt(f)?;
@@ -2317,9 +2463,13 @@ pub struct Set {
     pub col_names: Vec<Name>,
     pub expr: Expr,
 }
-
+impl ToTokens for Set {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Set {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.col_names.len() == 1 {
             comma(&self.col_names, f)?;
         } else {
@@ -2338,9 +2488,13 @@ pub enum PragmaBody {
     Equals(PragmaValue),
     Call(PragmaValue),
 }
-
+impl ToTokens for PragmaBody {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for PragmaBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             PragmaBody::Equals(value) => {
                 f.write_str(" = ")?;
@@ -2364,9 +2518,13 @@ pub enum TriggerTime {
     After,
     InsteadOf,
 }
-
+impl ToTokens for TriggerTime {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for TriggerTime {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             TriggerTime::Before => "BEFORE",
             TriggerTime::After => "AFTER",
@@ -2383,9 +2541,13 @@ pub enum TriggerEvent {
     // col names
     UpdateOf(Vec<Name>),
 }
-
+impl ToTokens for TriggerEvent {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for TriggerEvent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             TriggerEvent::Delete => f.write_str("DELETE"),
             TriggerEvent::Insert => f.write_str("INSERT"),
@@ -2422,9 +2584,13 @@ pub enum TriggerCmd {
     },
     Select(Select),
 }
-
+impl ToTokens for TriggerCmd {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for TriggerCmd {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             TriggerCmd::Update {
                 or_conflict,
@@ -2508,9 +2674,13 @@ pub enum ResolveType {
     Ignore,
     Replace,
 }
-
+impl ToTokens for ResolveType {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for ResolveType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             ResolveType::Rollback => "ROLLBACK",
             ResolveType::Abort => "ABORT",
@@ -2528,9 +2698,13 @@ pub struct With {
     pub recursive: bool,
     pub ctes: Vec<CommonTableExpr>,
 }
-
+impl ToTokens for With {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for With {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str("WITH ")?;
         if self.recursive {
             f.write_str("RECURSIVE ")?;
@@ -2548,7 +2722,7 @@ pub struct CommonTableExpr {
 }
 
 impl Display for CommonTableExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.tbl_name.fmt(f)?;
         if let Some(ref columns) = self.columns {
             f.write_str(" (")?;
@@ -2567,9 +2741,13 @@ pub struct Type {
     pub name: String, // TODO Validate: Ids+
     pub size: Option<TypeSize>,
 }
-
+impl ToTokens for Type {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.size {
             None => double_quote(&self.name, f),
             Some(ref size) => {
@@ -2590,7 +2768,7 @@ pub enum TypeSize {
 }
 
 impl Display for TypeSize {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             TypeSize::MaxSize(size) => size.fmt(f),
             TypeSize::TypeSize(size1, size2) => {
@@ -2608,9 +2786,13 @@ pub enum TransactionType {
     Immediate,
     Exclusive,
 }
-
+impl ToTokens for TransactionType {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for TransactionType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             TransactionType::Deferred => "DEFERRED",
             TransactionType::Immediate => "IMMEDIATE",
@@ -2628,7 +2810,7 @@ pub struct Upsert {
 }
 
 impl Display for Upsert {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str("ON CONFLICT ")?;
         if let Some(ref index) = self.index {
             index.fmt(f)?;
@@ -2645,7 +2827,7 @@ pub struct UpsertIndex {
 }
 
 impl Display for UpsertIndex {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_char('(')?;
         comma(&self.targets, f)?;
         f.write_char(')')?;
@@ -2667,7 +2849,7 @@ pub enum UpsertDo {
 }
 
 impl Display for UpsertDo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             UpsertDo::Set { sets, where_clause } => {
                 f.write_str("DO UPDATE SET ")?;
@@ -2688,9 +2870,13 @@ pub struct FunctionTail {
     pub filter_clause: Option<Box<Expr>>,
     pub over_clause: Option<Box<Over>>,
 }
-
+impl ToTokens for FunctionTail {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        unimplemented!()
+    }
+}
 impl Display for FunctionTail {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(ref filter_clause) = self.filter_clause {
             f.write_str(" FILTER (WHERE ")?;
             filter_clause.fmt(f)?;
@@ -2712,7 +2898,7 @@ pub enum Over {
 }
 
 impl Display for Over {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Over::Window(ref window) => window.fmt(f),
             Over::Name(ref name) => name.fmt(f),
@@ -2727,7 +2913,7 @@ pub struct WindowDef {
 }
 
 impl Display for WindowDef {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.name.fmt(f)?;
         f.write_str(" AS ")?;
         self.window.fmt(f)
@@ -2744,7 +2930,7 @@ pub struct Window {
 }
 
 impl Display for Window {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_char('(')?;
         if let Some(ref base) = self.base {
             base.fmt(f)?;
@@ -2777,7 +2963,7 @@ pub struct FrameClause {
 }
 
 impl Display for FrameClause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.mode.fmt(f)?;
         if let Some(ref end) = self.end {
             f.write_str(" BETWEEN ")?;
@@ -2804,7 +2990,7 @@ pub enum FrameMode {
 }
 
 impl Display for FrameMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             FrameMode::Groups => "GROUPS",
             FrameMode::Range => "RANGE",
@@ -2823,7 +3009,7 @@ pub enum FrameBound {
 }
 
 impl Display for FrameBound {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             FrameBound::CurrentRow => f.write_str("CURRENT ROW"),
             FrameBound::Following(value) => {
@@ -2849,7 +3035,7 @@ pub enum FrameExclude {
 }
 
 impl Display for FrameExclude {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             FrameExclude::NoOthers => f.write_str("NO OTHERS"),
             FrameExclude::CurrentRow => f.write_str("CURRENT ROW"),
@@ -2859,7 +3045,7 @@ impl Display for FrameExclude {
     }
 }
 
-fn comma<I>(items: I, f: &mut Formatter<'_>) -> Result
+fn comma<I>(items: I, f: &mut Formatter<'_>) -> fmt::Result
 where
     I: IntoIterator,
     I::Item: Display,
@@ -2873,9 +3059,23 @@ where
     }
     Ok(())
 }
+fn comma_<I, S: TokenStream>(items: I, s: &mut S) -> Result<(), S::Error>
+where
+    I: IntoIterator,
+    I::Item: ToTokens,
+{
+    let iter = items.into_iter();
+    for (i, item) in iter.enumerate() {
+        if i != 0 {
+            s.append(TK_COMMA, None)?;
+        }
+        item.to_tokens(s)?;
+    }
+    Ok(())
+}
 
 // TK_ID: [...] / `...` / "..." / some keywords / non keywords
-fn double_quote(name: &str, f: &mut Formatter<'_>) -> Result {
+fn double_quote(name: &str, f: &mut Formatter<'_>) -> fmt::Result {
     if name.is_empty() {
         return f.write_str("\"\"");
     }
@@ -2900,7 +3100,7 @@ fn double_quote(name: &str, f: &mut Formatter<'_>) -> Result {
 }
 
 // TK_STRING
-fn single_quote(name: &str, f: &mut Formatter<'_>) -> Result {
+fn single_quote(name: &str, f: &mut Formatter<'_>) -> fmt::Result {
     /*f.write_char('\'')?;
     for c in name.chars() {
         if c == '\'' {
