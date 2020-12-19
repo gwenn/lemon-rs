@@ -15,8 +15,13 @@ impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
 
     fn append(&mut self, ty: TokenType, value: Option<&str>) -> fmt::Result {
         if !self.spaced {
-            self.f.write_char(' ')?;
-            self.spaced = true;
+            match ty {
+                TK_COMMA | TK_SEMI | TK_RP | TK_DOT => {}
+                _ => {
+                    self.f.write_char(' ')?;
+                    self.spaced = true;
+                }
+            };
         }
         if ty == TK_BLOB {
             self.f.write_char('X')?;
@@ -27,11 +32,11 @@ impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
             return self.f.write_char('\'');
         } else if let Some(str) = ty.as_str() {
             self.f.write_str(str)?;
-            self.spaced = ty == TK_LP; // str should not be whitespace
+            self.spaced = ty == TK_LP || ty == TK_DOT; // str should not be whitespace
         }
         if let Some(str) = value {
             // trick for pretty-print
-            self.spaced = self.spaced || str.bytes().all(|b| b.is_ascii_whitespace());
+            self.spaced = str.bytes().all(|b| b.is_ascii_whitespace());
             /*if !self.spaced {
                 self.f.write_char(' ')?;
             }*/
