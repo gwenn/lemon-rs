@@ -364,7 +364,7 @@ impl ToTokens for Stmt {
                     when_clause.to_tokens(s)?;
                 }
                 s.append(TK_BEGIN, Some("\n"))?;
-                for (i, command) in commands.iter().enumerate() {
+                for command in commands {
                     command.to_tokens(s)?;
                     s.append(TK_SEMI, Some("\n"))?;
                 }
@@ -1758,6 +1758,12 @@ impl ToTokens for Name {
     }
 }
 
+impl Display for Name {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.to_fmt(f)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QualifiedName {
     pub db_name: Option<Name>,
@@ -2157,10 +2163,13 @@ pub enum NullsOrder {
 impl ToTokens for NullsOrder {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(TK_NULLS, None)?;
-        s.append(match self {
-            NullsOrder::First => TK_FIRST,
-            NullsOrder::Last => TK_LAST,
-        }, None)
+        s.append(
+            match self {
+                NullsOrder::First => TK_FIRST,
+                NullsOrder::Last => TK_LAST,
+            },
+            None,
+        )
     }
 }
 
@@ -2353,16 +2362,11 @@ pub struct Limit {
 }
 impl ToTokens for Limit {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Limit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str("LIMIT ")?;
-        self.expr.fmt(f)?;
+        s.append(TK_LIMIT, None)?;
+        self.expr.to_tokens(s)?;
         if let Some(ref offset) = self.offset {
-            f.write_str(" OFFSET ")?;
-            offset.fmt(f)?;
+            s.append(TK_OFFSET, None)?;
+            offset.to_tokens(s)?;
         }
         Ok(())
     }
@@ -2379,14 +2383,16 @@ impl ToTokens for InsertBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             InsertBody::Select(select, upsert) => {
-                select.fmt(f)?;
+                select.to_tokens(s)?;
                 if let Some(upsert) = upsert {
-                    f.write_char(' ')?;
-                    upsert.fmt(f)?;
+                    upsert.to_tokens(s)?;
                 }
                 Ok(())
             }
-            InsertBody::DefaultValues => f.write_str("DEFAULT VALUES"),
+            InsertBody::DefaultValues => {
+                s.append(TK_DEFAULT, None)?;
+                s.append(TK_VALUES, None)
+            }
         }
     }
 }
@@ -2398,20 +2404,15 @@ pub struct Set {
 }
 impl ToTokens for Set {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Set {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.col_names.len() == 1 {
-            comma(&self.col_names, f)?;
+            comma(&self.col_names, s)?;
         } else {
-            f.write_char('(')?;
-            comma(&self.col_names, f)?;
-            f.write_char(')')?;
+            s.append(TK_LP, None)?;
+            comma(&self.col_names, s)?;
+            s.append(TK_RP, None)?;
         }
-        f.write_str(" = ")?;
-        self.expr.fmt(f)
+        s.append(TK_EQ, None)?;
+        self.expr.to_tokens(s)
     }
 }
 
@@ -2423,20 +2424,15 @@ pub enum PragmaBody {
 }
 impl ToTokens for PragmaBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for PragmaBody {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             PragmaBody::Equals(value) => {
-                f.write_str(" = ")?;
-                value.fmt(f)
+                s.append(TK_EQ, None)?;
+                value.to_tokens(s)
             }
             PragmaBody::Call(value) => {
-                f.write_char('(')?;
-                value.fmt(f)?;
-                f.write_char(')')
+                s.append(TK_LP, None)?;
+                value.to_tokens(s)?;
+                s.append(TK_RP, None)
             }
         }
     }
@@ -2453,16 +2449,14 @@ pub enum TriggerTime {
 }
 impl ToTokens for TriggerTime {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for TriggerTime {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            TriggerTime::Before => "BEFORE",
-            TriggerTime::After => "AFTER",
-            TriggerTime::InsteadOf => "INSTEAD OF",
-        })
+        match self {
+            TriggerTime::Before => s.append(TK_BEFORE, None),
+            TriggerTime::After => s.append(TK_AFTER, None),
+            TriggerTime::InsteadOf => {
+                s.append(TK_INSTEAD, None)?;
+                s.append(TK_OF, None)
+            }
+        }
     }
 }
 
@@ -2476,18 +2470,14 @@ pub enum TriggerEvent {
 }
 impl ToTokens for TriggerEvent {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for TriggerEvent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            TriggerEvent::Delete => f.write_str("DELETE"),
-            TriggerEvent::Insert => f.write_str("INSERT"),
-            TriggerEvent::Update => f.write_str("UPDATE"),
+            TriggerEvent::Delete => s.append(TK_DELETE, None),
+            TriggerEvent::Insert => s.append(TK_INSERT, None),
+            TriggerEvent::Update => s.append(TK_UPDATE, None),
             TriggerEvent::UpdateOf(ref col_names) => {
-                f.write_str("UPDATE OF ")?;
-                comma(col_names, f)
+                s.append(TK_UPDATE, None)?;
+                s.append(TK_OF, None)?;
+                comma(col_names, s)
             }
         }
     }
@@ -2519,11 +2509,6 @@ pub enum TriggerCmd {
 }
 impl ToTokens for TriggerCmd {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for TriggerCmd {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             TriggerCmd::Update {
                 or_conflict,
@@ -2532,22 +2517,21 @@ impl Display for TriggerCmd {
                 from,
                 where_clause,
             } => {
-                f.write_str("UPDATE ")?;
+                s.append(TK_UPDATE, None)?;
                 if let Some(or_conflict) = or_conflict {
-                    f.write_str("OR ")?;
-                    or_conflict.fmt(f)?;
-                    f.write_char(' ')?;
+                    s.append(TK_OR, None)?;
+                    or_conflict.to_tokens(s)?;
                 }
-                tbl_name.fmt(f)?;
-                f.write_str(" SET ")?;
-                comma(sets, f)?;
+                tbl_name.to_tokens(s)?;
+                s.append(TK_SET, None)?;
+                comma(sets, s)?;
                 if let Some(from) = from {
-                    f.write_str(" FROM ")?;
-                    from.fmt(f)?;
+                    s.append(TK_FROM, None)?;
+                    from.to_tokens(s)?;
                 }
                 if let Some(where_clause) = where_clause {
-                    f.write_str(" WHERE ")?;
-                    where_clause.fmt(f)?;
+                    s.append(TK_WHERE, None)?;
+                    where_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -2559,26 +2543,24 @@ impl Display for TriggerCmd {
                 upsert,
             } => {
                 if let Some(ResolveType::Replace) = or_conflict {
-                    f.write_str("REPLACE")?;
+                    s.append(TK_REPLACE, None)?;
                 } else {
-                    f.write_str("INSERT")?;
+                    s.append(TK_INSERT, None)?;
                     if let Some(or_conflict) = or_conflict {
-                        f.write_str(" OR ")?;
-                        or_conflict.fmt(f)?;
+                        s.append(TK_OR, None)?;
+                        or_conflict.to_tokens(s)?;
                     }
                 }
-                f.write_str(" INTO ")?;
-                tbl_name.fmt(f)?;
+                s.append(TK_INTO, None)?;
+                tbl_name.to_tokens(s)?;
                 if let Some(col_names) = col_names {
-                    f.write_str(" (")?;
-                    comma(col_names, f)?;
-                    f.write_char(')')?;
+                    s.append(TK_LP, None)?;
+                    comma(col_names, s)?;
+                    s.append(TK_RP, None)?;
                 }
-                f.write_char(' ')?;
-                select.fmt(f)?;
+                select.to_tokens(s)?;
                 if let Some(upsert) = upsert {
-                    f.write_char(' ')?;
-                    upsert.fmt(f)?;
+                    upsert.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -2586,15 +2568,16 @@ impl Display for TriggerCmd {
                 tbl_name,
                 where_clause,
             } => {
-                f.write_str("DELETE FROM ")?;
-                tbl_name.fmt(f)?;
+                s.append(TK_DELETE, None)?;
+                s.append(TK_FROM, None)?;
+                tbl_name.to_tokens(s)?;
                 if let Some(where_clause) = where_clause {
-                    f.write_str(" WHERE ")?;
-                    where_clause.fmt(f)?;
+                    s.append(TK_WHERE, None)?;
+                    where_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
-            TriggerCmd::Select(select) => select.fmt(f),
+            TriggerCmd::Select(select) => select.to_tokens(s),
         }
     }
 }
@@ -2609,18 +2592,16 @@ pub enum ResolveType {
 }
 impl ToTokens for ResolveType {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for ResolveType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            ResolveType::Rollback => "ROLLBACK",
-            ResolveType::Abort => "ABORT",
-            ResolveType::Fail => "FAIL",
-            ResolveType::Ignore => "IGNORE",
-            ResolveType::Replace => "REPLACE",
-        })
+        s.append(
+            match self {
+                ResolveType::Rollback => TK_ROLLBACK,
+                ResolveType::Abort => TK_ABORT,
+                ResolveType::Fail => TK_FAIL,
+                ResolveType::Ignore => TK_IGNORE,
+                ResolveType::Replace => TK_REPLACE,
+            },
+            None,
+        )
     }
 }
 
@@ -2633,16 +2614,11 @@ pub struct With {
 }
 impl ToTokens for With {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for With {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str("WITH ")?;
+        s.append(TK_WITH, None)?;
         if self.recursive {
-            f.write_str("RECURSIVE ")?;
+            s.append(TK_RECURSIVE, None)?;
         }
-        comma(&self.ctes, f)
+        comma(&self.ctes, s)
     }
 }
 
@@ -2654,17 +2630,18 @@ pub struct CommonTableExpr {
     pub select: Select,
 }
 
-impl Display for CommonTableExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.tbl_name.fmt(f)?;
+impl ToTokens for CommonTableExpr {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        self.tbl_name.to_tokens(s)?;
         if let Some(ref columns) = self.columns {
-            f.write_str(" (")?;
-            comma(columns, f)?;
-            f.write_char(')')?;
+            s.append(TK_LP, None)?;
+            comma(columns, s)?;
+            s.append(TK_RP, None)?;
         }
-        f.write_str(" AS (")?;
-        self.select.fmt(f)?;
-        f.write_char(')')
+        s.append(TK_AS, None)?;
+        s.append(TK_LP, None)?;
+        self.select.to_tokens(s)?;
+        s.append(TK_RP, None)
     }
 }
 
@@ -2676,18 +2653,13 @@ pub struct Type {
 }
 impl ToTokens for Type {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.size {
-            None => double_quote(&self.name, f),
+            None => s.append(TK_ID, Some(&self.name)),
             Some(ref size) => {
-                f.write_str(&self.name)?; // TODO check there is no forbidden chars
-                f.write_char('(')?;
-                size.fmt(f)?;
-                f.write_char(')')
+                s.append(TK_ID, Some(&self.name))?; // TODO check there is no forbidden chars
+                s.append(TK_LP, None)?;
+                size.to_tokens(s)?;
+                s.append(TK_RP, None)
             }
         }
     }
@@ -2700,14 +2672,14 @@ pub enum TypeSize {
     TypeSize(Box<Expr>, Box<Expr>),
 }
 
-impl Display for TypeSize {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for TypeSize {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            TypeSize::MaxSize(size) => size.fmt(f),
+            TypeSize::MaxSize(size) => size.to_tokens(s),
             TypeSize::TypeSize(size1, size2) => {
-                size1.fmt(f)?;
-                f.write_str(", ")?;
-                size2.fmt(f)
+                size1.to_tokens(s)?;
+                s.append(TK_COMMA, None)?;
+                size2.to_tokens(s)
             }
         }
     }
@@ -2721,16 +2693,14 @@ pub enum TransactionType {
 }
 impl ToTokens for TransactionType {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for TransactionType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            TransactionType::Deferred => "DEFERRED",
-            TransactionType::Immediate => "IMMEDIATE",
-            TransactionType::Exclusive => "EXCLUSIVE",
-        })
+        s.append(
+            match self {
+                TransactionType::Deferred => TK_DEFERRED,
+                TransactionType::Immediate => TK_IMMEDIATE,
+                TransactionType::Exclusive => TK_EXCLUSIVE,
+            },
+            None,
+        )
     }
 }
 
@@ -2742,14 +2712,14 @@ pub struct Upsert {
     pub do_clause: UpsertDo,
 }
 
-impl Display for Upsert {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str("ON CONFLICT ")?;
+impl ToTokens for Upsert {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_ON, None)?;
+        s.append(TK_CONFLICT, None)?;
         if let Some(ref index) = self.index {
-            index.fmt(f)?;
-            f.write_char(' ')?;
+            index.to_tokens(s)?;
         }
-        self.do_clause.fmt(f)
+        self.do_clause.to_tokens(s)
     }
 }
 
@@ -2759,14 +2729,14 @@ pub struct UpsertIndex {
     pub where_clause: Option<Expr>,
 }
 
-impl Display for UpsertIndex {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_char('(')?;
-        comma(&self.targets, f)?;
-        f.write_char(')')?;
+impl ToTokens for UpsertIndex {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_LP, None)?;
+        comma(&self.targets, s)?;
+        s.append(TK_RP, None)?;
         if let Some(ref where_clause) = self.where_clause {
-            f.write_str(" WHERE ")?;
-            where_clause.fmt(f)?;
+            s.append(TK_WHERE, None)?;
+            where_clause.to_tokens(s)?;
         }
         Ok(())
     }
@@ -2781,19 +2751,24 @@ pub enum UpsertDo {
     Nothing,
 }
 
-impl Display for UpsertDo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for UpsertDo {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             UpsertDo::Set { sets, where_clause } => {
-                f.write_str("DO UPDATE SET ")?;
-                comma(sets, f)?;
+                s.append(TK_DO, None)?;
+                s.append(TK_UPDATE, None)?;
+                s.append(TK_SET, None)?;
+                comma(sets, s)?;
                 if let Some(where_clause) = where_clause {
-                    f.write_str(" WHERE ")?;
-                    where_clause.fmt(f)?;
+                    s.append(TK_WHERE, None)?;
+                    where_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
-            UpsertDo::Nothing => f.write_str("DO NOTHING"),
+            UpsertDo::Nothing => {
+                s.append(TK_DO, None)?;
+                s.append(TK_NOTHING, None)
+            }
         }
     }
 }
@@ -2805,19 +2780,16 @@ pub struct FunctionTail {
 }
 impl ToTokens for FunctionTail {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for FunctionTail {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(ref filter_clause) = self.filter_clause {
-            f.write_str(" FILTER (WHERE ")?;
-            filter_clause.fmt(f)?;
-            f.write_str(")")?;
+            s.append(TK_FILTER, None)?;
+            s.append(TK_LP, None)?;
+            s.append(TK_WHERE, None)?;
+            filter_clause.to_tokens(s)?;
+            s.append(TK_RP, None)?;
         }
         if let Some(ref over_clause) = self.over_clause {
-            f.write_str(" OVER ")?;
-            over_clause.fmt(f)?;
+            s.append(TK_OVER, None)?;
+            over_clause.to_tokens(s)?;
         }
         Ok(())
     }
@@ -2830,11 +2802,11 @@ pub enum Over {
     Name(Name),
 }
 
-impl Display for Over {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for Over {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Over::Window(ref window) => window.fmt(f),
-            Over::Name(ref name) => name.fmt(f),
+            Over::Window(ref window) => window.to_tokens(s),
+            Over::Name(ref name) => name.to_tokens(s),
         }
     }
 }
@@ -2846,14 +2818,9 @@ pub struct WindowDef {
 }
 impl ToTokens for WindowDef {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        unimplemented!()
-    }
-}
-impl Display for WindowDef {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.name.fmt(f)?;
-        f.write_str(" AS ")?;
-        self.window.fmt(f)
+        self.name.to_tokens(s)?;
+        s.append(TK_AS, None)?;
+        self.window.to_tokens(s)
     }
 }
 
@@ -2866,27 +2833,26 @@ pub struct Window {
     pub frame_clause: Option<FrameClause>,
 }
 
-impl Display for Window {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_char('(')?;
+impl ToTokens for Window {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_LP, None)?;
         if let Some(ref base) = self.base {
-            base.fmt(f)?;
-            f.write_char(' ')?;
+            base.to_tokens(s)?;
         }
         if let Some(ref partition_by) = self.partition_by {
-            f.write_str("PARTITION BY ")?;
-            comma(partition_by, f)?;
-            f.write_char(' ')?;
+            s.append(TK_PARTITION, None)?;
+            s.append(TK_BY, None)?;
+            comma(partition_by, s)?;
         }
         if let Some(ref order_by) = self.order_by {
-            f.write_str("ORDER BY ")?;
-            comma(order_by, f)?;
-            f.write_char(' ')?;
+            s.append(TK_ORDER, None)?;
+            s.append(TK_BY, None)?;
+            comma(order_by, s)?;
         }
         if let Some(ref frame_clause) = self.frame_clause {
-            frame_clause.fmt(f)?;
+            frame_clause.to_tokens(s)?;
         }
-        f.write_char(')')
+        s.append(TK_RP, None)
     }
 }
 
@@ -2899,21 +2865,20 @@ pub struct FrameClause {
     pub exclude: Option<FrameExclude>,
 }
 
-impl Display for FrameClause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.mode.fmt(f)?;
+impl ToTokens for FrameClause {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        self.mode.to_tokens(s)?;
         if let Some(ref end) = self.end {
-            f.write_str(" BETWEEN ")?;
-            self.start.fmt(f)?;
-            f.write_str(" AND ")?;
-            end.fmt(f)?;
+            s.append(TK_BETWEEN, None)?;
+            self.start.to_tokens(s)?;
+            s.append(TK_AND, None)?;
+            end.to_tokens(s)?;
         } else {
-            f.write_char(' ')?;
-            self.start.fmt(f)?;
+            self.start.to_tokens(s)?;
         }
         if let Some(ref exclude) = self.exclude {
-            f.write_str(" EXCLUDE ")?;
-            exclude.fmt(f)?;
+            s.append(TK_EXCLUDE, None)?;
+            exclude.to_tokens(s)?;
         }
         Ok(())
     }
@@ -2926,13 +2891,16 @@ pub enum FrameMode {
     Rows,
 }
 
-impl Display for FrameMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            FrameMode::Groups => "GROUPS",
-            FrameMode::Range => "RANGE",
-            FrameMode::Rows => "ROWS",
-        })
+impl ToTokens for FrameMode {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(
+            match self {
+                FrameMode::Groups => TK_GROUPS,
+                FrameMode::Range => TK_RANGE,
+                FrameMode::Rows => TK_ROWS,
+            },
+            None,
+        )
     }
 }
 
@@ -2945,20 +2913,29 @@ pub enum FrameBound {
     UnboundedPreceding,
 }
 
-impl Display for FrameBound {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for FrameBound {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            FrameBound::CurrentRow => f.write_str("CURRENT ROW"),
+            FrameBound::CurrentRow => {
+                s.append(TK_CURRENT, None)?;
+                s.append(TK_ROW, None)
+            }
             FrameBound::Following(value) => {
-                value.fmt(f)?;
-                f.write_str(" FOLLOWING")
+                value.to_tokens(s)?;
+                s.append(TK_FOLLOWING, None)
             }
             FrameBound::Preceding(value) => {
-                value.fmt(f)?;
-                f.write_str(" PRECEDING")
+                value.to_tokens(s)?;
+                s.append(TK_PRECEDING, None)
             }
-            FrameBound::UnboundedFollowing => f.write_str("UNBOUNDED FOLLOWING"),
-            FrameBound::UnboundedPreceding => f.write_str("UNBOUNDED PRECEDING"),
+            FrameBound::UnboundedFollowing => {
+                s.append(TK_UNBOUNDED, None)?;
+                s.append(TK_FOLLOWING, None)
+            }
+            FrameBound::UnboundedPreceding => {
+                s.append(TK_UNBOUNDED, None)?;
+                s.append(TK_PRECEDING, None)
+            }
         }
     }
 }
@@ -2971,13 +2948,19 @@ pub enum FrameExclude {
     Ties,
 }
 
-impl Display for FrameExclude {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl ToTokens for FrameExclude {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            FrameExclude::NoOthers => f.write_str("NO OTHERS"),
-            FrameExclude::CurrentRow => f.write_str("CURRENT ROW"),
-            FrameExclude::Group => f.write_str("GROUP"),
-            FrameExclude::Ties => f.write_str("TIES"),
+            FrameExclude::NoOthers => {
+                s.append(TK_NO, None)?;
+                s.append(TK_OTHERS, None)
+            }
+            FrameExclude::CurrentRow => {
+                s.append(TK_CURRENT, None)?;
+                s.append(TK_ROW, None)
+            }
+            FrameExclude::Group => s.append(TK_GROUP, None),
+            FrameExclude::Ties => s.append(TK_TIES, None),
         }
     }
 }
