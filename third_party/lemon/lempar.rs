@@ -508,11 +508,11 @@ fn yy_find_reduce_action(
     assert_ne!(iLookAhead, YYNOCODE);
     i += i32::from(iLookAhead);
     if YYERRORSYMBOL > 0 {
-        if i < 0 || i >= YY_ACTTAB_COUNT!() || yy_lookahead[i as usize] != iLookAhead {
+        if !(0..YY_ACTTAB_COUNT!()).contains(&i) || yy_lookahead[i as usize] != iLookAhead {
             return yy_default[stateno as usize];
         }
     } else {
-        assert!(i >= 0 && i < YY_ACTTAB_COUNT!());
+        assert!((0..YY_ACTTAB_COUNT!()).contains(&i));
         assert_eq!(yy_lookahead[i as usize], iLookAhead);
     }
     yy_action[i as usize]

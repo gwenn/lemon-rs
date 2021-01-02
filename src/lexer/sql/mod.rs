@@ -422,10 +422,10 @@ impl Splitter for Tokenizer {
                     if let Some(&b'\'') = data.get(1) {
                         blob_literal(data, eof)
                     } else {
-                        self.identifierish(data, eof)
+                        Ok(self.identifierish(data, eof))
                     }
                 } else {
-                    self.identifierish(data, eof)
+                    Ok(self.identifierish(data, eof))
                 }
             }
             _ => return Err(Error::UnrecognizedToken(None)),
@@ -602,7 +602,7 @@ impl Tokenizer {
         &mut self,
         data: &'input [u8],
         eof: bool,
-    ) -> Result<(Option<Token<'input>>, usize), Error> {
+    ) -> (Option<Token<'input>>, usize) {
         debug_assert!(is_identifier_start(data[0]));
         // data[0] is_identifier_start => skip(1)
         let end = data
@@ -628,10 +628,10 @@ impl Tokenizer {
             } else {
                 TK_ID
             };
-            return Ok((Some((word, tt)), i));
+            return (Some((word, tt)), i);
         }
         // else ask more data
-        Ok((None, 0))
+        (None, 0)
     }
 }
 
