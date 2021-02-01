@@ -15,8 +15,6 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
-    - name: Build Lemon
-      run: make  
     - name: Build
       run: cargo build
     - name: Run tests
