@@ -37,6 +37,6 @@ buf_redux = { version = "0.8", optional = true }
 env_logger = { version = "0.8", default-features = false }
 trybuild = "1.0"
 
-#[build-dependencies]
-#gcc = "0.3"
+[build-dependencies]
+cc = "1.0"
 #lemon = "0.0.1"
