@@ -2,7 +2,16 @@
 use log::error;
 
 pub mod ast;
-pub mod parse;
+pub mod parse {
+    #![allow(unused_braces)]
+    #![allow(unused_comparisons)] // FIXME
+    #![allow(clippy::collapsible_if)]
+    #![allow(clippy::if_same_then_else)]
+    #![allow(clippy::absurd_extreme_comparisons)] // FIXME
+    #![allow(clippy::needless_return)]
+
+    include!(concat!(env!("OUT_DIR"), "/parse.rs"));
+}
 
 use ast::{Cmd, ExplainKind, Name, Stmt};
 

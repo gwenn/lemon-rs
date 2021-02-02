@@ -58,13 +58,6 @@
 // code file that implements the parser.
 //
 %include {
-#![allow(unused_braces)]
-#![allow(unused_comparisons)] // FIXME
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::if_same_then_else)]
-#![allow(clippy::absurd_extreme_comparisons)] // FIXME
-#![allow(clippy::needless_return)]
-
 use crate::parser::ast::*;
 use crate::parser::Context;
 use crate::dialect::{from_token, TokenType};
