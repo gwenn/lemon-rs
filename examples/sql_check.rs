@@ -3,8 +3,8 @@ use std::env;
 use std::fs::File;
 use std::panic;
 
-use sqlite_parser::lexer::sql::Parser;
-use sqlite_parser::lexer::InputStream;
+use sqlite3_parser::lexer::sql::Parser;
+use sqlite3_parser::lexer::InputStream;
 
 /// Parse specified files and check all commands.
 fn main() {

@@ -1,5 +1,5 @@
-use sqlite_parser::lexer::sql::Tokenizer;
-use sqlite_parser::lexer::Scanner;
+use sqlite3_parser::lexer::sql::Tokenizer;
+use sqlite3_parser::lexer::Scanner;
 
 fn main() {
     let tokenizer = Tokenizer::new();
