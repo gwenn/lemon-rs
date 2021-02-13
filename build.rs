@@ -28,7 +28,6 @@ fn main() -> Result<()> {
     let sql_parser = Path::new("src").join("parser").join("parse.y");
     // run rlemon / generate parser:
     {
-        // TODO -d<string>   Output directory.  Default '.'
         assert!(Command::new(rlemon)
             .arg("-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT")
             .arg("-Tthird_party/lemon/lempar.rs")
