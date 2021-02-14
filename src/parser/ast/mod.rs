@@ -1,10 +1,14 @@
 //! Abstract Syntax Tree
 
+use std::collections::HashSet;
+use std::fmt::{self, Display, Formatter, Write};
+use std::num::ParseIntError;
+use std::result::Result;
+use std::str::FromStr;
+
 use crate::dialect::TokenType::{self, *};
 use crate::dialect::{from_token, is_identifier, Token};
 use crate::parser::parse::YYCODETYPE;
-use std::fmt::{self, Display, Formatter, Write};
-use std::result::Result;
 
 struct FmtTokenStream<'a, 'b> {
     f: &'a mut Formatter<'b>,
@@ -44,6 +48,44 @@ impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
         } else {
             Ok(())
         }
+    }
+}
+
+pub struct ParameterInfo {
+    pub count: u32,
+    pub names: HashSet<String>,
+}
+
+impl ParameterInfo {
+    pub fn new() -> ParameterInfo {
+        ParameterInfo {
+            count: 0,
+            names: HashSet::new(),
+        }
+    }
+}
+
+// https://sqlite.org/lang_expr.html#parameters
+impl TokenStream for ParameterInfo {
+    type Error = ParseIntError;
+
+    fn append(&mut self, ty: TokenType, value: Option<&str>) -> Result<(), Self::Error> {
+        if ty == TokenType::TK_VARIABLE {
+            if let Some(variable) = value {
+                if variable == "?" {
+                    self.count = self.count.saturating_add(1);
+                } else if variable.as_bytes()[0] == b'?' {
+                    let n = u32::from_str(&variable[1..])?;
+                    if n > self.count {
+                        self.count = n;
+                    }
+                } else {
+                    self.names.insert(variable.to_owned());
+                    self.count = self.count.saturating_add(1);
+                }
+            }
+        }
+        Ok(())
     }
 }
 

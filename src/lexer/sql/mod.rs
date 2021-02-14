@@ -14,6 +14,8 @@ use crate::parser::parse::{yyParser, YYCODETYPE};
 use crate::parser::Context;
 
 mod error;
+#[cfg(test)]
+mod test;
 
 use crate::lexer::scan::ScanError;
 use crate::lexer::scan::Splitter;
