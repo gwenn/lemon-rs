@@ -56,8 +56,8 @@ pub struct ParameterInfo {
     pub names: HashSet<String>,
 }
 
-impl ParameterInfo {
-    pub fn new() -> ParameterInfo {
+impl Default for ParameterInfo {
+    fn default() -> Self {
         ParameterInfo {
             count: 0,
             names: HashSet::new(),
@@ -1731,10 +1731,8 @@ impl JoinConstraint {
         if let Some(expr) = on {
             debug_assert!(using.is_none());
             Some(JoinConstraint::On(expr))
-        } else if let Some(names) = using {
-            Some(JoinConstraint::Using(names))
         } else {
-            None
+            using.map(JoinConstraint::Using)
         }
     }
 }

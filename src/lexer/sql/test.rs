@@ -8,7 +8,7 @@ fn count_placeholders() {
     let sql = "SELECT ? WHERE 1 = ?";
     let mut parser = Parser::new(sql.as_bytes());
     let ast = parser.next().unwrap().unwrap();
-    let mut info = ParameterInfo::new();
+    let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 2);
 }
@@ -18,7 +18,7 @@ fn count_numbered_placeholders() {
     let sql = "SELECT ?1 WHERE 1 = ?2";
     let mut parser = Parser::new(sql.as_bytes());
     let ast = parser.next().unwrap().unwrap();
-    let mut info = ParameterInfo::new();
+    let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 2);
 }
@@ -28,7 +28,7 @@ fn count_unused_placeholders() {
     let sql = "SELECT ?1 WHERE 1 = ?3";
     let mut parser = Parser::new(sql.as_bytes());
     let ast = parser.next().unwrap().unwrap();
-    let mut info = ParameterInfo::new();
+    let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 3);
 }
@@ -38,7 +38,7 @@ fn count_named_placeholders() {
     let sql = "SELECT :x WHERE 1 = :y";
     let mut parser = Parser::new(sql.as_bytes());
     let ast = parser.next().unwrap().unwrap();
-    let mut info = ParameterInfo::new();
+    let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 2);
     assert_eq!(info.names.len(), 2);
