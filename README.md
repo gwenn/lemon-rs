@@ -3,7 +3,7 @@
 
 [LEMON parser generator](https://www.sqlite.org/src/doc/trunk/doc/lemon.html) modified to generate Rust code.
 
-Lemon source and SQLite3 grammar were last synced as of september 2020.
+Lemon source and SQLite3 grammar were last synced as of march 2021.
 
 ## Unsupported
 
