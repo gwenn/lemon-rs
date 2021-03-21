@@ -492,6 +492,7 @@ impl ToTokens for Stmt {
                     where_clause.to_tokens(s)?;
                 }
                 if let Some(returning) = returning {
+                    s.append(TK_RETURNING, None)?;
                     comma(returning, s)?;
                 }
                 if let Some(order_by) = order_by {
@@ -585,6 +586,7 @@ impl ToTokens for Stmt {
                 }
                 body.to_tokens(s)?;
                 if let Some(returning) = returning {
+                    s.append(TK_RETURNING, None)?;
                     comma(returning, s)?;
                 }
                 Ok(())
@@ -663,6 +665,7 @@ impl ToTokens for Stmt {
                     where_clause.to_tokens(s)?;
                 }
                 if let Some(returning) = returning {
+                    s.append(TK_RETURNING, None)?;
                     comma(returning, s)?;
                 }
                 if let Some(order_by) = order_by {
@@ -2632,6 +2635,7 @@ impl ToTokens for TriggerCmd {
                     upsert.to_tokens(s)?;
                 }
                 if let Some(returning) = returning {
+                    s.append(TK_RETURNING, None)?;
                     comma(returning, s)?;
                 }
                 Ok(())
