@@ -214,13 +214,14 @@ pub enum Stmt {
         if_not_exists: bool,
         tbl_name: QualifiedName,
         module_name: Name,
-        args: Option<String>,
+        args: Option<String>, // TODO smol str
     },
     Delete {
         with: Option<With>,
         tbl_name: QualifiedName,
         indexed: Option<Indexed>,
         where_clause: Option<Expr>,
+        returning: Option<Vec<ResultColumn>>,
         order_by: Option<Vec<SortedColumn>>,
         limit: Option<Limit>,
     },
@@ -248,6 +249,7 @@ pub enum Stmt {
         tbl_name: QualifiedName,
         columns: Option<Vec<Name>>,
         body: InsertBody,
+        returning: Option<Vec<ResultColumn>>,
     },
     // pragma name, body
     Pragma(QualifiedName, Option<PragmaBody>),
@@ -271,6 +273,7 @@ pub enum Stmt {
         sets: Vec<Set>,
         from: Option<FromClause>,
         where_clause: Option<Expr>,
+        returning: Option<Vec<ResultColumn>>,
         order_by: Option<Vec<SortedColumn>>,
         limit: Option<Limit>,
     },
@@ -471,6 +474,7 @@ impl ToTokens for Stmt {
                 tbl_name,
                 indexed,
                 where_clause,
+                returning,
                 order_by,
                 limit,
             } => {
@@ -486,6 +490,9 @@ impl ToTokens for Stmt {
                 if let Some(where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
                     where_clause.to_tokens(s)?;
+                }
+                if let Some(returning) = returning {
+                    comma(returning, s)?;
                 }
                 if let Some(order_by) = order_by {
                     s.append(TK_ORDER, None)?;
@@ -555,6 +562,7 @@ impl ToTokens for Stmt {
                 tbl_name,
                 columns,
                 body,
+                returning,
             } => {
                 if let Some(with) = with {
                     with.to_tokens(s)?;
@@ -575,7 +583,11 @@ impl ToTokens for Stmt {
                     comma(columns, s)?;
                     s.append(TK_RP, None)?;
                 }
-                body.to_tokens(s)
+                body.to_tokens(s)?;
+                if let Some(returning) = returning {
+                    comma(returning, s)?;
+                }
+                Ok(())
             }
             Stmt::Pragma(name, value) => {
                 s.append(TK_PRAGMA, None)?;
@@ -624,6 +636,7 @@ impl ToTokens for Stmt {
                 sets,
                 from,
                 where_clause,
+                returning,
                 order_by,
                 limit,
             } => {
@@ -648,6 +661,9 @@ impl ToTokens for Stmt {
                 if let Some(where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
                     where_clause.to_tokens(s)?;
+                }
+                if let Some(returning) = returning {
+                    comma(returning, s)?;
                 }
                 if let Some(order_by) = order_by {
                     s.append(TK_ORDER, None)?;
@@ -1868,6 +1884,7 @@ pub enum AlterTableBody {
     RenameTo(Name),
     AddColumn(ColumnDefinition), // TODO distinction between ADD and ADD COLUMN
     RenameColumn { old: Name, new: Name },
+    DropColumn(Name), // TODO distinction between DROP and DROP COLUMN
 }
 impl ToTokens for AlterTableBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
@@ -1887,6 +1904,11 @@ impl ToTokens for AlterTableBody {
                 old.to_tokens(s)?;
                 s.append(TK_TO, None)?;
                 new.to_tokens(s)
+            }
+            AlterTableBody::DropColumn(name) => {
+                s.append(TK_DROP, None)?;
+                s.append(TK_COLUMNKW, None)?;
+                name.to_tokens(s)
             }
         }
     }
@@ -2545,6 +2567,7 @@ pub enum TriggerCmd {
         col_names: Option<Vec<Name>>,
         select: Select,
         upsert: Option<Upsert>,
+        returning: Option<Vec<ResultColumn>>,
     },
     Delete {
         tbl_name: Name,
@@ -2586,6 +2609,7 @@ impl ToTokens for TriggerCmd {
                 col_names,
                 select,
                 upsert,
+                returning,
             } => {
                 if let Some(ResolveType::Replace) = or_conflict {
                     s.append(TK_REPLACE, None)?;
@@ -2606,6 +2630,9 @@ impl ToTokens for TriggerCmd {
                 select.to_tokens(s)?;
                 if let Some(upsert) = upsert {
                     upsert.to_tokens(s)?;
+                }
+                if let Some(returning) = returning {
+                    comma(returning, s)?;
                 }
                 Ok(())
             }
@@ -2667,11 +2694,19 @@ impl ToTokens for With {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Materialized {
+    Any,
+    Yes,
+    No,
+}
+
 // https://sqlite.org/syntax/common-table-expression.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommonTableExpr {
     pub tbl_name: Name,
     pub columns: Option<Vec<IndexedColumn>>,
+    pub materialized: Materialized,
     pub select: Select,
 }
 
@@ -2684,6 +2719,16 @@ impl ToTokens for CommonTableExpr {
             s.append(TK_RP, None)?;
         }
         s.append(TK_AS, None)?;
+        match self.materialized {
+            Materialized::Any => {}
+            Materialized::Yes => {
+                s.append(TK_MATERIALIZED, None)?;
+            }
+            Materialized::No => {
+                s.append(TK_NOT, None)?;
+                s.append(TK_MATERIALIZED, None)?;
+            }
+        };
         s.append(TK_LP, None)?;
         self.select.to_tokens(s)?;
         s.append(TK_RP, None)
@@ -2755,6 +2800,7 @@ impl ToTokens for TransactionType {
 pub struct Upsert {
     pub index: Option<UpsertIndex>,
     pub do_clause: UpsertDo,
+    pub next: Option<Box<Upsert>>,
 }
 
 impl ToTokens for Upsert {
@@ -2764,7 +2810,11 @@ impl ToTokens for Upsert {
         if let Some(ref index) = self.index {
             index.to_tokens(s)?;
         }
-        self.do_clause.to_tokens(s)
+        self.do_clause.to_tokens(s)?;
+        if let Some(ref next) = self.next {
+            next.to_tokens(s)?;
+        }
+        Ok(())
     }
 }
 

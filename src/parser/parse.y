@@ -186,6 +186,7 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 %ifndef SQLITE_OMIT_GENERATED_COLUMNS
   GENERATED ALWAYS
 %endif
+  MATERIALIZED
   REINDEX RENAME CTIME_KW IF
   .
 %wildcard ANY.
@@ -743,36 +744,47 @@ limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y).
 /////////////////////////// The DELETE statement /////////////////////////////
 //
 %if SQLITE_ENABLE_UPDATE_DELETE_LIMIT || SQLITE_UDL_CAPABLE_PARSER
-cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt(W)
+cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt_ret(W)
         orderby_opt(O) limit_opt(L). {
-  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W,
+  let (where_clause, returning) = W;
+  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause, returning,
                                      order_by: O, limit: L });
 }
 %else
-cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt(W). {
-  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause: W,
+cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt_ret(W). {
+  let (where_clause, returning) = W;
+  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause, returning,
                                      order_by: None, limit: None });
 }
 %endif
 
 %type where_opt {Option<Expr>}
+%type where_opt_ret {(Option<Expr>, Option<Vec<ResultColumn>>)}
 
 where_opt(A) ::= .                    {A = None;}
 where_opt(A) ::= WHERE expr(X).       {A = Some(X);}
+where_opt_ret(A) ::= .                                      {A = (None, None);}
+where_opt_ret(A) ::= WHERE expr(X).                         {A = (Some(X), None);}
+where_opt_ret(A) ::= RETURNING selcollist(X).
+       {A = (None, Some(X));}
+where_opt_ret(A) ::= WHERE expr(X) RETURNING selcollist(Y).
+       {A = (Some(X), Some(Y));}
 
 ////////////////////////// The UPDATE command ////////////////////////////////
 //
 %if SQLITE_ENABLE_UPDATE_DELETE_LIMIT || SQLITE_UDL_CAPABLE_PARSER
 cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from(F)
-        where_opt(W) orderby_opt(O) limit_opt(L).  {
+        where_opt_ret(W) orderby_opt(O) limit_opt(L).  {
+  let (where_clause, returning) = W;
   self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y, from: F,
-                                      where_clause: W, order_by: O, limit: L });
+                                      where_clause, returning, order_by: O, limit: L });
 }
 %else
 cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from(F)
-        where_opt(W). {
+        where_opt_ret(W). {
+  let (where_clause, returning) = W;
   self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y, from: F,
-                                      where_clause: W, order_by: None, limit: None });
+                                      where_clause, returning, order_by: None, limit: None });
 }
 %endif
 
@@ -799,35 +811,46 @@ setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
 //
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
         upsert(U). {
-  let body = InsertBody::Select(S, U);
+  let (upsert, returning) = U;
+  let body = InsertBody::Select(S, upsert);
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
-                                     body });
+                                     body, returning });
 }
-cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) DEFAULT VALUES.
+cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) DEFAULT VALUES returning(Y).
 {
   let body = InsertBody::DefaultValues;
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
-                                     body });
+                                     body, returning: Y });
 }
 
-%type upsert {Option<Upsert>}
+%type upsert {(Option<Upsert>, Option<Vec<ResultColumn>>)}
 
 // Because upsert only occurs at the tip end of the INSERT rule for cmd,
 // there is never a case where the value of the upsert pointer will not
 // be destroyed by the cmd action.  So comment-out the destructor to
 // avoid unreachable code.
 //%destructor upsert {sqlite3UpsertDelete(pParse->db,$$);}
-upsert(A) ::= . { A = None; }
+upsert(A) ::= . { A = (None, None); }
+upsert(A) ::= RETURNING selcollist(X).  { A = (None, Some(X)); }
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW)
-              DO UPDATE SET setlist(Z) where_opt(W).
+              DO UPDATE SET setlist(Z) where_opt(W) upsert(N).
               { let index = UpsertIndex{ targets: T, where_clause: TW };
                 let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
-                A = Some(Upsert{ index: Some(index), do_clause });}
-upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING.
+                let (next, returning) = N;
+                A = (Some(Upsert{ index: Some(index), do_clause, next: next.map(Box::new) }), returning);}
+upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING upsert(N).
               { let index = UpsertIndex{ targets: T, where_clause: TW };
-                A = Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing }); }
-upsert(A) ::= ON CONFLICT DO NOTHING.
-              { A = Some(Upsert{ index: None, do_clause: UpsertDo::Nothing }); }
+                let (next, returning) = N;
+                A = (Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing, next: next.map(Box::new) }), returning); }
+upsert(A) ::= ON CONFLICT DO NOTHING returning(R).
+              { A = (Some(Upsert{ index: None, do_clause: UpsertDo::Nothing, next: None }), R); }
+upsert(A) ::= ON CONFLICT DO UPDATE SET setlist(Z) where_opt(W) returning(R).
+              { let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
+                A = (Some(Upsert{ index: None, do_clause, next: None }), R);}
+
+%type returning {Option<Vec<ResultColumn>>}
+returning(A) ::= RETURNING selcollist(X).  {A = Some(X);}
+returning(A) ::= . {A = None;}
 
 %type insert_cmd {Option<ResolveType>}
 insert_cmd(A) ::= INSERT orconf(R).   {A = R;}
@@ -1189,7 +1212,8 @@ trigger_cmd(A) ::=
 // INSERT
 trigger_cmd(A) ::= insert_cmd(R) INTO
                       trnm(X) idlist_opt(F) select(S) upsert(U). {
-   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: S, upsert: U };/*A-overwrites-R*/
+  let (upsert, returning) = U;
+   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: S, upsert, returning };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
@@ -1264,6 +1288,9 @@ cmd ::= ALTER TABLE fullname(X)
 cmd ::= ALTER TABLE fullname(X) RENAME kwcolumn_opt nm(Y) TO nm(Z). {
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameColumn{ old: Y, new: Z }));
 }
+cmd ::= ALTER TABLE fullname(X) DROP kwcolumn_opt nm(Y). {
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::DropColumn(Y)));
+}
 
 kwcolumn_opt ::= .
 kwcolumn_opt ::= COLUMNKW.
@@ -1300,17 +1327,26 @@ anylist ::= anylist ANY.
 //////////////////////// COMMON TABLE EXPRESSIONS ////////////////////////////
 %type with {Option<With>}
 %type wqlist {Vec<CommonTableExpr>}
+%type wqitem {CommonTableExpr}
+// %destructor wqitem {sqlite3CteDelete(pParse->db, $$);} // not reachable
 
 with(A) ::= . { A = None; }
 %ifndef SQLITE_OMIT_CTE
 with(A) ::= WITH wqlist(W).              { A = Some(With{ recursive: false, ctes: W }); }
 with(A) ::= WITH RECURSIVE wqlist(W).    { A = Some(With{ recursive: true, ctes: W }); }
 
-wqlist(A) ::= nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
-  A = vec![CommonTableExpr{ tbl_name: X, columns: Y, select: Z }]; /*A-overwrites-X*/
+%type wqas {Materialized}
+wqas(A)   ::= AS.                  {A = Materialized::Any;}
+wqas(A)   ::= AS MATERIALIZED.     {A = Materialized::Yes;}
+wqas(A)   ::= AS NOT MATERIALIZED. {A = Materialized::No;}
+wqitem(A) ::= nm(X) eidlist_opt(Y) wqas(M) LP select(Z) RP. {
+  A = CommonTableExpr{ tbl_name: X, columns: Y, materialized: M, select: Z }; /*A-overwrites-X*/
 }
-wqlist(A) ::= wqlist(A) COMMA nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
-  let cte = CommonTableExpr{ tbl_name: X, columns: Y, select: Z };
+wqlist(A) ::= wqitem(X). {
+  A = vec![X]; /*A-overwrites-X*/
+}
+wqlist(A) ::= wqlist(A) COMMA wqitem(X). {
+  let cte = X;
   A.push(cte);
 }
 %endif  SQLITE_OMIT_CTE

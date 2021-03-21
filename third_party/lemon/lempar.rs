@@ -631,44 +631,6 @@ impl yyParser {
         let yysize: i8; /* Amount to pop the stack */
         let _ = yy_look_ahead;
         let _ = yy_lookahead_token;
-        #[cfg(not(feature = "NDEBUG"))]
-        {
-            if (yyruleno as usize) < yyRuleName.len() {
-                let yysize = yyRuleInfoNRhs[yyruleno as usize];
-                let action = if yyruleno < YYNRULE_WITH_ACTION {
-                    ""
-                } else {
-                    " without external action"
-                };
-                if yysize != 0 {
-                    debug!(
-                        target: TARGET,
-                        "Reduce {} [{}]{}, pop back to state {}.",
-                        yyruleno,
-                        yyRuleName[yyruleno as usize],
-                        action,
-                        self[yysize].stateno
-                    );
-                } else {
-                    debug!(
-                        target: TARGET,
-                        "Reduce {} [{}]{}.", yyruleno, yyRuleName[yyruleno as usize], action
-                    );
-                }
-            }
-        }
-        /* Check that the stack is large enough to grow by a single entry
-         ** if the RHS of the rule is empty.  This ensures that there is room
-         ** enough on the stack to push the LHS value */
-        if yyRuleInfoNRhs[yyruleno as usize] == 0 {
-            self.yyhwm_incr();
-            if self.yy_grow_stack_for_push() {
-                /* The call to yyStackOverflow() above pops the stack until it is
-                 ** empty, causing the main parser loop to exit.  So the return value
-                 ** is never used and does not matter. */
-                return 0;
-            }
-        }
 
         let yylhsminor: YYMINORTYPE;
         match yyruleno {
@@ -825,7 +787,42 @@ impl yyParser {
             assert_eq!(yyact, self[0].stateno);
             yyact = yy_find_shift_action(yymajor, yyact);
             if yyact >= YY_MIN_REDUCE {
-                yyact = self.yy_reduce(yyact - YY_MIN_REDUCE, yymajor, yyminor.as_ref());
+                let yyruleno = yyact - YY_MIN_REDUCE; /* Reduce by this rule */
+                assert!((yyruleno as usize) < yyRuleName.len());
+                #[cfg(not(feature = "NDEBUG"))]
+                    {
+                        let yysize = yyRuleInfoNRhs[yyruleno as usize];
+                        let action = if yyruleno < YYNRULE_WITH_ACTION {
+                            ""
+                        } else {
+                            " without external action"
+                        };
+                        if yysize != 0 {
+                            debug!(
+                                target: TARGET,
+                                "Reduce {} [{}]{}, pop back to state {}.",
+                                yyruleno,
+                                yyRuleName[yyruleno as usize],
+                                action,
+                                self[yysize].stateno
+                            );
+                        } else {
+                            debug!(
+                                target: TARGET,
+                                "Reduce {} [{}]{}.", yyruleno, yyRuleName[yyruleno as usize], action
+                            );
+                        }
+                    }
+                /* Check that the stack is large enough to grow by a single entry
+                 ** if the RHS of the rule is empty.  This ensures that there is room
+                 ** enough on the stack to push the LHS value */
+                if yyRuleInfoNRhs[yyruleno as usize] == 0 {
+                    self.yyhwm_incr();
+                    if self.yy_grow_stack_for_push() {
+                        break;
+                    }
+                }
+                yyact = self.yy_reduce(yyruleno, yymajor, yyminor.as_ref());
             } else if yyact <= YY_MAX_SHIFTREDUCE {
                 self.yy_shift(yyact, yymajor, yyminor.take());
                 if cfg!(not(feature = "YYNOERRORRECOVERY")) {
