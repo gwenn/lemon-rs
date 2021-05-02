@@ -1412,11 +1412,10 @@ impl ToTokens for OneSelect {
                 for (i, vals) in values.iter().enumerate() {
                     if i == 0 {
                         s.append(TK_VALUES, None)?;
-                        s.append(TK_LP, None)?;
                     } else {
                         s.append(TK_COMMA, None)?;
-                        s.append(TK_LP, None)?;
                     }
+                    s.append(TK_LP, None)?;
                     comma(vals, s)?;
                     s.append(TK_RP, None)?;
                 }
