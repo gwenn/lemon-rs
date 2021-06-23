@@ -25,7 +25,7 @@ NDEBUG = []
 default = ["YYNOERRORRECOVERY", "buf_redux"]
 
 [dependencies]
-phf = { version = "0.8", features = ["macros"] }
+phf = { version = "0.9", features = ["macros"] }
 log = "0.4"
 memchr = "2.0"
 fallible-iterator = "0.2"
