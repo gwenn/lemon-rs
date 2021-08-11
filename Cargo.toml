@@ -25,7 +25,7 @@ NDEBUG = []
 default = ["YYNOERRORRECOVERY", "buf_redux"]
 
 [dependencies]
-phf = { version = "0.9", features = ["macros"] }
+phf = { version = "0.10", features = ["macros"] }
 log = "0.4"
 memchr = "2.0"
 fallible-iterator = "0.2"
@@ -33,7 +33,7 @@ smallvec = ">=1.6.1"
 buf_redux = { version = "0.8", optional = true }
 
 [dev-dependencies]
-env_logger = { version = "0.8", default-features = false }
+env_logger = { version = "0.9", default-features = false }
 trybuild = "1.0"
 
 [build-dependencies]
