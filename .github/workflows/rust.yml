@@ -8,13 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions-rs/toolchain@v1
-      with:
-        default: true
-        profile: minimal
-        toolchain: stable
-        override: true
+    - uses: actions/checkout@v2
     - name: Build
       run: cargo build
     - name: Run tests
