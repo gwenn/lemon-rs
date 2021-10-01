@@ -51,18 +51,10 @@ impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
     }
 }
 
+#[derive(Default)]
 pub struct ParameterInfo {
     pub count: u32,
     pub names: HashSet<String>,
-}
-
-impl Default for ParameterInfo {
-    fn default() -> Self {
-        ParameterInfo {
-            count: 0,
-            names: HashSet::new(),
-        }
-    }
 }
 
 // https://sqlite.org/lang_expr.html#parameters
@@ -1048,9 +1040,6 @@ impl ToTokens for Expr {
             }
             Expr::Unary(op, sub_expr) => {
                 op.to_tokens(s)?;
-                if let UnaryOperator::Not = op {
-                } else if let Expr::Unary(_, _) = sub_expr.as_ref() {
-                }
                 sub_expr.to_tokens(s)
             }
             Expr::Variable(var) => match var.chars().next() {
