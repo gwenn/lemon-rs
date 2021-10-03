@@ -1912,7 +1912,7 @@ pub enum CreateTableBody {
     ColumnsAndConstraints {
         columns: Vec<ColumnDefinition>,
         constraints: Option<Vec<NamedTableConstraint>>,
-        without: bool,
+        options: TableOptions,
     },
     AsSelect(Select),
 }
@@ -1922,7 +1922,7 @@ impl ToTokens for CreateTableBody {
             CreateTableBody::ColumnsAndConstraints {
                 columns,
                 constraints,
-                without,
+                options,
             } => {
                 s.append(TK_LP, None)?;
                 comma(columns, s)?;
@@ -1931,9 +1931,12 @@ impl ToTokens for CreateTableBody {
                     comma(constraints, s)?;
                 }
                 s.append(TK_RP, None)?;
-                if *without {
+                if options.contains(TableOptions::WITHOUT_ROWID) {
                     s.append(TK_WITHOUT, None)?;
                     s.append(TK_ID, Some("ROWID"))?;
+                }
+                if options.contains(TableOptions::STRICT) {
+                    s.append(TK_ID, Some("STRICT"))?;
                 }
                 Ok(())
             }
@@ -2193,6 +2196,14 @@ impl ToTokens for TableConstraint {
                 Ok(())
             }
         }
+    }
+}
+
+bitflags::bitflags! {
+    pub struct TableOptions: u8 {
+        const NONE = 0;
+        const WITHOUT_ROWID = 1;
+        const STRICT = 2;
     }
 }
 

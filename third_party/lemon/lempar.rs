@@ -873,14 +873,14 @@ impl yyParser {
                         }
                         yymajor = YYNOCODE;
                     } else {
-                        while self.yyidx >= 0 && {
+                        while self.yyidx > 0 {
                             yyact = yy_find_reduce_action(self[0].stateno, YYERRORSYMBOL);
-                            yyact
-                        } > YY_MAX_SHIFTREDUCE
-                        {
+                            if yyact <= YY_MAX_SHIFTREDUCE {
+                                break;
+                            }
                             self.yy_pop_parser_stack();
                         }
-                        if self.yyidx < 0 || yymajor == 0 {
+                        if self.yyidx <= 0 || yymajor == 0 {
                             self.yy_parse_failed();
                             if cfg!(not(feature = "YYNOERRORRECOVERY")) {
                                 self.yyerrcnt = -1;

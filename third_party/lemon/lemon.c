@@ -2681,7 +2681,7 @@ static void parseonetoken(struct pstate *psp)
       ** in order to control their assigned integer number.  The number for
       ** each token is assigned when it is first seen.  So by including
       **
-      **     %token ONE TWO THREE
+      **     %token ONE TWO THREE.
       **
       ** early in the grammar file, that assigns small consecutive values
       ** to each of the tokens ONE TWO and THREE.
@@ -3544,7 +3544,9 @@ PRIVATE int compute_action(struct lemon *lemp, struct action *ap)
       /* Since a SHIFT is inherient after a prior REDUCE, convert any
       ** SHIFTREDUCE action with a nonterminal on the LHS into a simple
       ** REDUCE action: */
-      if( ap->sp->index>=lemp->nterminal ){
+      if( ap->sp->index>=lemp->nterminal
+       && (lemp->errsym==0 || ap->sp->index!=lemp->errsym->index)
+      ){
         act = lemp->minReduce + ap->x.rp->iRule;
       }else{
         act = lemp->minShiftReduce + ap->x.rp->iRule;
