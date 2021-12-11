@@ -496,7 +496,6 @@ fn yy_find_reduce_action(
     stateno: YYACTIONTYPE,  /* Current state number */
     iLookAhead: YYCODETYPE, /* The look-ahead token */
 ) -> YYACTIONTYPE {
-    let mut i: i32;
     if YYERRORSYMBOL > 0 {
         if stateno > YY_REDUCE_COUNT {
             return yy_default[stateno as usize];
@@ -504,7 +503,7 @@ fn yy_find_reduce_action(
     } else {
         assert!(stateno <= YY_REDUCE_COUNT);
     }
-    i = yy_reduce_ofst[stateno as usize].into();
+    let mut i: i32 = yy_reduce_ofst[stateno as usize].into();
     assert_ne!(iLookAhead, YYNOCODE);
     i += i32::from(iLookAhead);
     if YYERRORSYMBOL > 0 {
@@ -626,9 +625,6 @@ impl yyParser {
         yy_look_ahead: YYCODETYPE, /* Lookahead token, or YYNOCODE if none */
         yy_lookahead_token: Option<&ParseTOKENTYPE>, /* Value of the lookahead token */
     ) -> YYACTIONTYPE {
-        let yygoto: YYCODETYPE; /* The next state */
-        let yyact: YYACTIONTYPE; /* The next action */
-        let yysize: i8; /* Amount to pop the stack */
         let _ = yy_look_ahead;
         let _ = yy_lookahead_token;
 
@@ -646,9 +642,9 @@ impl yyParser {
 %%
 /********** End reduce actions ************************************************/
         };
-        yygoto = yyRuleInfoLhs[yyruleno as usize];
-        yysize = yyRuleInfoNRhs[yyruleno as usize];
-        yyact = yy_find_reduce_action(self[yysize].stateno, yygoto);
+        let yygoto: YYCODETYPE = yyRuleInfoLhs[yyruleno as usize]; /* The next state */
+        let yysize: i8 = yyRuleInfoNRhs[yyruleno as usize];  /* Amount to pop the stack */
+        let yyact: YYACTIONTYPE = yy_find_reduce_action(self[yysize].stateno, yygoto); /* The next action */
 
         /* There are no SHIFTREDUCE actions on nonterminals because the table
          ** generator has simplified them to pure REDUCE actions. */
@@ -754,7 +750,6 @@ impl yyParser {
         mut yyminor: Option<ParseTOKENTYPE>, /* The value for the token */
     ) {
         let mut yymajor = yymajor as YYCODETYPE;
-        let mut yyact: YYACTIONTYPE; /* The parser action. */
         //#[cfg(all(not(feature = "YYERRORSYMBOL"), not(feature = "YYNOERRORRECOVERY")))]
         let mut yyendofinput: bool = false; /* True if we are at the end of input */
         //#[cfg(feature = "YYERRORSYMBOL")]
@@ -765,7 +760,7 @@ impl yyParser {
             yyendofinput = yymajor == 0;
         }
 
-        yyact = self[0].stateno;
+        let mut yyact: YYACTIONTYPE = self[0].stateno; /* The parser action. */
         #[cfg(not(feature = "NDEBUG"))]
         {
             if yyact < YY_MIN_REDUCE {
