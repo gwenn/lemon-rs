@@ -233,6 +233,19 @@ impl Tokenizer {
     }
 }
 
+/// ```compile_fail
+/// use sqlite3_parser::lexer::sql::Tokenizer;
+/// use sqlite3_parser::lexer::Scanner;
+///
+/// fn main() {
+///     let tokenizer = Tokenizer::new();
+///     let input = "PRAGMA parser_trace=ON;".as_bytes();
+///     let mut s = Scanner::new(input, tokenizer);
+///     let (token1, _) = s.scan().unwrap().unwrap();
+///     s.scan().unwrap().unwrap();
+///     assert!(b"PRAGMA".eq_ignore_ascii_case(token1));
+/// }
+/// ```
 impl Splitter for Tokenizer {
     type Error = Error;
     type TokenType = TokenType;
@@ -654,11 +667,5 @@ mod tests {
         let (token2, token_type2) = s.scan().unwrap().unwrap();
         assert_eq!("parser_trace".as_bytes(), token2);
         assert_eq!(TokenType::TK_ID, token_type2);
-    }
-
-    #[test]
-    fn streaming_iterator() {
-        let t = trybuild::TestCases::new();
-        t.compile_fail("tests/lexer/streaming_iterator.rs");
     }
 }
