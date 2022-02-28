@@ -223,7 +223,7 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 %left BITAND BITOR LSHIFT RSHIFT.
 %left PLUS MINUS.
 %left STAR SLASH REM.
-%left CONCAT.
+%left CONCAT PTR.
 %left COLLATE.
 %right BITNOT.
 %nonassoc ON.
@@ -989,6 +989,10 @@ expr(A) ::= BITNOT(B) expr(X).
               {A = Expr::unary(UnaryOperator::from(@B), X);/*A-overwrites-B*/}
 expr(A) ::= PLUS|MINUS(B) expr(X). [BITNOT] {
   A = Expr::unary(UnaryOperator::from(@B), X);/*A-overwrites-B*/
+}
+
+expr(A) ::= expr(B) PTR(C) expr(D). {
+  A = Expr::ptr(B, C, D);
 }
 
 %type between_op {bool}

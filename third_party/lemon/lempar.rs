@@ -783,9 +783,9 @@ impl yyParser {
             yyact = yy_find_shift_action(yymajor, yyact);
             if yyact >= YY_MIN_REDUCE {
                 let yyruleno = yyact - YY_MIN_REDUCE; /* Reduce by this rule */
-                assert!((yyruleno as usize) < yyRuleName.len());
                 #[cfg(not(feature = "NDEBUG"))]
                     {
+                        assert!((yyruleno as usize) < yyRuleName.len());
                         let yysize = yyRuleInfoNRhs[yyruleno as usize];
                         let action = if yyruleno < YYNRULE_WITH_ACTION {
                             ""

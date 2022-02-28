@@ -276,6 +276,13 @@ impl Splitter for Tokenizer {
                         } else if eof {
                             return Ok((None, data.len()));
                         } // else ask more data until '\n'
+                    } else if *b == b'>' {
+                        if let Some(b) = data.get(2) {
+                            if *b == b'>' {
+                                return Ok((Some((&data[..3], TK_PTR)), 3));
+                            }
+                        }
+                        return Ok((Some((&data[..2], TK_PTR)), 2));
                     } else {
                         return Ok((Some((&data[..1], TK_MINUS)), 1));
                     }

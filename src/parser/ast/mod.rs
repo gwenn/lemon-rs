@@ -787,6 +787,15 @@ impl Expr {
     pub fn binary(left: Expr, op: YYCODETYPE, right: Expr) -> Expr {
         Expr::Binary(Box::new(left), Operator::from(op), Box::new(right))
     }
+    pub fn ptr(left: Expr, op: Token, right: Expr) -> Expr {
+        let mut ptr = Operator::ArrowRight;
+        if let Some(ref op) = op {
+            if op == "->>" {
+                ptr = Operator::ArrowRightShift;
+            }
+        }
+        Expr::Binary(Box::new(left), ptr, Box::new(right))
+    }
     pub fn like(lhs: Expr, not: bool, op: LikeOperator, rhs: Expr, escape: Option<Expr>) -> Expr {
         Expr::Like {
             lhs: Box::new(lhs),
@@ -1149,6 +1158,8 @@ impl ToTokens for LikeOperator {
 pub enum Operator {
     Add,
     And,
+    ArrowRight,      // ->
+    ArrowRightShift, // ->>
     BitwiseAnd,
     BitwiseOr,
     Concat, // String concatenation (||)
@@ -1201,6 +1212,8 @@ impl ToTokens for Operator {
         match self {
             Operator::Add => s.append(TK_PLUS, None),
             Operator::And => s.append(TK_AND, None),
+            Operator::ArrowRight => s.append(TK_PTR, Some("->")),
+            Operator::ArrowRightShift => s.append(TK_PTR, Some("->>")),
             Operator::BitwiseAnd => s.append(TK_BITAND, None),
             Operator::BitwiseOr => s.append(TK_BITOR, None),
             Operator::Concat => s.append(TK_CONCAT, None),
