@@ -362,7 +362,7 @@ pub fn from_token(ty: u16, value: Token) -> String {
 }
 
 impl TokenType {
-    pub fn as_str(&self) -> Option<&'static str> {
+    pub const fn as_str(&self) -> Option<&'static str> {
         use TokenType::*;
         match self {
             TK_ABORT => Some("ABORT"),
