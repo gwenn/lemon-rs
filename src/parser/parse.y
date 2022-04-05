@@ -887,7 +887,7 @@ idlist(A) ::= nm(Y).
 }
 
 expr(A) ::= term(A).
-expr(A) ::= LP expr(X) RP. {A = Expr::parenthesized(X); /*A-overwrites-X*/}
+expr(A) ::= LP expr(X) RP. {A = Expr::parenthesized(X);}
 expr(A) ::= id(X).          {A= Expr::id(@X, X); /*A-overwrites-X*/}
 expr(A) ::= JOIN_KW(X).     {A= Expr::id(@X, X); /*A-overwrites-X*/}
 expr(A) ::= nm(X) DOT nm(Y). {
@@ -896,7 +896,7 @@ expr(A) ::= nm(X) DOT nm(Y). {
 expr(A) ::= nm(X) DOT nm(Y) DOT nm(Z). {
   A = Expr::DoublyQualified(X, Y, Z); /*A-overwrites-X*/
 }
-term(A) ::= NULL. {A=Expr::Literal(Literal::Null); /*A-overwrites-X*/}
+term(A) ::= NULL. {A=Expr::Literal(Literal::Null);}
 term(A) ::= BLOB(X). {A=Expr::Literal(Literal::Blob(X.unwrap())); /*A-overwrites-X*/}
 term(A) ::= STRING(X).          {A=Expr::Literal(Literal::String(X.unwrap())); /*A-overwrites-X*/}
 term(A) ::= FLOAT|INTEGER(X). {
@@ -1035,7 +1035,7 @@ case_exprlist(A) ::= WHEN expr(Y) THEN expr(Z). {
   A = vec![(Y, Z)];
 }
 %type case_else {Option<Expr>}
-case_else(A) ::=  ELSE expr(X).         {A = Some(X); /*A-overwrites-X*/}
+case_else(A) ::=  ELSE expr(X).         {A = Some(X);}
 case_else(A) ::=  .                     {A = None;}
 %type case_operand {Option<Expr>}
 case_operand(A) ::= expr(X).            {A = Some(X); /*A-overwrites-X*/}
@@ -1432,9 +1432,9 @@ frame_opt(A) ::= range_or_rows(X) BETWEEN frame_bound_s(Y) AND
   A = Some(FrameClause{ mode: X, start: Y, end: Some(Z), exclude: W });
 }
 
-range_or_rows(A) ::= RANGE.   { A = FrameMode::Range; /*A-overwrites-X*/}
-range_or_rows(A) ::= ROWS.    { A = FrameMode::Rows;  /*A-overwrites-X*/}
-range_or_rows(A) ::= GROUPS.  { A = FrameMode::Groups;/*A-overwrites-X*/}
+range_or_rows(A) ::= RANGE.   { A = FrameMode::Range; }
+range_or_rows(A) ::= ROWS.    { A = FrameMode::Rows; }
+range_or_rows(A) ::= GROUPS.  { A = FrameMode::Groups; }
 
 
 frame_bound_s(A) ::= frame_bound(X).      {A = X;}
@@ -1451,10 +1451,10 @@ frame_exclude_opt(A) ::= . {A = None;}
 frame_exclude_opt(A) ::= EXCLUDE frame_exclude(X). {A = Some(X);}
 
 %type frame_exclude {FrameExclude}
-frame_exclude(A) ::= NO OTHERS.   { A = FrameExclude::NoOthers;  /*A-overwrites-X*/}
-frame_exclude(A) ::= CURRENT ROW. { A = FrameExclude::CurrentRow;  /*A-overwrites-X*/}
-frame_exclude(A) ::= GROUP.       { A = FrameExclude::Group;  /*A-overwrites-X*/}
-frame_exclude(A) ::= TIES.        { A = FrameExclude::Ties;  /*A-overwrites-X*/}
+frame_exclude(A) ::= NO OTHERS.   { A = FrameExclude::NoOthers; }
+frame_exclude(A) ::= CURRENT ROW. { A = FrameExclude::CurrentRow; }
+frame_exclude(A) ::= GROUP.       { A = FrameExclude::Group; }
+frame_exclude(A) ::= TIES.        { A = FrameExclude::Ties; }
 
 %type window_clause {Vec<WindowDef>}
 window_clause(A) ::= WINDOW windowdefn_list(B). { A = B; }
