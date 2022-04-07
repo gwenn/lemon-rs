@@ -85,7 +85,7 @@ cmd ::= BEGIN transtype(Y) trans_opt(X).  {self.ctx.stmt = Some(Stmt::Begin(Y, X
 %type trans_opt {Option<Name>}
 trans_opt(A) ::= .               {A = None;}
 trans_opt(A) ::= TRANSACTION.    {A = None;}
-trans_opt(A) ::= TRANSACTION nm(X). {A = Some(X); /*A-overwrites-X*/}
+trans_opt(A) ::= TRANSACTION nm(X). {A = Some(X);}
 %type transtype {Option<TransactionType>}
 transtype(A) ::= .             {A = None;}
 transtype(A) ::= DEFERRED.  {A = Some(TransactionType::Deferred);}
