@@ -221,15 +221,11 @@ impl<I: Input> FallibleIterator for Parser<I> {
 pub type Token<'input> = (&'input [u8], TokenType);
 
 #[derive(Default)]
-pub struct Tokenizer {
-    uppercase_buffer: [u8; MAX_KEYWORD_LEN],
-}
+pub struct Tokenizer {}
 
 impl Tokenizer {
     pub fn new() -> Tokenizer {
-        Tokenizer {
-            uppercase_buffer: [0; MAX_KEYWORD_LEN],
-        }
+        Tokenizer {}
     }
 }
 
@@ -636,15 +632,7 @@ impl Tokenizer {
             };
             let word = &data[..i];
             let tt = if word.len() >= 2 && word.len() <= MAX_KEYWORD_LEN && word.is_ascii() {
-                let upcase = if word.iter().all(|b| b.is_ascii_uppercase()) {
-                    word
-                } else {
-                    let buffer = &mut self.uppercase_buffer[..word.len()];
-                    buffer.copy_from_slice(word);
-                    buffer.make_ascii_uppercase();
-                    buffer
-                };
-                keyword_token(upcase).unwrap_or(TK_ID)
+                keyword_token(word).unwrap_or(TK_ID)
             } else {
                 TK_ID
             };
