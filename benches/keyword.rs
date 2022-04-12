@@ -2,7 +2,6 @@
 extern crate test;
 
 use sqlite3_parser::dialect::keyword_token;
-use sqlite3_parser::dialect::MAX_KEYWORD_LEN;
 use test::Bencher;
 
 static VALUES: [&[u8]; 136] = [
@@ -149,19 +148,6 @@ fn bench_keyword_token(b: &mut Bencher) {
     b.iter(|| {
         for value in VALUES.iter() {
             assert!(keyword_token(value).is_some())
-        }
-    });
-}
-
-#[bench]
-fn bench_upcase_keyword_token(b: &mut Bencher) {
-    let mut uppercase_buffer: [u8; MAX_KEYWORD_LEN] = [0; MAX_KEYWORD_LEN];
-    b.iter(|| {
-        for value in VALUES.iter() {
-            let upcase = &mut uppercase_buffer[..value.len()];
-            upcase.copy_from_slice(value);
-            upcase.make_ascii_uppercase();
-            assert!(keyword_token(upcase).is_some())
         }
     });
 }
