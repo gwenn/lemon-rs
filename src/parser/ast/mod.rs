@@ -1746,16 +1746,6 @@ pub enum JoinConstraint {
     Using(Vec<Name>),
 }
 
-impl JoinConstraint {
-    pub(crate) fn from(on: Option<Expr>, using: Option<Vec<Name>>) -> Option<JoinConstraint> {
-        if let Some(expr) = on {
-            debug_assert!(using.is_none());
-            Some(JoinConstraint::On(expr))
-        } else {
-            using.map(JoinConstraint::Using)
-        }
-    }
-}
 impl ToTokens for JoinConstraint {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {

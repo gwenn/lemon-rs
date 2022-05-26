@@ -602,28 +602,28 @@ stl_prefix(A) ::= seltablist(A) joinop(Y).    {
 }
 stl_prefix(A) ::= .                           {A = FromClause::empty();}
 seltablist(A) ::= stl_prefix(A) fullname(Y) as(Z) indexed_opt(I)
-                  on_opt(N) using_opt(U). {
+                  on_using(N). {
     let st = SelectTable::Table(Y, Z, I);
-    let jc = JoinConstraint::from(N, U);
+    let jc = N;
     A.push(st, jc);
 }
 seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z)
-                  on_opt(N) using_opt(U). {
+                  on_using(N). {
     let st = SelectTable::TableCall(Y, E, Z);
-    let jc = JoinConstraint::from(N, U);
+    let jc = N;
     A.push(st, jc);
 }
 %ifndef SQLITE_OMIT_SUBQUERY
   seltablist(A) ::= stl_prefix(A) LP select(S) RP
-                    as(Z) on_opt(N) using_opt(U). {
+                    as(Z) on_using(N). {
     let st = SelectTable::Select(S, Z);
-    let jc = JoinConstraint::from(N, U);
+    let jc = N;
     A.push(st, jc);
   }
   seltablist(A) ::= stl_prefix(A) LP seltablist(F) RP
-                    as(Z) on_opt(N) using_opt(U). {
+                    as(Z) on_using(N). {
     let st = SelectTable::Sub(F, Z);
-    let jc = JoinConstraint::from(N, U);
+    let jc = N;
     A.push(st, jc);
   }
 %endif  SQLITE_OMIT_SUBQUERY
@@ -672,12 +672,13 @@ joinop(X) ::= JOIN_KW(A) nm(B) nm(C) JOIN.
 //
 //      INSERT INTO tab SELECT * FROM aaa JOIN bbb WHERE true ON CONFLICT ...
 //
-// The [AND] and [OR] precedence marks in the rules for on_opt cause the
+// The [AND] and [OR] precedence marks in the rules for on_using cause the
 // ON in this context to always be interpreted as belonging to the JOIN.
 //
-%type on_opt {Option<Expr>}
-on_opt(N) ::= ON expr(E).  {N = Some(E);}
-on_opt(N) ::= .     [OR]   {N = None;}
+%type on_using {Option<JoinConstraint>}
+on_using(N) ::= ON expr(E).            {N = Some(JoinConstraint::On(E));}
+on_using(N) ::= USING LP idlist(L) RP. {N = Some(JoinConstraint::Using(L));}
+on_using(N) ::= .                 [OR] {N = None;}
 
 // Note that this block abuses the Token type just a little. If there is
 // no "INDEXED BY" clause, the returned token is empty (z==0 && n==0). If
@@ -693,10 +694,6 @@ on_opt(N) ::= .     [OR]   {N = None;}
 indexed_opt(A) ::= .                 {A = None;}
 indexed_opt(A) ::= INDEXED BY nm(X). {A = Some(Indexed::IndexedBy(X));}
 indexed_opt(A) ::= NOT INDEXED.      {A = Some(Indexed::NotIndexed);}
-
-%type using_opt {Option<Vec<Name>>}
-using_opt(U) ::= USING LP idlist(L) RP.  {U = Some(L);}
-using_opt(U) ::= .                        {U = None;}
 
 %type orderby_opt {Option<Vec<SortedColumn>>}
 
@@ -980,6 +977,12 @@ expr(A) ::= expr(X) IS(OP) expr(Y).     {
   A = Expr::binary(X, @OP, Y); /*A-overwrites-X*/
 }
 expr(A) ::= expr(X) IS NOT expr(Y). {
+  A = Expr::binary(X, TokenType::TK_NOT as YYCODETYPE, Y); /*A-overwrites-X*/
+}
+expr(A) ::= expr(X) IS NOT DISTINCT FROM expr(Y).     {
+  A = Expr::binary(X, TokenType::TK_IS as YYCODETYPE, Y); /*A-overwrites-X*/
+}
+expr(A) ::= expr(X) IS DISTINCT FROM expr(Y). {
   A = Expr::binary(X, TokenType::TK_NOT as YYCODETYPE, Y); /*A-overwrites-X*/
 }
 
