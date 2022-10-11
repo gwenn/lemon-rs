@@ -35,7 +35,7 @@ pub struct Parser<I: Input> {
 impl<I: Input> Parser<I> {
     pub fn new(input: I) -> Parser<I> {
         let lexer = Tokenizer::new();
-        let scanner = super::Scanner::new(input, lexer);
+        let scanner = Scanner::new(input, lexer);
         let ctx = Context::new();
         let parser = yyParser::new(ctx);
         let buffer = Vec::new();

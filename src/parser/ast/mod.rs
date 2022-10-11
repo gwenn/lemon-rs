@@ -62,7 +62,7 @@ impl TokenStream for ParameterInfo {
     type Error = ParseIntError;
 
     fn append(&mut self, ty: TokenType, value: Option<&str>) -> Result<(), Self::Error> {
-        if ty == TokenType::TK_VARIABLE {
+        if ty == TK_VARIABLE {
             if let Some(variable) = value {
                 if variable == "?" {
                     self.count = self.count.saturating_add(1);
