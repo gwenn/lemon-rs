@@ -71,8 +71,7 @@ impl TokenStream for ParameterInfo {
                     if n > self.count {
                         self.count = n;
                     }
-                } else {
-                    self.names.insert(variable.to_owned());
+                } else if self.names.insert(variable.to_owned()) {
                     self.count = self.count.saturating_add(1);
                 }
             }

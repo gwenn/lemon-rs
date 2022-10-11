@@ -15,7 +15,7 @@ fn count_placeholders() {
 
 #[test]
 fn count_numbered_placeholders() {
-    let sql = "SELECT ?1 WHERE 1 = ?2";
+    let sql = "SELECT ?1 WHERE 1 = ?2 AND 0 = ?1";
     let mut parser = Parser::new(sql.as_bytes());
     let ast = parser.next().unwrap().unwrap();
     let mut info = ParameterInfo::default();
@@ -35,7 +35,7 @@ fn count_unused_placeholders() {
 
 #[test]
 fn count_named_placeholders() {
-    let sql = "SELECT :x WHERE 1 = :y";
+    let sql = "SELECT :x, :y WHERE 1 = :y";
     let mut parser = Parser::new(sql.as_bytes());
     let ast = parser.next().unwrap().unwrap();
     let mut info = ParameterInfo::default();
