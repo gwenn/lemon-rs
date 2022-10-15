@@ -203,7 +203,7 @@ struct s_options {
 int    OptInit(char**,struct s_options*,FILE*);
 int    OptNArgs(void);
 char  *OptArg(int);
-void   OptErr(int);
+
 void   OptPrint(void);
 
 /******** From the file "parse.h" *****************************************/
@@ -346,7 +346,6 @@ struct action {
   } x;
   struct symbol *spOpt;    /* SHIFTREDUCE optimization to this symbol */
   struct action *next;     /* Next action for this state */
-  struct action *collide;  /* Next action with the same hash */
 };
 
 /* Each state of the generated parser's finite state machine
@@ -455,7 +454,7 @@ int Symbolcmpp(const void *, const void *);
 void Symbol_init(void);
 int Symbol_insert(struct symbol *, const char *);
 struct symbol *Symbol_find(const char *);
-struct symbol *Symbol_Nth(int);
+
 int Symbol_count(void);
 struct symbol **Symbol_arrayof(void);
 
@@ -2133,13 +2132,6 @@ char *OptArg(int n)
   int i;
   i = argindex(n);
   return i>=0 ? g_argv[i] : 0;
-}
-
-void OptErr(int n)
-{
-  int i;
-  i = argindex(n);
-  if( i>=0 ) errline(i,0,errstream);
 }
 
 void OptPrint(void){
@@ -5460,18 +5452,6 @@ struct symbol *Symbol_find(const char *key)
     np = np->next;
   }
   return np ? np->data : 0;
-}
-
-/* Return the n-th data.  Return NULL if n is out of range. */
-struct symbol *Symbol_Nth(int n)
-{
-  struct symbol *data;
-  if( x2a && n>0 && n<=x2a->count ){
-    data = x2a->tbl[n-1].data;
-  }else{
-    data = 0;
-  }
-  return data;
 }
 
 /* Return the size of the array */
