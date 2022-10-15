@@ -2,11 +2,9 @@
 
 use log::debug;
 
-use std::convert::From;
 use std::error::Error;
 use std::fmt;
 use std::io;
-use std::result::Result;
 
 #[cfg(feature = "buf_redux")]
 use buf_redux::Buffer;

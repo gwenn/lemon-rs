@@ -3,7 +3,6 @@
 use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter, Write};
 use std::num::ParseIntError;
-use std::result::Result;
 use std::str::FromStr;
 
 use crate::dialect::TokenType::{self, *};

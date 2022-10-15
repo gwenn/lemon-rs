@@ -2,7 +2,6 @@
 use fallible_iterator::FallibleIterator;
 use memchr::memchr;
 use std::collections::VecDeque;
-use std::result::Result;
 
 pub use crate::dialect::TokenType;
 pub use crate::dialect::TokenType::*;
