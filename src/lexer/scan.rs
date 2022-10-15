@@ -269,7 +269,7 @@ impl<I: Input, S: Splitter> Scanner<I, S> {
 
     /// Consume `amt` bytes of the buffer.
     fn consume(&mut self, amt: usize) {
-        debug!(target: "scanner", "comsume({})", amt);
+        debug!(target: "scanner", "consume({})", amt);
         debug_assert!(amt <= self.input.len());
         for byte in &self.input.buffer()[..amt] {
             if *byte == b'\n' {

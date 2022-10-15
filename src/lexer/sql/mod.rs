@@ -144,6 +144,19 @@ impl<I: Input> Parser<I> {
     }
 }
 
+macro_rules! try_with_position {
+    ($scanner:expr, $expr:expr) => {
+        match $expr {
+            Ok(val) => val,
+            Err(err) => {
+                let mut err = Error::from(err);
+                err.position($scanner.line(), $scanner.column());
+                return Err(err);
+            }
+        }
+    };
+}
+
 impl<I: Input> FallibleIterator for Parser<I> {
     type Item = Cmd;
     type Error = Error;
@@ -186,7 +199,7 @@ impl<I: Input> FallibleIterator for Parser<I> {
                 token_type.to_token(value)
             };
             //print!("({:?}, {:?})", token_type, token);
-            self.parser.sqlite3Parser(token_type, token);
+            try_with_position!(self.scanner, self.parser.sqlite3Parser(token_type, token));
             last_token_parsed = token_type;
             if self.parser.ctx.done() {
                 //println!();
@@ -201,9 +214,9 @@ impl<I: Input> FallibleIterator for Parser<I> {
         with tokens TK_SEMI and 0, in that order. */
         if eof && self.parser.ctx.is_ok() {
             if last_token_parsed != TK_SEMI {
-                self.parser.sqlite3Parser(TK_SEMI, None);
+                try_with_position!(self.scanner, self.parser.sqlite3Parser(TK_SEMI, None));
             }
-            self.parser.sqlite3Parser(TK_EOF, None);
+            try_with_position!(self.scanner, self.parser.sqlite3Parser(TK_EOF, None));
         }
         self.parser.sqlite3ParserFinalize();
         if let Some(msg) = self.parser.ctx.error() {
@@ -649,7 +662,7 @@ mod tests {
     use crate::lexer::Scanner;
 
     #[test]
-    fn faillible_iterator() {
+    fn fallible_iterator() {
         let tokenizer = Tokenizer::new();
         let input = "PRAGMA parser_trace=ON;".as_bytes();
         let mut s = Scanner::new(input, tokenizer);

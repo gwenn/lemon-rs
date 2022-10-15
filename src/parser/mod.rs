@@ -16,6 +16,24 @@ pub mod parse {
 
 use ast::{Cmd, ExplainKind, Name, Stmt};
 
+/// Parser error
+#[derive(Debug)]
+pub struct ParserError(String);
+
+impl ParserError {
+    pub fn msg(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "parser error: {}", self.0,)
+    }
+}
+
+impl std::error::Error for ParserError {}
+
 /// Parser context
 pub struct Context {
     explain: Option<ExplainKind>,
@@ -65,7 +83,7 @@ impl Context {
         self.done = true;
     }
 
-    /// Return `true` if parser completes either sucessfully or with an error.
+    /// Return `true` if parser completes either successfully or with an error.
     pub fn done(&self) -> bool {
         self.done || self.error.is_some()
     }

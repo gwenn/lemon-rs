@@ -624,7 +624,7 @@ impl yyParser {
         yyruleno: YYACTIONTYPE,    /* Number of the rule by which to reduce */
         yy_look_ahead: YYCODETYPE, /* Lookahead token, or YYNOCODE if none */
         yy_lookahead_token: Option<&ParseTOKENTYPE>, /* Value of the lookahead token */
-    ) -> YYACTIONTYPE {
+    ) -> Result<YYACTIONTYPE, ParseError> {
         let _ = yy_look_ahead;
         let _ = yy_lookahead_token;
 
@@ -660,7 +660,7 @@ impl yyParser {
             yymsp.major = yygoto;
         }
         self.yyTraceShift(yyact, "... then shift");
-        yyact
+        Ok(yyact)
     }
 }
 
@@ -748,7 +748,7 @@ impl yyParser {
         &mut self,
         yymajor: TokenType,                  /* The major token code number */
         mut yyminor: Option<ParseTOKENTYPE>, /* The value for the token */
-    ) {
+    ) -> Result<(), ParseError> {
         let mut yymajor = yymajor as YYCODETYPE;
         //#[cfg(all(not(feature = "YYERRORSYMBOL"), not(feature = "YYNOERRORRECOVERY")))]
         let mut yyendofinput: bool = false; /* True if we are at the end of input */
@@ -817,7 +817,7 @@ impl yyParser {
                         break;
                     }
                 }
-                yyact = self.yy_reduce(yyruleno, yymajor, yyminor.as_ref());
+                yyact = self.yy_reduce(yyruleno, yymajor, yyminor.as_ref())?;
             } else if yyact <= YY_MAX_SHIFTREDUCE {
                 self.yy_shift(yyact, yymajor, yyminor.take());
                 if cfg!(not(feature = "YYNOERRORRECOVERY")) {
@@ -827,7 +827,7 @@ impl yyParser {
             } else if yyact == YY_ACCEPT_ACTION {
                 self.yyidx_shift(-1);
                 self.yy_accept();
-                return;
+                return Ok(());
             } else {
                 assert_eq!(yyact, YY_ERROR_ACTION);
                 #[cfg(not(feature = "NDEBUG"))]
@@ -940,7 +940,7 @@ impl yyParser {
                 debug!(target: TARGET, "Return. Stack=[{}]", msg);
             }
         }
-        return;
+        return Ok(());
     }
 
     /*

@@ -63,6 +63,8 @@ use crate::parser::Context;
 use crate::dialect::{from_token, TokenType};
 use log::{debug, error, log_enabled};
 
+#[allow(non_camel_case_types)]
+type sqlite3ParserError = crate::parser::ParserError;
 } // end %include
 
 // Input is a single SQL command
@@ -124,7 +126,7 @@ temp(A) ::= .      {A = false;}
 
 %type create_table_args {CreateTableBody}
 create_table_args(A) ::= LP columnlist(C) conslist_opt(X) RP table_option_set(F). {
-  A = CreateTableBody::ColumnsAndConstraints{ columns: C, constraints: X, options: F };
+  A = CreateTableBody::columns_and_constraints(C, X, F)?;
 }
 create_table_args(A) ::= AS select(S). {
   A = CreateTableBody::AsSelect(S);

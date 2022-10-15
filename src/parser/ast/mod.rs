@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use crate::dialect::TokenType::{self, *};
 use crate::dialect::{from_token, is_identifier, Token};
-use crate::parser::parse::YYCODETYPE;
+use crate::parser::{parse::YYCODETYPE, ParserError};
 
 struct FmtTokenStream<'a, 'b> {
     f: &'a mut Formatter<'b>,
@@ -1972,6 +1972,21 @@ pub enum CreateTableBody {
     },
     AsSelect(Select),
 }
+
+impl CreateTableBody {
+    pub fn columns_and_constraints(
+        columns: Vec<ColumnDefinition>,
+        constraints: Option<Vec<NamedTableConstraint>>,
+        options: TableOptions,
+    ) -> Result<CreateTableBody, ParserError> {
+        Ok(CreateTableBody::ColumnsAndConstraints {
+            columns,
+            constraints,
+            options,
+        })
+    }
+}
+
 impl ToTokens for CreateTableBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
