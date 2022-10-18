@@ -1,6 +1,6 @@
 use fallible_iterator::FallibleIterator;
 
-use super::Parser;
+use super::{Error, Parser};
 use crate::parser::ast::{ParameterInfo, ToTokens};
 
 #[test]
@@ -44,4 +44,14 @@ fn count_named_placeholders() {
     assert_eq!(info.names.len(), 2);
     assert!(info.names.contains(":x"));
     assert!(info.names.contains(":y"));
+}
+
+#[test]
+fn duplicate_column() {
+    let sql = "CREATE TABLE t (x TEXT, x TEXT)";
+    let mut parser = Parser::new(sql.as_bytes());
+    let r = parser.next();
+    if let Error::ParserError(msg, _) = r.unwrap_err() {
+        assert!(msg.contains("duplicate column name"));
+    }
 }

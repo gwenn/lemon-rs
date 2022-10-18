@@ -2038,6 +2038,24 @@ impl ToTokens for ColumnDefinition {
         Ok(())
     }
 }
+impl ColumnDefinition {
+    pub fn add_column(
+        columns: &mut Vec<ColumnDefinition>,
+        cd: ColumnDefinition,
+    ) -> Result<(), ParserError> {
+        if columns
+            .iter()
+            .any(|c| c.col_name.0.eq_ignore_ascii_case(&cd.col_name.0))
+        {
+            return Err(ParserError(format!(
+                "duplicate column name: {}",
+                cd.col_name
+            )));
+        }
+        columns.push(cd);
+        Ok(())
+    }
+}
 
 // https://sqlite.org/syntax/column-constraint.html
 #[derive(Clone, Debug, PartialEq, Eq)]

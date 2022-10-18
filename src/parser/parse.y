@@ -158,7 +158,7 @@ table_option(A) ::= nm(X). {
 columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
   let col = X;
   let cd = ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y };
-  A.push(cd);
+  ColumnDefinition::add_column(A, cd)?;
 }
 columnlist(A) ::= columnname(X) carglist(Y). {
   let col = X;
