@@ -1368,7 +1368,7 @@ wqlist(A) ::= wqitem(X). {
 }
 wqlist(A) ::= wqlist(A) COMMA wqitem(X). {
   let cte = X;
-  A.push(cte);
+  CommonTableExpr::add_cte(A, cte)?;
 }
 %endif  SQLITE_OMIT_CTE
 

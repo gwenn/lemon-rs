@@ -2827,6 +2827,25 @@ impl ToTokens for CommonTableExpr {
     }
 }
 
+impl CommonTableExpr {
+    pub fn add_cte(
+        ctes: &mut Vec<CommonTableExpr>,
+        cte: CommonTableExpr,
+    ) -> Result<(), ParserError> {
+        if ctes
+            .iter()
+            .any(|c| c.tbl_name.0.eq_ignore_ascii_case(&cte.tbl_name.0))
+        {
+            return Err(ParserError(format!(
+                "duplicate WITH table name: {}",
+                cte.tbl_name
+            )));
+        }
+        ctes.push(cte);
+        Ok(())
+    }
+}
+
 // https://sqlite.org/syntax/type-name.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Type {
