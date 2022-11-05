@@ -41,7 +41,7 @@ fn main() -> Result<()> {
     }
 
     let keywords = out_path.join("keywords.rs");
-    let mut keywords = BufWriter::new(File::create(&keywords)?);
+    let mut keywords = BufWriter::new(File::create(keywords)?);
     write!(
         &mut keywords,
         "static KEYWORDS: ::phf::Map<&'static UncasedStr, TokenType> = \n{};",
