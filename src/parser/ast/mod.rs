@@ -1,9 +1,10 @@
 //! Abstract Syntax Tree
 
-use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter, Write};
 use std::num::ParseIntError;
 use std::str::FromStr;
+
+use indexmap::IndexSet;
 
 use crate::dialect::TokenType::{self, *};
 use crate::dialect::{from_token, is_identifier, Token};
@@ -53,7 +54,7 @@ impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
 #[derive(Default)]
 pub struct ParameterInfo {
     pub count: u32,
-    pub names: HashSet<String>,
+    pub names: IndexSet<String>,
 }
 
 // https://sqlite.org/lang_expr.html#parameters
