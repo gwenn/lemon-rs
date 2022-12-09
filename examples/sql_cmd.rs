@@ -11,11 +11,11 @@ fn main() {
         match parser.next() {
             Ok(None) => break,
             Err(err) => {
-                eprintln!("Err: {} in {}", err, arg);
+                eprintln!("Err: {err} in {arg}");
                 break;
             }
             Ok(Some(cmd)) => {
-                println!("{}", cmd);
+                println!("{cmd}");
             }
         }
     }
