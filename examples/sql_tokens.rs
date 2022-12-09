@@ -20,7 +20,7 @@ fn main() {
                 Ok(None) => break,
                 Err(err) => {
                     //eprintln!("{} at line: {}, column: {}", err, s.line(), s.column());
-                    eprintln!("Err: {} in {}", err, arg);
+                    eprintln!("Err: {err} in {arg}");
                     break;
                 }
                 Ok(Some((token, token_type))) => match token_type {
@@ -44,7 +44,7 @@ fn main() {
                             if let Err(err) =
                                 i64::from_str_radix(str::from_utf8(&token[2..]).unwrap(), 16)
                             {
-                                eprintln!("Err: {} in {}", err, arg);
+                                eprintln!("Err: {err} in {arg}");
                             }
                         } else {
                             /*let raw = str::from_utf8(token).unwrap();

@@ -33,7 +33,7 @@ fn main() -> Result<()> {
         assert!(Command::new(rlemon)
             .arg("-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT")
             .arg("-Tthird_party/lemon/lempar.rs")
-            .arg(format!("-d{}", out_dir))
+            .arg(format!("-d{out_dir}"))
             .arg(sql_parser)
             .status()?
             .success());

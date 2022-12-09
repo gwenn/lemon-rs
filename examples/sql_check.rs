@@ -11,7 +11,7 @@ fn main() {
     env_logger::init();
     let args = env::args();
     for arg in args.skip(1) {
-        println!("{}", arg);
+        println!("{arg}");
         let result = panic::catch_unwind(|| {
             let f = File::open(arg.clone()).unwrap();
             let input = InputStream::new(f);
@@ -20,7 +20,7 @@ fn main() {
                 match parser.next() {
                     Ok(None) => break,
                     Err(err) => {
-                        eprintln!("Err: {} in {}", err, arg);
+                        eprintln!("Err: {err} in {arg}");
                         break;
                     }
                     Ok(Some(cmd)) => {
@@ -42,7 +42,7 @@ fn main() {
                             }
                             Ok(Some(check)) => {
                                 if cmd != check {
-                                    eprintln!("{:?}\n<>\n{:?}", cmd, check);
+                                    eprintln!("{cmd:?}\n<>\n{check:?}");
                                 }
                             }
                         }
@@ -51,7 +51,7 @@ fn main() {
             }
         });
         if let Err(e) = result {
-            eprintln!("Panic: {:?} in {}", e, arg);
+            eprintln!("Panic: {e:?} in {arg}");
         }
     }
 }
