@@ -56,15 +56,15 @@ pub fn is_identifier(name: &str) -> bool {
 }
 
 pub fn is_identifier_start(b: u8) -> bool {
-    (b'A'..=b'Z').contains(&b) || b == b'_' || (b'a'..=b'z').contains(&b) || b > b'\x7F'
+    b.is_ascii_uppercase() || b == b'_' || b.is_ascii_lowercase() || b > b'\x7F'
 }
 
 pub fn is_identifier_continue(b: u8) -> bool {
     b == b'$'
-        || (b'0'..=b'9').contains(&b)
-        || (b'A'..=b'Z').contains(&b)
+        || b.is_ascii_digit()
+        || b.is_ascii_uppercase()
         || b == b'_'
-        || (b'a'..=b'z').contains(&b)
+        || b.is_ascii_lowercase()
         || b > b'\x7F'
 }
 
