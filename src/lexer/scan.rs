@@ -53,6 +53,38 @@ impl Input for &[u8] {
     }
 }
 
+impl Input for Vec<u8> {
+    #[inline]
+    fn fill_buf(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+
+    #[inline]
+    fn eof(&self) -> bool {
+        true
+    }
+
+    #[inline]
+    fn consume(&mut self, amt: usize) {
+        self.drain(..amt);
+    }
+
+    #[inline]
+    fn buffer(&self) -> &[u8] {
+        self
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.len()
+    }
+}
+
 /// Streaming input
 #[cfg(feature = "buf_redux")]
 pub struct InputStream<R> {
