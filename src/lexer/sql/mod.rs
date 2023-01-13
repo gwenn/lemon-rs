@@ -26,7 +26,7 @@ pub use error::Error;
 
 pub struct Parser<I: Input> {
     scanner: Scanner<I, Tokenizer>,
-    parser: yyParser,
+    parser: Box<yyParser>,
     buffer: Vec<u8>,
     lookahead: VecDeque<(TokenType, String)>,
 }
@@ -36,7 +36,7 @@ impl<I: Input> Parser<I> {
         let lexer = Tokenizer::new();
         let scanner = Scanner::new(input, lexer);
         let ctx = Context::new();
-        let parser = yyParser::new(ctx);
+        let parser = Box::new(yyParser::new(ctx));
         let buffer = Vec::new();
         let lookahead = VecDeque::new();
         Parser {
