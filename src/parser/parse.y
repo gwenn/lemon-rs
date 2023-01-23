@@ -39,15 +39,18 @@
 %syntax_error {
   if TokenType::TK_EOF as YYCODETYPE == yymajor {
     error!(target: TARGET, "incomplete input");
-    self.ctx.error = Some("incomplete input".to_owned());
+    self.ctx.error = Some(ParserError::UnexpectedEof);
   } else {
     error!(target: TARGET, "near {}, \"{:?}\": syntax error", yyTokenName[yymajor as usize], yyminor);
-    self.ctx.error = Some(format!("near {}, \"{:?}\": syntax error", yyTokenName[yymajor as usize], yyminor));
+    self.ctx.error = Some(ParserError::SyntaxError {
+        token_type: yyTokenName[yymajor as usize],
+        found: yyminor.cloned(),
+    });
   }
 }
 %stack_overflow {
   error!(target: TARGET, "parser stack overflow");
-  self.ctx.error = Some("parser stack overflow".to_owned());
+  self.ctx.error = Some(ParserError::StackOverflow);
 }
 
 // The name of the generated procedure that implements the parser
@@ -59,7 +62,7 @@
 //
 %include {
 use crate::parser::ast::*;
-use crate::parser::Context;
+use crate::parser::{Context, ParserError};
 use crate::dialect::{from_token, TokenType};
 use log::{debug, error, log_enabled};
 

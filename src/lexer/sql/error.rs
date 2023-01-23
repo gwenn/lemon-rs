@@ -19,8 +19,7 @@ pub enum Error {
     ExpectedEqualsSign(Option<(u64, usize)>),
     MalformedBlobLiteral(Option<(u64, usize)>),
     MalformedHexInteger(Option<(u64, usize)>),
-    SyntaxError(String, Option<(u64, usize)>),
-    ParserError(String, Option<(u64, usize)>),
+    ParserError(ParserError, Option<(u64, usize)>),
 }
 
 impl fmt::Display for Error {
@@ -46,7 +45,6 @@ impl fmt::Display for Error {
             Error::MalformedHexInteger(pos) => {
                 write!(f, "malformed hex integer at {:?}", pos.unwrap())
             }
-            Error::SyntaxError(ref msg, pos) => write!(f, "{} at {:?}", msg, pos.unwrap()),
             Error::ParserError(ref msg, pos) => write!(f, "{} at {:?}", msg, pos.unwrap()),
         }
     }
@@ -62,7 +60,7 @@ impl From<io::Error> for Error {
 
 impl From<ParserError> for Error {
     fn from(err: ParserError) -> Error {
-        Error::ParserError(err.msg(), None)
+        Error::ParserError(err, None)
     }
 }
 
@@ -79,7 +77,6 @@ impl ScanError for Error {
             Error::ExpectedEqualsSign(ref mut pos) => *pos = Some((line, column)),
             Error::MalformedBlobLiteral(ref mut pos) => *pos = Some((line, column)),
             Error::MalformedHexInteger(ref mut pos) => *pos = Some((line, column)),
-            Error::SyntaxError(_, ref mut pos) => *pos = Some((line, column)),
             Error::ParserError(_, ref mut pos) => *pos = Some((line, column)),
         }
     }

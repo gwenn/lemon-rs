@@ -2048,7 +2048,7 @@ impl ColumnDefinition {
             .iter()
             .any(|c| c.col_name.0.eq_ignore_ascii_case(&cd.col_name.0))
         {
-            return Err(ParserError(format!(
+            return Err(ParserError::Custom(format!(
                 "duplicate column name: {}",
                 cd.col_name
             )));
@@ -2837,7 +2837,7 @@ impl CommonTableExpr {
             .iter()
             .any(|c| c.tbl_name.0.eq_ignore_ascii_case(&cte.tbl_name.0))
         {
-            return Err(ParserError(format!(
+            return Err(ParserError::Custom(format!(
                 "duplicate WITH table name: {}",
                 cte.tbl_name
             )));
