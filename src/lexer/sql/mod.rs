@@ -19,6 +19,7 @@ mod test;
 use crate::lexer::scan::ScanError;
 use crate::lexer::scan::Splitter;
 use crate::lexer::{Input, Scanner};
+pub use crate::parser::ParserError;
 pub use error::Error;
 
 // TODO Extract scanning stuff and move this into the parser crate
@@ -219,9 +220,8 @@ impl<I: Input> FallibleIterator for Parser<I> {
             try_with_position!(self.scanner, self.parser.sqlite3Parser(TK_EOF, None));
         }
         self.parser.sqlite3ParserFinalize();
-        if let Some(msg) = self.parser.ctx.error() {
-            let mut err = Error::SyntaxError(msg, None);
-            err.position(self.scanner.line(), self.scanner.column());
+        if let Some(e) = self.parser.ctx.error() {
+            let err = Error::ParserError(e, Some((self.scanner.line(), self.scanner.column())));
             return Err(err);
         }
         let cmd = self.parser.ctx.cmd();
