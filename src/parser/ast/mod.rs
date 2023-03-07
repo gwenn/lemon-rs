@@ -5,6 +5,7 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 
 use indexmap::IndexSet;
+use smallvec::{smallvec, SmallVec};
 
 use crate::dialect::TokenType::{self, *};
 use crate::dialect::{from_token, is_identifier, Token};
@@ -1615,50 +1616,23 @@ impl ToTokens for SelectTable {
 }
 
 // https://sqlite.org/syntax/join-operator.html
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JoinOperator {
     Comma,
     TypedJoin {
         natural: bool,
-        join_type: Option<JoinType>,
+        join_type: SmallVec<[JoinType; 3]>,
     },
 }
 
 impl JoinOperator {
     pub(crate) fn from_single(token: Token) -> JoinOperator {
         if let Some(ref jt) = token {
-            if "CROSS".eq_ignore_ascii_case(jt) {
-                JoinOperator::TypedJoin {
-                    natural: false,
-                    join_type: Some(JoinType::Cross),
-                }
-            } else if "INNER".eq_ignore_ascii_case(jt) {
-                JoinOperator::TypedJoin {
-                    natural: false,
-                    join_type: Some(JoinType::Inner),
-                }
-            } else if "LEFT".eq_ignore_ascii_case(jt) {
-                JoinOperator::TypedJoin {
-                    natural: false,
-                    join_type: Some(JoinType::Left),
-                }
-            } else if "RIGHT".eq_ignore_ascii_case(jt) {
-                JoinOperator::TypedJoin {
-                    natural: false,
-                    join_type: Some(JoinType::Right),
-                }
-            } else if "FULL".eq_ignore_ascii_case(jt) {
-                JoinOperator::TypedJoin {
-                    natural: false,
-                    join_type: Some(JoinType::Full),
-                }
-            } else if "NATURAL".eq_ignore_ascii_case(jt) {
-                JoinOperator::TypedJoin {
-                    natural: true,
-                    join_type: None,
-                }
-            } else {
-                unreachable!() // FIXME do not panic
+            let it = jt.parse().unwrap();
+            let join_type = smallvec![it];
+            JoinOperator::TypedJoin {
+                natural: join_type.iter().any(|o| matches!(o, JoinType::Natural)),
+                join_type,
             }
         } else {
             unreachable!()
@@ -1666,50 +1640,12 @@ impl JoinOperator {
     }
     pub(crate) fn from_couple(token: Token, name: Name) -> JoinOperator {
         if let Some(ref jt) = token {
-            if "NATURAL".eq_ignore_ascii_case(jt) {
-                let join_type = if "INNER".eq_ignore_ascii_case(&name.0) {
-                    JoinType::Inner
-                } else if "LEFT".eq_ignore_ascii_case(&name.0) {
-                    JoinType::Left
-                } else if "RIGHT".eq_ignore_ascii_case(&name.0) {
-                    JoinType::Right
-                } else if "FULL".eq_ignore_ascii_case(&name.0) {
-                    JoinType::Full
-                } else if "CROSS".eq_ignore_ascii_case(&name.0) {
-                    JoinType::Cross
-                } else {
-                    unreachable!() // FIXME do not panic
-                };
-                JoinOperator::TypedJoin {
-                    natural: true,
-                    join_type: Some(join_type),
-                }
-            } else if "OUTER".eq_ignore_ascii_case(&name.0) {
-                let join_type = if "LEFT".eq_ignore_ascii_case(jt) {
-                    JoinType::LeftOuter
-                } else if "RIGHT".eq_ignore_ascii_case(jt) {
-                    JoinType::RightOuter
-                } else if "FULL".eq_ignore_ascii_case(jt) {
-                    JoinType::FullOuter
-                } else {
-                    unreachable!() // FIXME do not panic
-                };
-                JoinOperator::TypedJoin {
-                    natural: false,
-                    join_type: Some(join_type),
-                }
-            } else if "LEFT".eq_ignore_ascii_case(jt) && "RIGHT".eq_ignore_ascii_case(&name.0) {
-                JoinOperator::TypedJoin {
-                    natural: false,
-                    join_type: Some(JoinType::Full),
-                }
-            } else if "OUTER".eq_ignore_ascii_case(jt) && "LEFT".eq_ignore_ascii_case(&name.0) {
-                JoinOperator::TypedJoin {
-                    natural: false,
-                    join_type: Some(JoinType::LeftOuter),
-                }
-            } else {
-                unreachable!() // FIXME do not panic
+            let fst = jt.parse().unwrap();
+            let snd = name.0.parse().unwrap();
+            let join_type = smallvec![fst, snd];
+            JoinOperator::TypedJoin {
+                natural: join_type.iter().any(|o| matches!(o, JoinType::Natural)),
+                join_type,
             }
         } else {
             unreachable!()
@@ -1717,30 +1653,13 @@ impl JoinOperator {
     }
     pub(crate) fn from_triple(token: Token, n1: Name, n2: Name) -> JoinOperator {
         if let Some(ref jt) = token {
-            if "NATURAL".eq_ignore_ascii_case(jt) && "OUTER".eq_ignore_ascii_case(&n2.0) {
-                let join_type = if "LEFT".eq_ignore_ascii_case(&n1.0) {
-                    JoinType::LeftOuter
-                } else if "RIGHT".eq_ignore_ascii_case(&n1.0) {
-                    JoinType::RightOuter
-                } else if "FULL".eq_ignore_ascii_case(&n1.0) {
-                    JoinType::FullOuter
-                } else {
-                    unreachable!() // FIXME do not panic
-                };
-                JoinOperator::TypedJoin {
-                    natural: true,
-                    join_type: Some(join_type),
-                }
-            } else if "OUTER".eq_ignore_ascii_case(jt)
-                && "LEFT".eq_ignore_ascii_case(&n1.0)
-                && "NATURAL".eq_ignore_ascii_case(&n2.0)
-            {
-                JoinOperator::TypedJoin {
-                    natural: true,
-                    join_type: Some(JoinType::LeftOuter),
-                }
-            } else {
-                unreachable!() // FIXME do not panic
+            let fst = jt.parse().unwrap();
+            let snd = n1.0.parse().unwrap();
+            let trd = n2.0.parse().unwrap();
+            let join_type = smallvec![fst, snd, trd];
+            JoinOperator::TypedJoin {
+                natural: join_type.iter().any(|o| matches!(o, JoinType::Natural)),
+                join_type,
             }
         } else {
             unreachable!()
@@ -1755,8 +1674,9 @@ impl ToTokens for JoinOperator {
                 if *natural {
                     s.append(TK_JOIN_KW, Some("NATURAL"))?;
                 }
-                if let Some(ref join_type) = join_type {
-                    join_type.to_tokens(s)?;
+
+                for op in join_type {
+                    op.to_tokens(s)?;
                 }
                 s.append(TK_JOIN, None)
             }
@@ -1766,28 +1686,51 @@ impl ToTokens for JoinOperator {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum JoinType {
+    Natural,
     Left,
-    LeftOuter,
     Inner,
     Cross,
     Right,
-    RightOuter,
     Full,
-    FullOuter,
+    Outer,
 }
+
+impl FromStr for JoinType {
+    type Err = ParserError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if "OUTER".eq_ignore_ascii_case(s) {
+            Ok(Self::Outer)
+        } else if "LEFT".eq_ignore_ascii_case(s) {
+            Ok(Self::Left)
+        } else if "RIGHT".eq_ignore_ascii_case(s) {
+            Ok(Self::Right)
+        } else if "INNER".eq_ignore_ascii_case(s) {
+            Ok(Self::Inner)
+        } else if "CROSS".eq_ignore_ascii_case(s) {
+            Ok(Self::Cross)
+        } else if "FULL".eq_ignore_ascii_case(s) {
+            Ok(Self::Full)
+        } else if "NATURAL".eq_ignore_ascii_case(s) {
+            Ok(Self::Natural)
+        } else {
+            Err(ParserError::Custom(format!("invalid JOIN operator `{s}`")))
+        }
+    }
+}
+
 impl ToTokens for JoinType {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(
             TK_JOIN_KW,
             match self {
                 JoinType::Left => Some("LEFT"),
-                JoinType::LeftOuter => Some("LEFT OUTER"),
                 JoinType::Inner => Some("INNER"),
                 JoinType::Cross => Some("CROSS"),
                 JoinType::Right => Some("RIGHT"),
-                JoinType::RightOuter => Some("RIGHT OUTER"),
                 JoinType::Full => Some("FULL"),
-                JoinType::FullOuter => Some("FULL OUTER"),
+                JoinType::Outer => Some("OUTER"),
+                JoinType::Natural => Some("NATURAL"),
             },
         )
     }
