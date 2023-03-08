@@ -1,6 +1,7 @@
 //! Adaptation/port of [`SQLite` tokenizer](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/tokenize.c)
 use fallible_iterator::FallibleIterator;
 use memchr::memchr;
+use smallvec::SmallVec;
 use std::collections::VecDeque;
 
 pub use crate::dialect::TokenType;
@@ -21,6 +22,8 @@ use crate::lexer::scan::Splitter;
 use crate::lexer::{Input, Scanner};
 pub use crate::parser::ParserError;
 pub use error::Error;
+
+use super::scan::SplitResult;
 
 // TODO Extract scanning stuff and move this into the parser crate
 // to make possible to use the tokenizer without depending on the parser...
@@ -72,7 +75,7 @@ impl<I: Input> Parser<I> {
                 }
                 Some(tuple) => tuple,
             };
-            self.lookahead.push_back((token_type, from_bytes(value)));
+            self.lookahead.push_back((token_type, from_bytes(&value)));
             token_type
         };
         if t == TK_ID
@@ -170,7 +173,7 @@ impl<I: Input> FallibleIterator for Parser<I> {
         loop {
             let lookahead = self.lookahead.pop_front();
             let (value, mut token_type) = if let Some((token_type, ref value)) = lookahead {
-                (value.as_bytes(), token_type)
+                (value.as_bytes().into(), token_type)
             } else {
                 match self.scanner.scan()? {
                     None => {
@@ -184,7 +187,7 @@ impl<I: Input> FallibleIterator for Parser<I> {
                 debug_assert!(
                     token_type == TK_OVER || token_type == TK_FILTER || token_type == TK_WINDOW
                 );
-                self.buffer.extend_from_slice(value);
+                self.buffer.extend_from_slice(&value);
 
                 if token_type == TK_WINDOW {
                     token_type = self.analyze_window_keyword()?;
@@ -197,7 +200,7 @@ impl<I: Input> FallibleIterator for Parser<I> {
                 self.buffer.clear();
                 token
             } else {
-                token_type.to_token(value)
+                token_type.to_token(&value)
             };
             //print!("({:?}, {:?})", token_type, token);
             try_with_position!(self.scanner, self.parser.sqlite3Parser(token_type, token));
@@ -230,7 +233,7 @@ impl<I: Input> FallibleIterator for Parser<I> {
     }
 }
 
-pub type Token<'input> = (&'input [u8], TokenType);
+pub type Token<T = TokenType> = (SmallVec<[u8; 16]>, T);
 
 #[derive(Default)]
 pub struct Tokenizer {}
@@ -258,9 +261,9 @@ impl Splitter for Tokenizer {
 
     fn split<'input>(
         &mut self,
-        data: &'input [u8],
+        data: &[u8],
         eof: bool,
-    ) -> Result<(Option<Token<'input>>, usize), Error> {
+    ) -> SplitResult<Self::TokenType, Self::Error> {
         if eof && data.is_empty() {
             return Ok((None, 0));
         }
@@ -287,22 +290,22 @@ impl Splitter for Tokenizer {
                     } else if *b == b'>' {
                         if let Some(b) = data.get(2) {
                             if *b == b'>' {
-                                return Ok((Some((&data[..3], TK_PTR)), 3));
+                                return Ok((Some((data[..3].into(), TK_PTR)), 3));
                             }
                         }
-                        return Ok((Some((&data[..2], TK_PTR)), 2));
+                        return Ok((Some((data[..2].into(), TK_PTR)), 2));
                     } else {
-                        return Ok((Some((&data[..1], TK_MINUS)), 1));
+                        return Ok((Some((data[..1].into(), TK_MINUS)), 1));
                     }
                 } else if eof {
-                    return Ok((Some((&data[..1], TK_MINUS)), 1));
+                    return Ok((Some((data[..1].into(), TK_MINUS)), 1));
                 } // else ask more data
             }
-            b'(' => return Ok((Some((&data[..1], TK_LP)), 1)),
-            b')' => return Ok((Some((&data[..1], TK_RP)), 1)),
-            b';' => return Ok((Some((&data[..1], TK_SEMI)), 1)),
-            b'+' => return Ok((Some((&data[..1], TK_PLUS)), 1)),
-            b'*' => return Ok((Some((&data[..1], TK_STAR)), 1)),
+            b'(' => return Ok((Some((data[..1].into(), TK_LP)), 1)),
+            b')' => return Ok((Some((data[..1].into(), TK_RP)), 1)),
+            b';' => return Ok((Some((data[..1].into(), TK_SEMI)), 1)),
+            b'+' => return Ok((Some((data[..1].into(), TK_PLUS)), 1)),
+            b'*' => return Ok((Some((data[..1].into(), TK_STAR)), 1)),
             b'/' => {
                 if let Some(b) = data.get(1) {
                     if *b == b'*' {
@@ -322,51 +325,51 @@ impl Splitter for Tokenizer {
                             return Err(Error::UnterminatedBlockComment(None));
                         } // else ask more data until '*/'
                     } else {
-                        return Ok((Some((&data[..1], TK_SLASH)), 1));
+                        return Ok((Some((data[..1].into(), TK_SLASH)), 1));
                     }
                 } else if eof {
-                    return Ok((Some((&data[..1], TK_SLASH)), 1));
+                    return Ok((Some((data[..1].into(), TK_SLASH)), 1));
                 }
             }
-            b'%' => return Ok((Some((&data[..1], TK_REM)), 1)),
+            b'%' => return Ok((Some((data[..1].into(), TK_REM)), 1)),
             b'=' => {
                 if let Some(b) = data.get(1) {
                     return Ok(if *b == b'=' {
-                        (Some((&data[..2], TK_EQ)), 2)
+                        (Some((data[..2].into(), TK_EQ)), 2)
                     } else {
-                        (Some((&data[..1], TK_EQ)), 1)
+                        (Some((data[..1].into(), TK_EQ)), 1)
                     });
                 } else if eof {
-                    return Ok((Some((&data[..1], TK_EQ)), 1));
+                    return Ok((Some((data[..1].into(), TK_EQ)), 1));
                 } // else ask more data to fuse '==' or not
             }
             b'<' => {
                 if let Some(b) = data.get(1) {
                     return Ok(match *b {
-                        b'=' => (Some((&data[..2], TK_LE)), 2),
-                        b'>' => (Some((&data[..2], TK_NE)), 2),
-                        b'<' => (Some((&data[..2], TK_LSHIFT)), 2),
-                        _ => (Some((&data[..1], TK_LT)), 1),
+                        b'=' => (Some((data[..2].into(), TK_LE)), 2),
+                        b'>' => (Some((data[..2].into(), TK_NE)), 2),
+                        b'<' => (Some((data[..2].into(), TK_LSHIFT)), 2),
+                        _ => (Some((data[..1].into(), TK_LT)), 1),
                     });
                 } else if eof {
-                    return Ok((Some((&data[..1], TK_LT)), 1));
+                    return Ok((Some((data[..1].into(), TK_LT)), 1));
                 } // else ask more data
             }
             b'>' => {
                 if let Some(b) = data.get(1) {
                     return Ok(match *b {
-                        b'=' => (Some((&data[..2], TK_GE)), 2),
-                        b'>' => (Some((&data[..2], TK_RSHIFT)), 2),
-                        _ => (Some((&data[..1], TK_GT)), 1),
+                        b'=' => (Some((data[..2].into(), TK_GE)), 2),
+                        b'>' => (Some((data[..2].into(), TK_RSHIFT)), 2),
+                        _ => (Some((data[..1].into(), TK_GT)), 1),
                     });
                 } else if eof {
-                    return Ok((Some((&data[..1], TK_GT)), 1));
+                    return Ok((Some((data[..1].into(), TK_GT)), 1));
                 } // else ask more data
             }
             b'!' => {
                 if let Some(b) = data.get(1) {
                     return if *b == b'=' {
-                        Ok((Some((&data[..2], TK_NE)), 2))
+                        Ok((Some((data[..2].into(), TK_NE)), 2))
                     } else {
                         Err(Error::ExpectedEqualsSign(None))
                     };
@@ -377,34 +380,34 @@ impl Splitter for Tokenizer {
             b'|' => {
                 if let Some(b) = data.get(1) {
                     return Ok(if *b == b'|' {
-                        (Some((&data[..2], TK_CONCAT)), 2)
+                        (Some((data[..2].into(), TK_CONCAT)), 2)
                     } else {
-                        (Some((&data[..1], TK_BITOR)), 1)
+                        (Some((data[..1].into(), TK_BITOR)), 1)
                     });
                 } else if eof {
-                    return Ok((Some((&data[..1], TK_BITOR)), 1));
+                    return Ok((Some((data[..1].into(), TK_BITOR)), 1));
                 } // else ask more data
             }
-            b',' => return Ok((Some((&data[..1], TK_COMMA)), 1)),
-            b'&' => return Ok((Some((&data[..1], TK_BITAND)), 1)),
-            b'~' => return Ok((Some((&data[..1], TK_BITNOT)), 1)),
+            b',' => return Ok((Some((data[..1].into(), TK_COMMA)), 1)),
+            b'&' => return Ok((Some((data[..1].into(), TK_BITAND)), 1)),
+            b'~' => return Ok((Some((data[..1].into(), TK_BITNOT)), 1)),
             quote @ b'`' | quote @ b'\'' | quote @ b'"' => return literal(data, eof, quote),
             b'.' => {
                 if let Some(b) = data.get(1) {
                     if b.is_ascii_digit() {
                         return fractional_part(data, eof, 0);
                     } else if eof {
-                        return Ok((Some((&data[..1], TK_DOT)), 1));
+                        return Ok((Some((data[..1].into(), TK_DOT)), 1));
                     }
                 } else if eof {
-                    return Ok((Some((&data[..1], TK_DOT)), 1));
+                    return Ok((Some((data[..1].into(), TK_DOT)), 1));
                 } // else ask more data
             }
             b'0'..=b'9' => return number(data, eof),
             b'[' => {
                 if let Some(i) = memchr(b']', data) {
                     // Keep original quotes / '[' ... ’]'
-                    return Ok((Some((&data[0..i + 1], TK_ID)), i + 1));
+                    return Ok((Some((data[0..i + 1].into(), TK_ID)), i + 1));
                 } else if eof {
                     return Err(Error::UnterminatedBracket(None));
                 } // else ask more data until ']'
@@ -413,10 +416,10 @@ impl Splitter for Tokenizer {
                 match data.iter().skip(1).position(|&b| !b.is_ascii_digit()) {
                     Some(i) => {
                         // do not include the '?' in the token
-                        return Ok((Some((&data[1..=i], TK_VARIABLE)), i + 1));
+                        return Ok((Some((data[1..=i].into(), TK_VARIABLE)), i + 1));
                     }
                     None if eof => {
-                        return Ok((Some((&data[1..], TK_VARIABLE)), data.len()));
+                        return Ok((Some((data[1..].into(), TK_VARIABLE)), data.len()));
                     }
                     _ => {
                         // else ask more data
@@ -432,13 +435,13 @@ impl Splitter for Tokenizer {
                     Some(0) => return Err(Error::BadVariableName(None)),
                     Some(i) => {
                         // '$' is included as part of the name
-                        return Ok((Some((&data[..=i], TK_VARIABLE)), i + 1));
+                        return Ok((Some((data[..=i].into(), TK_VARIABLE)), i + 1));
                     }
                     None if eof => {
                         if data.len() == 1 {
                             return Err(Error::BadVariableName(None));
                         }
-                        return Ok((Some((data, TK_VARIABLE)), data.len()));
+                        return Ok((Some((data.into(), TK_VARIABLE)), data.len()));
                     }
                     _ => {
                         // else ask more data
@@ -463,7 +466,7 @@ impl Splitter for Tokenizer {
     }
 }
 
-fn literal(data: &[u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, usize), Error> {
+fn literal(data: &[u8], eof: bool, quote: u8) -> Result<(Option<Token>, usize), Error> {
     debug_assert_eq!(data[0], quote);
     let tt = if quote == b'\'' { TK_STRING } else { TK_ID };
     let mut pb = 0;
@@ -488,7 +491,7 @@ fn literal(data: &[u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, usiz
             _ => data.len(),
         };
         // keep original quotes in the token
-        return Ok((Some((&data[0..i], tt)), i));
+        return Ok((Some((data[0..i].into(), tt)), i));
     } else if eof {
         return Err(Error::UnterminatedLiteral(None));
     }
@@ -496,7 +499,7 @@ fn literal(data: &[u8], eof: bool, quote: u8) -> Result<(Option<Token<'_>>, usiz
     Ok((None, 0))
 }
 
-fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
+fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
     debug_assert!(data[0] == b'x' || data[0] == b'X');
     debug_assert_eq!(data[1], b'\'');
     if let Some((i, b)) = data
@@ -508,7 +511,7 @@ fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Er
         if *b != b'\'' || i % 2 != 0 {
             return Err(Error::MalformedBlobLiteral(None));
         }
-        return Ok((Some((&data[2..i], TK_BLOB)), i + 1));
+        return Ok((Some((data[2..i].into(), TK_BLOB)), i + 1));
     } else if eof {
         return Err(Error::MalformedBlobLiteral(None));
     }
@@ -516,7 +519,7 @@ fn blob_literal(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Er
     Ok((None, 0))
 }
 
-fn number(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
+fn number(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
     debug_assert!(data[0].is_ascii_digit());
     if data[0] == b'0' {
         if let Some(b) = data.get(1) {
@@ -524,7 +527,7 @@ fn number(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
                 return hex_integer(data, eof);
             }
         } else if eof {
-            return Ok((Some((data, TK_INTEGER)), data.len()));
+            return Ok((Some((data.into(), TK_INTEGER)), data.len()));
         } else {
             // ask more data
             return Ok((None, 0));
@@ -543,15 +546,15 @@ fn number(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
         } else if is_identifier_start(*b) {
             return Err(Error::BadNumber(None));
         }
-        return Ok((Some((&data[..i], TK_INTEGER)), i));
+        return Ok((Some((data[..i].into(), TK_INTEGER)), i));
     } else if eof {
-        return Ok((Some((data, TK_INTEGER)), data.len()));
+        return Ok((Some((data.into(), TK_INTEGER)), data.len()));
     }
     // else ask more data
     Ok((None, 0))
 }
 
-fn hex_integer(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Error> {
+fn hex_integer(data: &[u8], eof: bool) -> Result<(Option<Token>, usize), Error> {
     debug_assert_eq!(data[0], b'0');
     debug_assert!(data[1] == b'x' || data[1] == b'X');
     if let Some((i, b)) = data
@@ -564,19 +567,19 @@ fn hex_integer(data: &[u8], eof: bool) -> Result<(Option<Token<'_>>, usize), Err
         if i == 2 || is_identifier_start(*b) {
             return Err(Error::MalformedHexInteger(None));
         }
-        return Ok((Some((&data[..i], TK_INTEGER)), i));
+        return Ok((Some((data[..i].into(), TK_INTEGER)), i));
     } else if eof {
         // Must not be empty (Ox is invalid)
         if data.len() == 2 {
             return Err(Error::MalformedHexInteger(None));
         }
-        return Ok((Some((data, TK_INTEGER)), data.len()));
+        return Ok((Some((data.into(), TK_INTEGER)), data.len()));
     }
     // else ask more data
     Ok((None, 0))
 }
 
-fn fractional_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token<'_>>, usize), Error> {
+fn fractional_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token>, usize), Error> {
     debug_assert_eq!(data[i], b'.');
     if let Some((i, b)) = data
         .iter()
@@ -589,15 +592,15 @@ fn fractional_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token<'_>
         } else if is_identifier_start(*b) {
             return Err(Error::BadNumber(None));
         }
-        return Ok((Some((&data[..i], TK_FLOAT)), i));
+        return Ok((Some((data[..i].into(), TK_FLOAT)), i));
     } else if eof {
-        return Ok((Some((data, TK_FLOAT)), data.len()));
+        return Ok((Some((data.into(), TK_FLOAT)), data.len()));
     }
     // else ask more data
     Ok((None, 0))
 }
 
-fn exponential_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token<'_>>, usize), Error> {
+fn exponential_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token>, usize), Error> {
     debug_assert!(data[i] == b'e' || data[i] == b'E');
     // data[i] == 'e'|'E'
     if let Some(b) = data.get(i + 1) {
@@ -611,12 +614,12 @@ fn exponential_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token<'_
             if is_identifier_start(*b) {
                 return Err(Error::BadNumber(None));
             }
-            return Ok((Some((&data[..i], TK_FLOAT)), i));
+            return Ok((Some((data[..i].into(), TK_FLOAT)), i));
         } else if eof {
             if data.len() == i + 1 {
                 return Err(Error::BadNumber(None));
             }
-            return Ok((Some((data, TK_FLOAT)), data.len()));
+            return Ok((Some((data.into(), TK_FLOAT)), data.len()));
         }
     } else if eof {
         return Err(Error::BadNumber(None));
@@ -626,11 +629,7 @@ fn exponential_part(data: &[u8], eof: bool, i: usize) -> Result<(Option<Token<'_
 }
 
 impl Tokenizer {
-    fn identifierish<'input>(
-        &mut self,
-        data: &'input [u8],
-        eof: bool,
-    ) -> (Option<Token<'input>>, usize) {
+    fn identifierish<'input>(&mut self, data: &'input [u8], eof: bool) -> (Option<Token>, usize) {
         debug_assert!(is_identifier_start(data[0]));
         // data[0] is_identifier_start => skip(1)
         let end = data
@@ -648,7 +647,7 @@ impl Tokenizer {
             } else {
                 TK_ID
             };
-            return (Some((word, tt)), i);
+            return (Some((word.into(), tt)), i);
         }
         // else ask more data
         (None, 0)
@@ -667,10 +666,10 @@ mod tests {
         let input = "PRAGMA parser_trace=ON;".as_bytes();
         let mut s = Scanner::new(input, tokenizer);
         let (token1, token_type1) = s.scan().unwrap().unwrap();
-        assert!(b"PRAGMA".eq_ignore_ascii_case(token1));
+        assert!(b"PRAGMA".eq_ignore_ascii_case(&token1));
         assert_eq!(TokenType::TK_PRAGMA, token_type1);
         let (token2, token_type2) = s.scan().unwrap().unwrap();
-        assert_eq!("parser_trace".as_bytes(), token2);
+        assert_eq!("parser_trace".as_bytes(), &*token2);
         assert_eq!(TokenType::TK_ID, token_type2);
     }
 }

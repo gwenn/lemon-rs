@@ -25,11 +25,11 @@ fn main() {
                 }
                 Ok(Some((token, token_type))) => match token_type {
                     TK_TEMP => debug_assert!(
-                        b"TEMP".eq_ignore_ascii_case(token)
-                            || b"TEMPORARY".eq_ignore_ascii_case(token)
+                        b"TEMP".eq_ignore_ascii_case(&token)
+                            || b"TEMPORARY".eq_ignore_ascii_case(&token)
                     ),
-                    TK_EQ => debug_assert!(b"=" == token || b"==" == token),
-                    TK_NE => debug_assert!(b"<>" == token || b"!=" == token),
+                    TK_EQ => debug_assert!(b"=" == &*token || b"==" == &*token),
+                    TK_NE => debug_assert!(b"<>" == &*token || b"!=" == &*token),
                     //TK_STRING => debug_assert!(),
                     //TK_ID => debug_assert!(),
                     //TK_VARIABLE => debug_assert!(),
@@ -56,33 +56,33 @@ fn main() {
                         }
                     }
                     TK_FLOAT => {
-                        debug_assert!(str::from_utf8(token).unwrap().parse::<f64>().is_ok())
+                        debug_assert!(str::from_utf8(&token).unwrap().parse::<f64>().is_ok())
                     }
                     TK_CTIME_KW => debug_assert!(
-                        b"CURRENT_DATE".eq_ignore_ascii_case(token)
-                            || b"CURRENT_TIME".eq_ignore_ascii_case(token)
-                            || b"CURRENT_TIMESTAMP".eq_ignore_ascii_case(token)
+                        b"CURRENT_DATE".eq_ignore_ascii_case(&token)
+                            || b"CURRENT_TIME".eq_ignore_ascii_case(&token)
+                            || b"CURRENT_TIMESTAMP".eq_ignore_ascii_case(&token)
                     ),
                     TK_JOIN_KW => debug_assert!(
-                        b"CROSS".eq_ignore_ascii_case(token)
-                            || b"FULL".eq_ignore_ascii_case(token)
-                            || b"INNER".eq_ignore_ascii_case(token)
-                            || b"LEFT".eq_ignore_ascii_case(token)
-                            || b"NATURAL".eq_ignore_ascii_case(token)
-                            || b"OUTER".eq_ignore_ascii_case(token)
-                            || b"RIGHT".eq_ignore_ascii_case(token)
+                        b"CROSS".eq_ignore_ascii_case(&token)
+                            || b"FULL".eq_ignore_ascii_case(&token)
+                            || b"INNER".eq_ignore_ascii_case(&token)
+                            || b"LEFT".eq_ignore_ascii_case(&token)
+                            || b"NATURAL".eq_ignore_ascii_case(&token)
+                            || b"OUTER".eq_ignore_ascii_case(&token)
+                            || b"RIGHT".eq_ignore_ascii_case(&token)
                     ),
                     TK_LIKE_KW => debug_assert!(
-                        b"GLOB".eq_ignore_ascii_case(token)
-                            || b"LIKE".eq_ignore_ascii_case(token)
-                            || b"REGEXP".eq_ignore_ascii_case(token)
+                        b"GLOB".eq_ignore_ascii_case(&token)
+                            || b"LIKE".eq_ignore_ascii_case(&token)
+                            || b"REGEXP".eq_ignore_ascii_case(&token)
                     ),
                     _ => match token_type.as_str() {
                         Some(str) => {
-                            debug_assert!(str.eq_ignore_ascii_case(str::from_utf8(token).unwrap()))
+                            debug_assert!(str.eq_ignore_ascii_case(str::from_utf8(&token).unwrap()))
                         }
                         _ => {
-                            println!("'{}', {:?}", str::from_utf8(token).unwrap(), token_type);
+                            println!("'{}', {:?}", str::from_utf8(&token).unwrap(), token_type);
                         }
                     },
                 },

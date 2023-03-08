@@ -8,6 +8,8 @@ use std::io;
 
 #[cfg(feature = "buf_redux")]
 use buf_redux::Buffer;
+
+use super::sql::Token;
 #[cfg(feature = "buf_redux")]
 const MAX_CAPACITY: usize = 1024 * 1024 * 1024;
 
@@ -176,8 +178,7 @@ pub trait ScanError: Error + From<io::Error> + Sized {
 
 /// The `(&[u8], TokenType)` is the token.
 /// And the `usize` is the amount of bytes to consume.
-type SplitResult<'input, TokenType, Error> =
-    Result<(Option<(&'input [u8], TokenType)>, usize), Error>;
+pub(crate) type SplitResult<TokenType, Error> = Result<(Option<Token<TokenType>>, usize), Error>;
 
 /// Split function used to tokenize the input
 pub trait Splitter: Sized {
@@ -195,11 +196,7 @@ pub trait Splitter: Sized {
     /// The function is never called with an empty data slice unless at EOF.
     /// If `eof` is true, however, data may be non-empty and,
     /// as always, holds unprocessed text.
-    fn split<'input>(
-        &mut self,
-        data: &'input [u8],
-        eof: bool,
-    ) -> SplitResult<'input, Self::TokenType, Self::Error>;
+    fn split(&mut self, data: &[u8], eof: bool) -> SplitResult<Self::TokenType, Self::Error>;
 }
 
 /// Like a `BufReader` but with a growable buffer.
@@ -252,24 +249,21 @@ impl<I: Input, S: Splitter> Scanner<I, S> {
     }
 }
 
-type ScanResult<'input, TokenType, Error> = Result<Option<(&'input [u8], TokenType)>, Error>;
+type ScanResult<TokenType, Error> = Result<Option<Token<TokenType>>, Error>;
 
 impl<I: Input, S: Splitter> Scanner<I, S> {
     /// Advance the Scanner to next token.
     /// Return the token as a byte slice.
     /// Return `None` when the end of the input is reached.
     /// Return any error that occurs while reading the input.
-    pub fn scan(&mut self) -> ScanResult<'_, S::TokenType, S::Error> {
-        use std::mem;
+    pub fn scan(&mut self) -> ScanResult<S::TokenType, S::Error> {
         debug!(target: "scanner", "scan(line: {}, column: {})", self.line, self.column);
         // Loop until we have a token.
         loop {
             let eof = self.input.eof();
             // See if we can get a token with what we already have.
             if !self.input.is_empty() || eof {
-                // TODO: I don't know how to make the borrow checker happy!
-                let data = unsafe { mem::transmute(self.input.buffer()) };
-                match self.splitter.split(data, eof) {
+                match self.splitter.split(self.input.buffer(), eof) {
                     Err(mut e) => {
                         e.position(self.line, self.column);
                         return Err(e);
