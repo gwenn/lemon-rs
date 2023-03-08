@@ -36,7 +36,7 @@ impl std::fmt::Display for ParserError {
                 write!(f, "near {}, \"{:?}\": syntax error", token_type, found)
             }
             ParserError::UnexpectedEof => f.write_str("unexpected end of input"),
-            ParserError::Custom(s) => f.write_str(&s),
+            ParserError::Custom(s) => f.write_str(s),
         }
     }
 }

@@ -1,8 +1,8 @@
 use sqlite3_parser::lexer::sql::{TokenType, Tokenizer};
-use sqlite3_parser::lexer::{InputStream, Scanner};
+use sqlite3_parser::lexer::Scanner;
 
 use std::env;
-use std::fs::File;
+use std::fs::read;
 use std::i64;
 use std::str;
 
@@ -11,10 +11,9 @@ fn main() {
     use TokenType::*;
     let args = env::args();
     for arg in args.skip(1) {
-        let f = File::open(arg.clone()).unwrap();
-        let input = InputStream::new(f);
+        let input = read(arg.clone()).unwrap();
         let tokenizer = Tokenizer::new();
-        let mut s = Scanner::new(input, tokenizer);
+        let mut s = Scanner::new(&input, tokenizer);
         loop {
             match s.scan() {
                 Ok(None) => break,
