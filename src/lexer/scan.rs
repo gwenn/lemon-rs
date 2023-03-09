@@ -44,6 +44,8 @@ pub trait Splitter: Sized {
 pub struct Scanner<'input, S: Splitter> {
     /// The reader provided by the client.
     input: &'input [u8],
+    /// offset in `input`
+    offset: usize,
     /// The function to tokenize the input.
     splitter: S,
     /// current line number
@@ -56,6 +58,7 @@ impl<'input, S: Splitter> Scanner<'input, S> {
     pub fn new(input: &'input [u8], splitter: S) -> Scanner<'input, S> {
         Scanner {
             input,
+            offset: 0,
             splitter,
             line: 1,
             column: 1,
@@ -79,6 +82,7 @@ impl<'input, S: Splitter> Scanner<'input, S> {
     /// Reset the scanner such that it behaves as if it had never been used.
     pub fn reset(&mut self, input: &'input [u8]) {
         self.input = input;
+        self.offset = 0;
         self.line = 1;
         self.column = 1;
     }
@@ -96,8 +100,8 @@ impl<'input, S: Splitter> Scanner<'input, S> {
         // Loop until we have a token.
         loop {
             // See if we can get a token with what we already have.
-            if !self.input.is_empty() {
-                let data = self.input;
+            if self.offset < self.input.len() {
+                let data = &self.input[self.offset..];
                 match self.splitter.split(data) {
                     Err(mut e) => {
                         e.position(self.line, self.column);
@@ -126,8 +130,9 @@ impl<'input, S: Splitter> Scanner<'input, S> {
     /// Consume `amt` bytes of the buffer.
     fn consume(&mut self, amt: usize) {
         debug!(target: "scanner", "consume({})", amt);
-        debug_assert!(amt <= self.input.len());
-        for byte in &self.input[..amt] {
+        let data = &self.input[self.offset..];
+        debug_assert!(amt <= data.len());
+        for byte in &data[..amt] {
             if *byte == b'\n' {
                 self.line += 1;
                 self.column = 1;
@@ -135,7 +140,7 @@ impl<'input, S: Splitter> Scanner<'input, S> {
                 self.column += 1;
             }
         }
-        self.input = &self.input[amt..];
+        self.offset += amt;
     }
 }
 
@@ -143,6 +148,7 @@ impl<'input, S: Splitter> fmt::Debug for Scanner<'input, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Scanner")
             .field("input", &self.input)
+            .field("offset", &self.offset)
             .field("line", &self.line)
             .field("column", &self.column)
             .finish()
