@@ -13,9 +13,9 @@ fn main() {
     for arg in args.skip(1) {
         let input = read(arg.clone()).unwrap();
         let tokenizer = Tokenizer::new();
-        let mut s = Scanner::new(&input, tokenizer);
+        let mut s = Scanner::new(tokenizer);
         loop {
-            match s.scan() {
+            match s.scan(&input) {
                 Ok(None) => break,
                 Err(err) => {
                     //eprintln!("{} at line: {}, column: {}", err, s.line(), s.column());

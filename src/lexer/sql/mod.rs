@@ -1,13 +1,10 @@
 //! Adaptation/port of [`SQLite` tokenizer](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/tokenize.c)
 use fallible_iterator::FallibleIterator;
 use memchr::memchr;
-use std::collections::VecDeque;
 
 pub use crate::dialect::TokenType;
 pub use crate::dialect::TokenType::*;
-use crate::dialect::{
-    from_bytes, is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN,
-};
+use crate::dialect::{is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN};
 use crate::parser::ast::Cmd;
 use crate::parser::parse::{yyParser, YYCODETYPE};
 use crate::parser::Context;
@@ -26,30 +23,27 @@ pub use error::Error;
 // to make possible to use the tokenizer without depending on the parser...
 
 pub struct Parser<'input> {
-    scanner: Scanner<'input, Tokenizer>,
+    input: &'input [u8],
+    scanner: Scanner<Tokenizer>,
     parser: yyParser,
-    buffer: Vec<u8>,
-    lookahead: VecDeque<(TokenType, String)>,
 }
 
 impl<'input> Parser<'input> {
     pub fn new(input: &'input [u8]) -> Parser<'input> {
         let lexer = Tokenizer::new();
-        let scanner = Scanner::new(input, lexer);
+        let scanner = Scanner::new(lexer);
         let ctx = Context::new();
         let parser = yyParser::new(ctx);
-        let buffer = Vec::new();
-        let lookahead = VecDeque::new();
         Parser {
+            input,
             scanner,
             parser,
-            buffer,
-            lookahead,
         }
     }
 
     pub fn reset(&mut self, input: &'input [u8]) {
-        self.scanner.reset(input);
+        self.input = input;
+        self.scanner.reset();
     }
 
     pub fn line(&self) -> u64 {
@@ -58,91 +52,99 @@ impl<'input> Parser<'input> {
     pub fn column(&self) -> usize {
         self.scanner.column()
     }
+}
 
-    /*
-     ** Return the id of the next token in input.
-     */
-    fn get_token(&mut self, i: usize) -> Result<TokenType, Error> {
-        let mut t = if let Some((token_type, _)) = self.lookahead.get(i) {
-            *token_type
-        } else {
-            let (value, token_type) = match self.scanner.scan()? {
-                None => {
-                    return Ok(TK_EOF);
-                }
-                Some(tuple) => tuple,
-            };
-            self.lookahead.push_back((token_type, from_bytes(value)));
-            token_type
-        };
-        if t == TK_ID
-            || t == TK_STRING
-            || t == TK_JOIN_KW
-            || t == TK_WINDOW
-            || t == TK_OVER
-            || yyParser::parse_fallback(t as YYCODETYPE) == TK_ID as YYCODETYPE
-        {
-            t = TK_ID;
-        }
-        Ok(t)
-    }
-
-    /*
-     ** The following three functions are called immediately after the tokenizer
-     ** reads the keywords WINDOW, OVER and FILTER, respectively, to determine
-     ** whether the token should be treated as a keyword or an SQL identifier.
-     ** This cannot be handled by the usual lemon %fallback method, due to
-     ** the ambiguity in some constructions. e.g.
-     **
-     **   SELECT sum(x) OVER ...
-     **
-     ** In the above, "OVER" might be a keyword, or it might be an alias for the
-     ** sum(x) expression. If a "%fallback ID OVER" directive were added to
-     ** grammar, then SQLite would always treat "OVER" as an alias, making it
-     ** impossible to call a window-function without a FILTER clause.
-     **
-     ** WINDOW is treated as a keyword if:
-     **
-     **   * the following token is an identifier, or a keyword that can fallback
-     **     to being an identifier, and
-     **   * the token after than one is TK_AS.
-     **
-     ** OVER is a keyword if:
-     **
-     **   * the previous token was TK_RP, and
-     **   * the next token is either TK_LP or an identifier.
-     **
-     ** FILTER is a keyword if:
-     **
-     **   * the previous token was TK_RP, and
-     **   * the next token is TK_LP.
-     */
-    fn analyze_window_keyword(&mut self) -> Result<TokenType, Error> {
-        let t = self.get_token(0)?;
-        if t != TK_ID {
-            return Ok(TK_ID);
-        };
-        let t = self.get_token(1)?;
-        if t != TK_AS {
-            return Ok(TK_ID);
-        };
-        Ok(TK_WINDOW)
-    }
-    fn analyze_over_keyword(&mut self, last_token: TokenType) -> Result<TokenType, Error> {
-        if last_token == TK_RP {
-            let t = self.get_token(0)?;
-            if t == TK_LP || t == TK_ID {
-                return Ok(TK_OVER);
+/*
+ ** Return the id of the next token in input.
+ */
+fn get_token(scanner: &mut Scanner<Tokenizer>, input: &[u8]) -> Result<TokenType, Error> {
+    let mut t = {
+        let (_, token_type) = match scanner.scan(input)? {
+            None => {
+                return Ok(TK_EOF);
             }
-        }
-        Ok(TK_ID)
+            Some(tuple) => tuple,
+        };
+        token_type
+    };
+    if t == TK_ID
+        || t == TK_STRING
+        || t == TK_JOIN_KW
+        || t == TK_WINDOW
+        || t == TK_OVER
+        || yyParser::parse_fallback(t as YYCODETYPE) == TK_ID as YYCODETYPE
+    {
+        t = TK_ID;
     }
-    fn analyze_filter_keyword(&mut self, last_token: TokenType) -> Result<TokenType, Error> {
-        if last_token == TK_RP && self.get_token(1)? == TK_LP {
-            return Ok(TK_FILTER);
+    Ok(t)
+}
+
+/*
+ ** The following three functions are called immediately after the tokenizer
+ ** reads the keywords WINDOW, OVER and FILTER, respectively, to determine
+ ** whether the token should be treated as a keyword or an SQL identifier.
+ ** This cannot be handled by the usual lemon %fallback method, due to
+ ** the ambiguity in some constructions. e.g.
+ **
+ **   SELECT sum(x) OVER ...
+ **
+ ** In the above, "OVER" might be a keyword, or it might be an alias for the
+ ** sum(x) expression. If a "%fallback ID OVER" directive were added to
+ ** grammar, then SQLite would always treat "OVER" as an alias, making it
+ ** impossible to call a window-function without a FILTER clause.
+ **
+ ** WINDOW is treated as a keyword if:
+ **
+ **   * the following token is an identifier, or a keyword that can fallback
+ **     to being an identifier, and
+ **   * the token after than one is TK_AS.
+ **
+ ** OVER is a keyword if:
+ **
+ **   * the previous token was TK_RP, and
+ **   * the next token is either TK_LP or an identifier.
+ **
+ ** FILTER is a keyword if:
+ **
+ **   * the previous token was TK_RP, and
+ **   * the next token is TK_LP.
+ */
+fn analyze_window_keyword(
+    scanner: &mut Scanner<Tokenizer>,
+    input: &[u8],
+) -> Result<TokenType, Error> {
+    let t = get_token(scanner, input)?;
+    if t != TK_ID {
+        return Ok(TK_ID);
+    };
+    let t = get_token(scanner, input)?;
+    if t != TK_AS {
+        return Ok(TK_ID);
+    };
+    Ok(TK_WINDOW)
+}
+fn analyze_over_keyword(
+    scanner: &mut Scanner<Tokenizer>,
+    input: &[u8],
+    last_token: TokenType,
+) -> Result<TokenType, Error> {
+    if last_token == TK_RP {
+        let t = get_token(scanner, input)?;
+        if t == TK_LP || t == TK_ID {
+            return Ok(TK_OVER);
         }
-        Ok(TK_ID)
     }
+    Ok(TK_ID)
+}
+fn analyze_filter_keyword(
+    scanner: &mut Scanner<Tokenizer>,
+    input: &[u8],
+    last_token: TokenType,
+) -> Result<TokenType, Error> {
+    if last_token == TK_RP && get_token(scanner, input)? == TK_LP {
+        return Ok(TK_FILTER);
+    }
+    Ok(TK_ID)
 }
 
 macro_rules! try_with_position {
@@ -168,34 +170,29 @@ impl<'input> FallibleIterator for Parser<'input> {
         let mut last_token_parsed = TK_EOF;
         let mut eof = false;
         loop {
-            let lookahead = self.lookahead.pop_front();
-            let (value, mut token_type) = if let Some((token_type, ref value)) = lookahead {
-                (value.as_bytes(), token_type)
-            } else {
-                match self.scanner.scan()? {
-                    None => {
-                        eof = true;
-                        break;
-                    }
-                    Some(tuple) => tuple,
+            let (value, mut token_type) = match self.scanner.scan(self.input)? {
+                None => {
+                    eof = true;
+                    break;
                 }
+                Some(tuple) => tuple,
             };
             let token = if token_type >= TK_WINDOW {
                 debug_assert!(
                     token_type == TK_OVER || token_type == TK_FILTER || token_type == TK_WINDOW
                 );
-                self.buffer.extend_from_slice(value);
-
+                self.scanner.mark();
                 if token_type == TK_WINDOW {
-                    token_type = self.analyze_window_keyword()?;
+                    token_type = analyze_window_keyword(&mut self.scanner, self.input)?;
                 } else if token_type == TK_OVER {
-                    token_type = self.analyze_over_keyword(last_token_parsed)?;
+                    token_type =
+                        analyze_over_keyword(&mut self.scanner, self.input, last_token_parsed)?;
                 } else if token_type == TK_FILTER {
-                    token_type = self.analyze_filter_keyword(last_token_parsed)?;
+                    token_type =
+                        analyze_filter_keyword(&mut self.scanner, self.input, last_token_parsed)?;
                 }
-                let token = token_type.to_token(self.buffer.as_slice());
-                self.buffer.clear();
-                token
+                self.scanner.reset_to_mark();
+                token_type.to_token(value)
             } else {
                 token_type.to_token(value)
             };
@@ -207,7 +204,6 @@ impl<'input> FallibleIterator for Parser<'input> {
                 break;
             }
         }
-        self.lookahead.clear();
         if last_token_parsed == TK_EOF {
             return Ok(None); // empty input
         }
@@ -628,11 +624,11 @@ mod tests {
     fn fallible_iterator() {
         let tokenizer = Tokenizer::new();
         let input = "PRAGMA parser_trace=ON;".as_bytes();
-        let mut s = Scanner::new(input, tokenizer);
-        let (token1, token_type1) = s.scan().unwrap().unwrap();
+        let mut s = Scanner::new(tokenizer);
+        let (token1, token_type1) = s.scan(input).unwrap().unwrap();
         assert!(b"PRAGMA".eq_ignore_ascii_case(token1));
         assert_eq!(TokenType::TK_PRAGMA, token_type1);
-        let (token2, token_type2) = s.scan().unwrap().unwrap();
+        let (token2, token_type2) = s.scan(input).unwrap().unwrap();
         assert_eq!("parser_trace".as_bytes(), token2);
         assert_eq!(TokenType::TK_ID, token_type2);
     }

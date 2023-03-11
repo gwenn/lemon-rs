@@ -41,11 +41,11 @@ pub trait Splitter: Sized {
 /// Scanning stops unrecoverably at EOF, the first I/O error, or a token too
 /// large to fit in the buffer. When a scan stops, the reader may have
 /// advanced arbitrarily far past the last token.
-pub struct Scanner<'input, S: Splitter> {
-    /// The reader provided by the client.
-    input: &'input [u8],
+pub struct Scanner<S: Splitter> {
     /// offset in `input`
     offset: usize,
+    /// mark
+    mark: (usize, u64, usize),
     /// The function to tokenize the input.
     splitter: S,
     /// current line number
@@ -54,11 +54,11 @@ pub struct Scanner<'input, S: Splitter> {
     column: usize,
 }
 
-impl<'input, S: Splitter> Scanner<'input, S> {
-    pub fn new(input: &'input [u8], splitter: S) -> Scanner<'input, S> {
+impl<S: Splitter> Scanner<S> {
+    pub fn new(splitter: S) -> Scanner<S> {
         Scanner {
-            input,
             offset: 0,
+            mark: (0, 0, 0),
             splitter,
             line: 1,
             column: 1,
@@ -79,9 +79,15 @@ impl<'input, S: Splitter> Scanner<'input, S> {
         &self.splitter
     }
 
+    pub fn mark(&mut self) {
+        self.mark = (self.offset, self.line, self.column);
+    }
+    pub fn reset_to_mark(&mut self) {
+        (self.offset, self.line, self.column) = self.mark;
+    }
+
     /// Reset the scanner such that it behaves as if it had never been used.
-    pub fn reset(&mut self, input: &'input [u8]) {
-        self.input = input;
+    pub fn reset(&mut self) {
         self.offset = 0;
         self.line = 1;
         self.column = 1;
@@ -90,33 +96,36 @@ impl<'input, S: Splitter> Scanner<'input, S> {
 
 type ScanResult<'input, TokenType, Error> = Result<Option<(&'input [u8], TokenType)>, Error>;
 
-impl<'input, S: Splitter> Scanner<'input, S> {
+impl<S: Splitter> Scanner<S> {
     /// Advance the Scanner to next token.
     /// Return the token as a byte slice.
     /// Return `None` when the end of the input is reached.
     /// Return any error that occurs while reading the input.
-    pub fn scan(&mut self) -> ScanResult<'_, S::TokenType, S::Error> {
+    pub fn scan<'input>(
+        &mut self,
+        input: &'input [u8],
+    ) -> ScanResult<'input, S::TokenType, S::Error> {
         debug!(target: "scanner", "scan(line: {}, column: {})", self.line, self.column);
         // Loop until we have a token.
         loop {
             // See if we can get a token with what we already have.
-            if self.offset < self.input.len() {
-                let data = &self.input[self.offset..];
+            if self.offset < input.len() {
+                let data = &input[self.offset..];
                 match self.splitter.split(data) {
                     Err(mut e) => {
                         e.position(self.line, self.column);
                         return Err(e);
                     }
                     Ok((None, 0)) => {
-                        // Request more data
+                        // Done
                     }
                     Ok((None, amt)) => {
                         // Ignore/skip this data
-                        self.consume(amt);
+                        self.consume(data, amt);
                         continue;
                     }
                     Ok((tok, amt)) => {
-                        self.consume(amt);
+                        self.consume(data, amt);
                         return Ok(tok);
                     }
                 }
@@ -128,9 +137,8 @@ impl<'input, S: Splitter> Scanner<'input, S> {
     }
 
     /// Consume `amt` bytes of the buffer.
-    fn consume(&mut self, amt: usize) {
+    fn consume(&mut self, data: &[u8], amt: usize) {
         debug!(target: "scanner", "consume({})", amt);
-        let data = &self.input[self.offset..];
         debug_assert!(amt <= data.len());
         for byte in &data[..amt] {
             if *byte == b'\n' {
@@ -144,11 +152,11 @@ impl<'input, S: Splitter> Scanner<'input, S> {
     }
 }
 
-impl<'input, S: Splitter> fmt::Debug for Scanner<'input, S> {
+impl<S: Splitter> fmt::Debug for Scanner<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Scanner")
-            .field("input", &self.input)
             .field("offset", &self.offset)
+            .field("mark", &self.mark)
             .field("line", &self.line)
             .field("column", &self.column)
             .finish()
