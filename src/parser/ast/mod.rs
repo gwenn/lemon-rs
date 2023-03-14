@@ -2290,6 +2290,7 @@ impl ToTokens for TableConstraint {
 }
 
 bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     pub struct TableOptions: u8 {
         const NONE = 0;
         const WITHOUT_ROWID = 1;
