@@ -657,11 +657,11 @@ xfullname(A) ::= nm(X) AS nm(Z). {
 joinop(X) ::= COMMA.              { X = JoinOperator::Comma; }
 joinop(X) ::= JOIN.              { X = JoinOperator::TypedJoin{ natural: false, join_type: None }; }
 joinop(X) ::= JOIN_KW(A) JOIN.
-                  {X = JoinOperator::from_single(A);  /*X-overwrites-A*/}
+                  {X = JoinOperator::from_single(A)?;  /*X-overwrites-A*/}
 joinop(X) ::= JOIN_KW(A) nm(B) JOIN.
-                  {X = JoinOperator::from_couple(A, B); /*X-overwrites-A*/}
+                  {X = JoinOperator::from_couple(A, B)?; /*X-overwrites-A*/}
 joinop(X) ::= JOIN_KW(A) nm(B) nm(C) JOIN.
-                  {X = JoinOperator::from_triple(A, B, C);/*X-overwrites-A*/}
+                  {X = JoinOperator::from_triple(A, B, C)?;/*X-overwrites-A*/}
 
 // There is a parsing abiguity in an upsert statement that uses a
 // SELECT on the RHS of a the INSERT:
