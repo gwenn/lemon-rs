@@ -1625,8 +1625,8 @@ pub enum JoinOperator {
 }
 
 impl JoinOperator {
-    pub(crate) fn from_single(token: Token) -> JoinOperator {
-        if let Some(ref jt) = token {
+    pub(crate) fn from_single(token: Token) -> Result<JoinOperator, ParserError> {
+        Ok(if let Some(ref jt) = token {
             if "CROSS".eq_ignore_ascii_case(jt) {
                 JoinOperator::TypedJoin {
                     natural: false,
@@ -1658,14 +1658,17 @@ impl JoinOperator {
                     join_type: None,
                 }
             } else {
-                unreachable!() // FIXME do not panic
+                return Err(ParserError::Custom(format!(
+                    "unsupported JOIN type: {}",
+                    jt
+                )));
             }
         } else {
             unreachable!()
-        }
+        })
     }
-    pub(crate) fn from_couple(token: Token, name: Name) -> JoinOperator {
-        if let Some(ref jt) = token {
+    pub(crate) fn from_couple(token: Token, name: Name) -> Result<JoinOperator, ParserError> {
+        Ok(if let Some(ref jt) = token {
             if "NATURAL".eq_ignore_ascii_case(jt) {
                 let join_type = if "INNER".eq_ignore_ascii_case(&name.0) {
                     JoinType::Inner
@@ -1678,13 +1681,17 @@ impl JoinOperator {
                 } else if "CROSS".eq_ignore_ascii_case(&name.0) {
                     JoinType::Cross
                 } else {
-                    unreachable!() // FIXME do not panic
+                    return Err(ParserError::Custom(format!(
+                        "unsupported JOIN type: {} {}",
+                        jt, &name.0
+                    )));
                 };
                 JoinOperator::TypedJoin {
                     natural: true,
                     join_type: Some(join_type),
                 }
             } else if "OUTER".eq_ignore_ascii_case(&name.0) {
+                // If "OUTER" is present then there must also be one of "LEFT", "RIGHT", or "FULL"
                 let join_type = if "LEFT".eq_ignore_ascii_case(jt) {
                     JoinType::LeftOuter
                 } else if "RIGHT".eq_ignore_ascii_case(jt) {
@@ -1692,7 +1699,10 @@ impl JoinOperator {
                 } else if "FULL".eq_ignore_ascii_case(jt) {
                     JoinType::FullOuter
                 } else {
-                    unreachable!() // FIXME do not panic
+                    return Err(ParserError::Custom(format!(
+                        "unsupported JOIN type: {} {}",
+                        jt, &name.0
+                    )));
                 };
                 JoinOperator::TypedJoin {
                     natural: false,
@@ -1704,20 +1714,29 @@ impl JoinOperator {
                     join_type: Some(JoinType::Full),
                 }
             } else if "OUTER".eq_ignore_ascii_case(jt) && "LEFT".eq_ignore_ascii_case(&name.0) {
+                // OUTER LEFT JOIN         ->   same as LEFT JOIN
                 JoinOperator::TypedJoin {
                     natural: false,
                     join_type: Some(JoinType::LeftOuter),
                 }
             } else {
-                unreachable!() // FIXME do not panic
+                return Err(ParserError::Custom(format!(
+                    "unsupported JOIN type: {} {}",
+                    jt, &name.0
+                )));
             }
         } else {
             unreachable!()
-        }
+        })
     }
-    pub(crate) fn from_triple(token: Token, n1: Name, n2: Name) -> JoinOperator {
-        if let Some(ref jt) = token {
+    pub(crate) fn from_triple(
+        token: Token,
+        n1: Name,
+        n2: Name,
+    ) -> Result<JoinOperator, ParserError> {
+        Ok(if let Some(ref jt) = token {
             if "NATURAL".eq_ignore_ascii_case(jt) && "OUTER".eq_ignore_ascii_case(&n2.0) {
+                // If "OUTER" is present then there must also be one of "LEFT", "RIGHT", or "FULL"
                 let join_type = if "LEFT".eq_ignore_ascii_case(&n1.0) {
                     JoinType::LeftOuter
                 } else if "RIGHT".eq_ignore_ascii_case(&n1.0) {
@@ -1725,7 +1744,10 @@ impl JoinOperator {
                 } else if "FULL".eq_ignore_ascii_case(&n1.0) {
                     JoinType::FullOuter
                 } else {
-                    unreachable!() // FIXME do not panic
+                    return Err(ParserError::Custom(format!(
+                        "unsupported JOIN type: {} {} {}",
+                        jt, &n1.0, &n2.0
+                    )));
                 };
                 JoinOperator::TypedJoin {
                     natural: true,
@@ -1740,11 +1762,14 @@ impl JoinOperator {
                     join_type: Some(JoinType::LeftOuter),
                 }
             } else {
-                unreachable!() // FIXME do not panic
+                return Err(ParserError::Custom(format!(
+                    "unsupported JOIN type: {} {} {}",
+                    jt, &n1.0, &n2.0
+                )));
             }
         } else {
             unreachable!()
-        }
+        })
     }
 }
 impl ToTokens for JoinOperator {
@@ -1766,13 +1791,13 @@ impl ToTokens for JoinOperator {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum JoinType {
-    Left,
+    Left, // same as LeftOuter
     LeftOuter,
     Inner,
     Cross,
-    Right,
+    Right, // same as RightOuter
     RightOuter,
-    Full,
+    Full, // same as FullOuter
     FullOuter,
 }
 impl ToTokens for JoinType {
@@ -2290,6 +2315,7 @@ impl ToTokens for TableConstraint {
 }
 
 bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     pub struct TableOptions: u8 {
         const NONE = 0;
         const WITHOUT_ROWID = 1;
