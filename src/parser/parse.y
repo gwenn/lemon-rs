@@ -655,7 +655,7 @@ xfullname(A) ::= nm(X) AS nm(Z). {
 
 %type joinop {JoinOperator}
 joinop(X) ::= COMMA.              { X = JoinOperator::Comma; }
-joinop(X) ::= JOIN.              { X = JoinOperator::TypedJoin{ natural: false, join_type: None }; }
+joinop(X) ::= JOIN.              { X = JoinOperator::TypedJoin{ natural: false, join_type: SmallVec::new() }; }
 joinop(X) ::= JOIN_KW(A) JOIN.
                   {X = JoinOperator::from_single(A);  /*X-overwrites-A*/}
 joinop(X) ::= JOIN_KW(A) nm(B) JOIN.
