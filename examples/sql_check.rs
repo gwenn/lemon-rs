@@ -1,10 +1,9 @@
 use fallible_iterator::FallibleIterator;
 use std::env;
-use std::fs::File;
+use std::fs::read;
 use std::panic;
 
 use sqlite3_parser::lexer::sql::Parser;
-use sqlite3_parser::lexer::InputStream;
 
 /// Parse specified files and check all commands.
 fn main() {
@@ -13,9 +12,8 @@ fn main() {
     for arg in args.skip(1) {
         println!("{arg}");
         let result = panic::catch_unwind(|| {
-            let f = File::open(arg.clone()).unwrap();
-            let input = InputStream::new(f);
-            let mut parser = Parser::new(input);
+            let input = read(arg.clone()).unwrap();
+            let mut parser = Parser::new(&input);
             loop {
                 match parser.next() {
                     Ok(None) => break,

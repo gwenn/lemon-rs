@@ -22,7 +22,7 @@ YYNOERRORRECOVERY = []
 YYSTACKDYNAMIC = []
 YYCOVERAGE = []
 NDEBUG = []
-default = ["YYNOERRORRECOVERY", "buf_redux"]
+default = ["YYNOERRORRECOVERY"]
 
 [dependencies]
 phf = { version = "0.11", features = ["uncased"] }
@@ -30,7 +30,6 @@ log = "0.4"
 memchr = "2.0"
 fallible-iterator = "0.2"
 smallvec = ">=1.6.1"
-buf_redux = { version = "0.8", optional = true }
 bitflags = "2.0"
 uncased = "0.9"
 indexmap = "1.9"
