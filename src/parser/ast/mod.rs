@@ -35,8 +35,10 @@ impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
             }
             return self.f.write_char('\'');
         } else if let Some(str) = ty.as_str() {
-            self.f.write_str(str)?;
-            self.spaced = ty == TK_LP || ty == TK_DOT; // str should not be whitespace
+            if ty != TK_ANY {
+                self.f.write_str(str)?;
+                self.spaced = ty == TK_LP || ty == TK_DOT; // str should not be whitespace
+            }
         }
         if let Some(str) = value {
             // trick for pretty-print
@@ -205,7 +207,7 @@ pub enum Stmt {
         if_not_exists: bool,
         tbl_name: QualifiedName,
         module_name: Name,
-        args: Option<String>, // TODO smol str
+        args: Option<Vec<ModuleArgument>>, // TODO smol str
     },
     Delete {
         with: Option<With>,
@@ -456,7 +458,7 @@ impl ToTokens for Stmt {
                 module_name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
                 if let Some(args) = args {
-                    s.append(TK_ANY, Some(args))?;
+                    comma(args, s)?;
                 }
                 s.append(TK_RP, None)
             }
@@ -3236,4 +3238,23 @@ fn double_quote<S: TokenStream>(name: &str, s: &mut S) -> Result<(), S::Error> {
     }
     f.write_char('"')*/
     s.append(TK_ID, Some(name))
+}
+
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
+pub struct ModuleArgument(pub Vec<String>);
+
+impl ToTokens for ModuleArgument {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        for tk in &self.0 {
+            s.append(TK_ANY, Some(&tk))?;
+        }
+
+        Ok(())
+    }
+}
+
+impl ModuleArgument {
+    pub fn push(&mut self, s: String) {
+        self.0.push(s);
+    }
 }

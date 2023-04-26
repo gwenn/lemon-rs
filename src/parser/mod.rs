@@ -16,6 +16,8 @@ pub mod parse {
 
 use ast::{Cmd, ExplainKind, Name, Stmt};
 
+use self::ast::ModuleArgument;
+
 /// Parser error
 #[derive(Debug)]
 pub enum ParserError {
@@ -50,6 +52,7 @@ pub struct Context {
     constraint_name: Option<Name>, // transient
     done: bool,
     error: Option<ParserError>,
+    module_arguments: Option<Vec<ModuleArgument>>,
 }
 
 impl Context {
@@ -60,6 +63,7 @@ impl Context {
             constraint_name: None,
             done: false,
             error: None,
+            module_arguments: None,
         }
     }
 
@@ -112,5 +116,30 @@ impl Context {
         self.constraint_name = None;
         self.done = false;
         self.error = None;
+        self.module_arguments = None;
+    }
+
+    /// initializes argument an argument for the virtual table module currently being parsed.
+    pub fn init_vtab_arg(&mut self) {
+        match self.module_arguments {
+            Some(ref mut args) => args.push(ModuleArgument::default()),
+            None => self.module_arguments = Some(vec![ModuleArgument::default()]),
+        }
+    }
+
+    /// add a token to the virtual table module argument currently being parsed.
+    pub fn add_to_vtab_argument(&mut self, s: String) -> Result<(), ParserError> {
+        match self.module_arguments {
+            Some(ref mut args) => {
+                let last = args.last_mut().ok_or_else(|| {
+                    ParserError::Custom("uninitialized module arguments".to_string())
+                })?;
+                last.push(s);
+                Ok(())
+            }
+            None => Err(ParserError::Custom(
+                "uninitialized module arguments".to_string(),
+            )),
+        }
     }
 }
