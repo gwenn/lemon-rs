@@ -1323,10 +1323,10 @@ kwcolumn_opt ::= COLUMNKW.
 //////////////////////// CREATE VIRTUAL TABLE ... /////////////////////////////
 %ifndef SQLITE_OMIT_VIRTUALTABLE
 cmd ::= create_vtab(X).                       {self.ctx.stmt = Some(X);}
-cmd ::= create_vtab(X) LP vtabarglist(Y) RP.  {
+cmd ::= create_vtab(X) LP vtabarglist RP.  {
   let mut stmt = X;
   if let Stmt::CreateVirtualTable{ ref mut args, .. } = stmt {
-    *args = Y;
+    *args = self.ctx.module_args();
   }
   self.ctx.stmt = Some(stmt);
 }
@@ -1337,11 +1337,11 @@ create_vtab(A) ::= createkw VIRTUAL TABLE ifnotexists(E)
 }
 vtabarglist ::= vtabarg.
 vtabarglist ::= vtabarglist COMMA vtabarg.
-vtabarg ::= .                       {/*FIXME sqlite3VtabArgInit(pParse);*/}
+vtabarg ::= .                       {self.ctx.vtab_arg_init();}
 vtabarg ::= vtabarg vtabargtoken.
-vtabargtoken ::= ANY(X).            {/*FIXME sqlite3VtabArgExtend(pParse,X);*/}
-vtabargtoken ::= lp anylist RP(X).  {/*FIXME sqlite3VtabArgExtend(pParse,X);*/}
-lp ::= LP(X).                       {/*FIXME sqlite3VtabArgExtend(pParse,X);*/}
+vtabargtoken ::= ANY(X).            { let x = X; self.ctx.vtab_arg_extend(x);}
+vtabargtoken ::= lp anylist RP(X).  {let x = X; self.ctx.vtab_arg_extend(x);}
+lp ::= LP(X).                       {let x = X; self.ctx.vtab_arg_extend(x);}
 anylist ::= .
 anylist ::= anylist LP anylist RP.
 anylist ::= anylist ANY.

@@ -227,7 +227,6 @@ impl TokenType {
             TK_ANALYZE => Some("ANALYZE"),
             TK_ALWAYS => Some("ALWAYS"),
             TK_AND => Some("AND"),
-            TK_ANY => Some("ANY"),
             TK_AS => Some("AS"),
             TK_ASC => Some("ASC"),
             TK_ATTACH => Some("ATTACH"),

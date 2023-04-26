@@ -47,7 +47,9 @@ impl std::error::Error for ParserError {}
 pub struct Context {
     explain: Option<ExplainKind>,
     stmt: Option<Stmt>,
-    constraint_name: Option<Name>, // transient
+    constraint_name: Option<Name>,    // transient
+    module_arg: Option<String>,       // Complete text of a module argument
+    module_args: Option<Vec<String>>, // CREATE VIRTUAL TABLE args
     done: bool,
     error: Option<ParserError>,
 }
@@ -58,6 +60,8 @@ impl Context {
             explain: None,
             stmt: None,
             constraint_name: None,
+            module_arg: None,
+            module_args: None,
             done: false,
             error: None,
         }
@@ -81,6 +85,25 @@ impl Context {
     }
     fn no_constraint_name(&self) -> bool {
         self.constraint_name.is_none()
+    }
+
+    fn vtab_arg_init(&mut self) {
+        if let Some(arg) = self.module_arg.take() {
+            self.module_args.get_or_insert(vec![]).push(arg);
+        }
+    }
+    fn vtab_arg_extend(&mut self, any: Option<String>) {
+        if let Some(ref s) = any {
+            if let Some(ref mut arg) = self.module_arg {
+                arg.push_str(s);
+            } else {
+                self.module_arg = Some(s.to_owned());
+            }
+        }
+    }
+    fn module_args(&mut self) -> Option<Vec<String>> {
+        self.vtab_arg_init();
+        self.module_args.take()
     }
 
     fn sqlite3_error_msg(&mut self, msg: &str) {
@@ -110,6 +133,8 @@ impl Context {
         self.explain = None;
         self.stmt = None;
         self.constraint_name = None;
+        self.module_arg = None;
+        self.module_args = None;
         self.done = false;
         self.error = None;
     }

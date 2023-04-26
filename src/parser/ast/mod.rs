@@ -100,6 +100,13 @@ impl<T: ?Sized + ToTokens> ToTokens for &T {
         ToTokens::to_tokens(&**self, s)
     }
 }
+
+impl ToTokens for String {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_ANY, Some(self.as_ref()))
+    }
+}
+
 /* FIXME: does not work, find why
 impl Display for dyn ToTokens {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -205,7 +212,7 @@ pub enum Stmt {
         if_not_exists: bool,
         tbl_name: QualifiedName,
         module_name: Name,
-        args: Option<String>, // TODO smol str
+        args: Option<Vec<String>>, // TODO smol str
     },
     Delete {
         with: Option<With>,
@@ -456,7 +463,7 @@ impl ToTokens for Stmt {
                 module_name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
                 if let Some(args) = args {
-                    s.append(TK_ANY, Some(args))?;
+                    comma(args, s)?;
                 }
                 s.append(TK_RP, None)
             }
