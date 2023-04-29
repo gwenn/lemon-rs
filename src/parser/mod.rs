@@ -14,6 +14,7 @@ pub mod parse {
     include!(concat!(env!("OUT_DIR"), "/parse.rs"));
 }
 
+use crate::dialect::Token;
 use ast::{Cmd, ExplainKind, Name, Stmt};
 
 /// Parser error
@@ -44,19 +45,21 @@ impl std::fmt::Display for ParserError {
 impl std::error::Error for ParserError {}
 
 /// Parser context
-pub struct Context {
+pub struct Context<'input> {
+    input: &'input [u8],
     explain: Option<ExplainKind>,
     stmt: Option<Stmt>,
-    constraint_name: Option<Name>,    // transient
-    module_arg: Option<String>,       // Complete text of a module argument
-    module_args: Option<Vec<String>>, // CREATE VIRTUAL TABLE args
+    constraint_name: Option<Name>,      // transient
+    module_arg: Option<(usize, usize)>, // Complete text of a module argument
+    module_args: Option<Vec<String>>,   // CREATE VIRTUAL TABLE args
     done: bool,
     error: Option<ParserError>,
 }
 
-impl Context {
-    pub fn new() -> Context {
+impl<'input> Context<'input> {
+    pub fn new(input: &'input [u8]) -> Context<'input> {
         Context {
+            input,
             explain: None,
             stmt: None,
             constraint_name: None,
@@ -88,21 +91,26 @@ impl Context {
     }
 
     fn vtab_arg_init(&mut self) {
-        if let Some(arg) = self.module_arg.take() {
-            self.module_args.get_or_insert(vec![]).push(arg);
+        self.add_module_arg();
+        self.module_arg = None;
+    }
+    fn vtab_arg_extend(&mut self, any: Token) {
+        if let Some((_, ref mut n)) = self.module_arg {
+            *n = any.2
+        } else {
+            self.module_arg = Some((any.0, any.2))
         }
     }
-    fn vtab_arg_extend(&mut self, any: Option<String>) {
-        if let Some(ref s) = any {
-            if let Some(ref mut arg) = self.module_arg {
-                arg.push_str(s);
-            } else {
-                self.module_arg = Some(s.to_owned());
-            }
+    fn add_module_arg(&mut self) {
+        if let Some((start, end)) = self.module_arg.take() {
+            if let Ok(arg) = std::str::from_utf8(&self.input[start..end]) {
+                println!("add_module_arg => {}", arg);
+                self.module_args.get_or_insert(vec![]).push(arg.to_owned());
+            } // FIXME error handling
         }
     }
     fn module_args(&mut self) -> Option<Vec<String>> {
-        self.vtab_arg_init();
+        self.add_module_arg();
         self.module_args.take()
     }
 

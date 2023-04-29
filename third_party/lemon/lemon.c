@@ -4122,7 +4122,7 @@ void print_stack_union(
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
   fprintf(out,"enum YYMINORTYPE {\n"); lineno++;
   fprintf(out,"    yyinit(),\n"); lineno++;
-  fprintf(out,"    yy0(Option<%sTOKENTYPE>),\n",name); lineno++;
+  fprintf(out,"    yy0(%sTOKENTYPE),\n",name); lineno++;
   for(i=0; i<arraysize; i++){
     if( types[i]==0 ) continue;
     fprintf(out,"    yy%d(%s),\n",i+1,types[i]); lineno++;
@@ -4142,7 +4142,7 @@ void print_stack_union(
   fprintf(out,"}\n"); lineno++;
 
   fprintf(out,"impl yyStackEntry {\n"); lineno++;
-  fprintf(out,"    fn yy0(self) -> Option<%sTOKENTYPE> {\n",name); lineno++;
+  fprintf(out,"    fn yy0(self) -> %sTOKENTYPE {\n",name); lineno++;
   fprintf(out,"        if let YYMINORTYPE::yy0(v) = self.minor {\n"); lineno++;
   fprintf(out,"            v\n"); lineno++;
   fprintf(out,"        } else {\n"); lineno++;
@@ -4721,7 +4721,7 @@ void ReportTable(
   /* Generate %extra_context field declaration
   */
   if( lemp->ctx && lemp->ctx[0] ){
-    fprintf(out,"    pub %s,\n",lemp->ctx);  lineno++;
+    fprintf(out,"    pub %s<'input>,\n",lemp->ctx);  lineno++;
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 

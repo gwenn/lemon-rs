@@ -2,9 +2,9 @@
 use fallible_iterator::FallibleIterator;
 use memchr::memchr;
 
-pub use crate::dialect::TokenType;
 pub use crate::dialect::TokenType::*;
 use crate::dialect::{is_identifier_continue, is_identifier_start, keyword_token, MAX_KEYWORD_LEN};
+pub use crate::dialect::{sentinel, TokenType};
 use crate::parser::ast::Cmd;
 use crate::parser::parse::{yyParser, YYCODETYPE};
 use crate::parser::Context;
@@ -25,14 +25,14 @@ pub use error::Error;
 pub struct Parser<'input> {
     input: &'input [u8],
     scanner: Scanner<Tokenizer>,
-    parser: yyParser,
+    parser: yyParser<'input>,
 }
 
 impl<'input> Parser<'input> {
     pub fn new(input: &'input [u8]) -> Parser<'input> {
         let lexer = Tokenizer::new();
         let scanner = Scanner::new(lexer);
-        let ctx = Context::new();
+        let ctx = Context::new(input);
         let parser = yyParser::new(ctx);
         Parser {
             input,
@@ -60,10 +60,10 @@ impl<'input> Parser<'input> {
 fn get_token(scanner: &mut Scanner<Tokenizer>, input: &[u8]) -> Result<TokenType, Error> {
     let mut t = {
         let (_, token_type) = match scanner.scan(input)? {
-            None => {
+            (_, None, _) => {
                 return Ok(TK_EOF);
             }
-            Some(tuple) => tuple,
+            (_, Some(tuple), _) => tuple,
         };
         token_type
     };
@@ -170,12 +170,12 @@ impl<'input> FallibleIterator for Parser<'input> {
         let mut last_token_parsed = TK_EOF;
         let mut eof = false;
         loop {
-            let (value, mut token_type) = match self.scanner.scan(self.input)? {
-                None => {
+            let (start, (value, mut token_type), end) = match self.scanner.scan(self.input)? {
+                (_, None, _) => {
                     eof = true;
                     break;
                 }
-                Some(tuple) => tuple,
+                (start, Some(tuple), end) => (start, tuple, end),
             };
             let token = if token_type >= TK_WINDOW {
                 debug_assert!(
@@ -192,11 +192,11 @@ impl<'input> FallibleIterator for Parser<'input> {
                         analyze_filter_keyword(&mut self.scanner, self.input, last_token_parsed)?;
                 }
                 self.scanner.reset_to_mark();
-                token_type.to_token(value)
+                token_type.to_token(start, value, end)
             } else {
-                token_type.to_token(value)
+                token_type.to_token(start, value, end)
             };
-            //print!("({:?}, {:?})", token_type, token);
+            //println!("({:?}, {:?})", token_type, token);
             try_with_position!(self.scanner, self.parser.sqlite3Parser(token_type, token));
             last_token_parsed = token_type;
             if self.parser.ctx.done() {
@@ -211,9 +211,17 @@ impl<'input> FallibleIterator for Parser<'input> {
         with tokens TK_SEMI and 0, in that order. */
         if eof && self.parser.ctx.is_ok() {
             if last_token_parsed != TK_SEMI {
-                try_with_position!(self.scanner, self.parser.sqlite3Parser(TK_SEMI, None));
+                try_with_position!(
+                    self.scanner,
+                    self.parser
+                        .sqlite3Parser(TK_SEMI, sentinel(self.input.len()))
+                );
             }
-            try_with_position!(self.scanner, self.parser.sqlite3Parser(TK_EOF, None));
+            try_with_position!(
+                self.scanner,
+                self.parser
+                    .sqlite3Parser(TK_EOF, sentinel(self.input.len()))
+            );
         }
         self.parser.sqlite3ParserFinalize();
         if let Some(e) = self.parser.ctx.error() {

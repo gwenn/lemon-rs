@@ -27,8 +27,8 @@
 // The type of the data attached to each token is Token.  This is also the
 // default type for non-terminals.
 //
-%token_type {String}
-%default_type {Option<String>}
+%token_type {Token}
+%default_type {Token}
 
 // An extra argument to the constructor for the parser, which is available
 // to all actions.
@@ -44,7 +44,7 @@
     error!(target: TARGET, "near {}, \"{:?}\": syntax error", yyTokenName[yymajor as usize], yyminor);
     self.ctx.error = Some(ParserError::SyntaxError {
         token_type: yyTokenName[yymajor as usize],
-        found: yyminor.cloned(),
+        found: yyminor.1.clone(),
     });
   }
 }
@@ -63,7 +63,7 @@
 %include {
 use crate::parser::ast::*;
 use crate::parser::{Context, ParserError};
-use crate::dialect::{from_token, TokenType};
+use crate::dialect::{from_token, Token, TokenType};
 use log::{debug, error, log_enabled};
 
 #[allow(non_camel_case_types)]
