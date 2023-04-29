@@ -104,7 +104,6 @@ impl<'input> Context<'input> {
     fn add_module_arg(&mut self) {
         if let Some((start, end)) = self.module_arg.take() {
             if let Ok(arg) = std::str::from_utf8(&self.input[start..end]) {
-                println!("add_module_arg => {}", arg);
                 self.module_args.get_or_insert(vec![]).push(arg.to_owned());
             } // FIXME error handling
         }

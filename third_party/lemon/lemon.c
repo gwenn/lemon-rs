@@ -4057,7 +4057,7 @@ void print_stack_union(
   char *tokentype = 0;
   if( lemp->tokentype ){
     tokentype = (char*)malloc(lemonStrlen(lemp->tokentype) + 9);
-    lemon_sprintf(tokentype, "Option<%s>", lemp->tokentype);
+    lemon_sprintf(tokentype, "%s", lemp->tokentype);
   }
 
 
