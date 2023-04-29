@@ -10,7 +10,7 @@ pub use token::TokenType;
 /// Token value (lexeme)
 pub struct Token(pub usize, pub Option<String>, pub usize);
 
-pub fn sentinel(start: usize) -> Token {
+pub(crate) fn sentinel(start: usize) -> Token {
     Token(start, None, start)
 }
 
@@ -33,7 +33,7 @@ impl TokenType {
     // TODO try Cow<&'static, str> (Borrowed<&'static str> for keyword and Owned<String> for below),
     // => Syntax error on keyword will be better
     // => `from_token` will become unnecessary
-    pub fn to_token(self, start: usize, value: &[u8], end: usize) -> Token {
+    pub(crate) fn to_token(self, start: usize, value: &[u8], end: usize) -> Token {
         Token(
             start,
             match self {
@@ -62,15 +62,15 @@ fn from_bytes(bytes: &[u8]) -> String {
 }
 
 include!(concat!(env!("OUT_DIR"), "/keywords.rs"));
-pub const MAX_KEYWORD_LEN: usize = 17;
+pub(crate) const MAX_KEYWORD_LEN: usize = 17;
 
-pub fn keyword_token(word: &[u8]) -> Option<TokenType> {
+pub(crate) fn keyword_token(word: &[u8]) -> Option<TokenType> {
     KEYWORDS
         .get(UncasedStr::new(unsafe { str::from_utf8_unchecked(word) }))
         .cloned()
 }
 
-pub fn is_identifier(name: &str) -> bool {
+pub(crate) fn is_identifier(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
@@ -79,11 +79,11 @@ pub fn is_identifier(name: &str) -> bool {
         && (bytes.len() == 1 || bytes[1..].iter().all(|b| is_identifier_continue(*b)))
 }
 
-pub fn is_identifier_start(b: u8) -> bool {
+pub(crate) fn is_identifier_start(b: u8) -> bool {
     b.is_ascii_uppercase() || b == b'_' || b.is_ascii_lowercase() || b > b'\x7F'
 }
 
-pub fn is_identifier_continue(b: u8) -> bool {
+pub(crate) fn is_identifier_continue(b: u8) -> bool {
     b == b'$'
         || b.is_ascii_digit()
         || b.is_ascii_uppercase()
@@ -94,7 +94,7 @@ pub fn is_identifier_continue(b: u8) -> bool {
 
 // keyword may become an identifier
 // see %fallback in parse.y
-pub fn from_token(ty: u16, value: Token) -> String {
+pub(crate) fn from_token(ty: u16, value: Token) -> String {
     use TokenType::*;
     if let Some(str) = value.1 {
         return str;
