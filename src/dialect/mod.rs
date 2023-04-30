@@ -64,7 +64,7 @@ fn from_bytes(bytes: &[u8]) -> String {
 include!(concat!(env!("OUT_DIR"), "/keywords.rs"));
 pub(crate) const MAX_KEYWORD_LEN: usize = 17;
 
-pub(crate) fn keyword_token(word: &[u8]) -> Option<TokenType> {
+pub fn keyword_token(word: &[u8]) -> Option<TokenType> {
     KEYWORDS
         .get(UncasedStr::new(unsafe { str::from_utf8_unchecked(word) }))
         .cloned()
