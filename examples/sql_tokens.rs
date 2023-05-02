@@ -16,13 +16,13 @@ fn main() {
         let mut s = Scanner::new(tokenizer);
         loop {
             match s.scan(&input) {
-                Ok(None) => break,
+                Ok((_, None, _)) => break,
                 Err(err) => {
                     //eprintln!("{} at line: {}, column: {}", err, s.line(), s.column());
                     eprintln!("Err: {err} in {arg}");
                     break;
                 }
-                Ok(Some((token, token_type))) => match token_type {
+                Ok((_, Some((token, token_type)), _)) => match token_type {
                     TK_TEMP => debug_assert!(
                         b"TEMP".eq_ignore_ascii_case(token)
                             || b"TEMPORARY".eq_ignore_ascii_case(token)

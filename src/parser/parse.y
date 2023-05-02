@@ -27,8 +27,8 @@
 // The type of the data attached to each token is Token.  This is also the
 // default type for non-terminals.
 //
-%token_type {String}
-%default_type {Option<String>}
+%token_type {Token}
+%default_type {Token}
 
 // An extra argument to the constructor for the parser, which is available
 // to all actions.
@@ -44,7 +44,7 @@
     error!(target: TARGET, "near {}, \"{:?}\": syntax error", yyTokenName[yymajor as usize], yyminor);
     self.ctx.error = Some(ParserError::SyntaxError {
         token_type: yyTokenName[yymajor as usize],
-        found: yyminor.cloned(),
+        found: yyminor.1.clone(),
     });
   }
 }
@@ -63,7 +63,7 @@
 %include {
 use crate::parser::ast::*;
 use crate::parser::{Context, ParserError};
-use crate::dialect::{from_token, TokenType};
+use crate::dialect::{from_token, Token, TokenType};
 use log::{debug, error, log_enabled};
 
 #[allow(non_camel_case_types)]
@@ -1323,10 +1323,10 @@ kwcolumn_opt ::= COLUMNKW.
 //////////////////////// CREATE VIRTUAL TABLE ... /////////////////////////////
 %ifndef SQLITE_OMIT_VIRTUALTABLE
 cmd ::= create_vtab(X).                       {self.ctx.stmt = Some(X);}
-cmd ::= create_vtab(X) LP vtabarglist(Y) RP.  {
+cmd ::= create_vtab(X) LP vtabarglist RP.  {
   let mut stmt = X;
   if let Stmt::CreateVirtualTable{ ref mut args, .. } = stmt {
-    *args = Y;
+    *args = self.ctx.module_args();
   }
   self.ctx.stmt = Some(stmt);
 }
@@ -1337,11 +1337,11 @@ create_vtab(A) ::= createkw VIRTUAL TABLE ifnotexists(E)
 }
 vtabarglist ::= vtabarg.
 vtabarglist ::= vtabarglist COMMA vtabarg.
-vtabarg ::= .                       {/*FIXME sqlite3VtabArgInit(pParse);*/}
+vtabarg ::= .                       {self.ctx.vtab_arg_init();}
 vtabarg ::= vtabarg vtabargtoken.
-vtabargtoken ::= ANY(X).            {/*FIXME sqlite3VtabArgExtend(pParse,X);*/}
-vtabargtoken ::= lp anylist RP(X).  {/*FIXME sqlite3VtabArgExtend(pParse,X);*/}
-lp ::= LP(X).                       {/*FIXME sqlite3VtabArgExtend(pParse,X);*/}
+vtabargtoken ::= ANY(X).            { let x = X; self.ctx.vtab_arg_extend(x);}
+vtabargtoken ::= lp anylist RP(X).  {let x = X; self.ctx.vtab_arg_extend(x);}
+lp ::= LP(X).                       {let x = X; self.ctx.vtab_arg_extend(x);}
 anylist ::= .
 anylist ::= anylist LP anylist RP.
 anylist ::= anylist ANY.

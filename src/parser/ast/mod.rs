@@ -100,6 +100,13 @@ impl<T: ?Sized + ToTokens> ToTokens for &T {
         ToTokens::to_tokens(&**self, s)
     }
 }
+
+impl ToTokens for String {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_ANY, Some(self.as_ref()))
+    }
+}
+
 /* FIXME: does not work, find why
 impl Display for dyn ToTokens {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -205,7 +212,7 @@ pub enum Stmt {
         if_not_exists: bool,
         tbl_name: QualifiedName,
         module_name: Name,
-        args: Option<String>, // TODO smol str
+        args: Option<Vec<String>>, // TODO smol str
     },
     Delete {
         with: Option<With>,
@@ -456,7 +463,7 @@ impl ToTokens for Stmt {
                 module_name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
                 if let Some(args) = args {
-                    s.append(TK_ANY, Some(args))?;
+                    comma(args, s)?;
                 }
                 s.append(TK_RP, None)
             }
@@ -788,7 +795,7 @@ impl Expr {
     }
     pub fn ptr(left: Expr, op: Token, right: Expr) -> Expr {
         let mut ptr = Operator::ArrowRight;
-        if let Some(ref op) = op {
+        if let Some(ref op) = op.1 {
             if op == "->>" {
                 ptr = Operator::ArrowRightShift;
             }
@@ -1083,7 +1090,7 @@ pub enum Literal {
 
 impl Literal {
     pub fn from_ctime_kw(token: Token) -> Literal {
-        if let Some(ref token) = token {
+        if let Some(ref token) = token.1 {
             if "CURRENT_DATE".eq_ignore_ascii_case(token) {
                 Literal::CurrentDate
             } else if "CURRENT_TIME".eq_ignore_ascii_case(token) {
@@ -1126,7 +1133,7 @@ impl LikeOperator {
         if token_type == TK_MATCH as YYCODETYPE {
             return LikeOperator::Match;
         } else if token_type == TK_LIKE_KW as YYCODETYPE {
-            if let Some(ref token) = token {
+            if let Some(ref token) = token.1 {
                 if "LIKE".eq_ignore_ascii_case(token) {
                     return LikeOperator::Like;
                 } else if "GLOB".eq_ignore_ascii_case(token) {
@@ -1626,7 +1633,7 @@ pub enum JoinOperator {
 
 impl JoinOperator {
     pub(crate) fn from_single(token: Token) -> Result<JoinOperator, ParserError> {
-        Ok(if let Some(ref jt) = token {
+        Ok(if let Some(ref jt) = token.1 {
             if "CROSS".eq_ignore_ascii_case(jt) {
                 JoinOperator::TypedJoin {
                     natural: false,
@@ -1668,7 +1675,7 @@ impl JoinOperator {
         })
     }
     pub(crate) fn from_couple(token: Token, name: Name) -> Result<JoinOperator, ParserError> {
-        Ok(if let Some(ref jt) = token {
+        Ok(if let Some(ref jt) = token.1 {
             if "NATURAL".eq_ignore_ascii_case(jt) {
                 let join_type = if "INNER".eq_ignore_ascii_case(&name.0) {
                     JoinType::Inner
@@ -1734,7 +1741,7 @@ impl JoinOperator {
         n1: Name,
         n2: Name,
     ) -> Result<JoinOperator, ParserError> {
-        Ok(if let Some(ref jt) = token {
+        Ok(if let Some(ref jt) = token.1 {
             if "NATURAL".eq_ignore_ascii_case(jt) && "OUTER".eq_ignore_ascii_case(&n2.0) {
                 // If "OUTER" is present then there must also be one of "LEFT", "RIGHT", or "FULL"
                 let join_type = if "LEFT".eq_ignore_ascii_case(&n1.0) {

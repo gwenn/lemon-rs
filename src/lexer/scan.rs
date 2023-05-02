@@ -94,7 +94,8 @@ impl<S: Splitter> Scanner<S> {
     }
 }
 
-type ScanResult<'input, TokenType, Error> = Result<Option<(&'input [u8], TokenType)>, Error>;
+type ScanResult<'input, TokenType, Error> =
+    Result<(usize, Option<(&'input [u8], TokenType)>, usize), Error>;
 
 impl<S: Splitter> Scanner<S> {
     /// Advance the Scanner to next token.
@@ -125,14 +126,15 @@ impl<S: Splitter> Scanner<S> {
                         continue;
                     }
                     Ok((tok, amt)) => {
+                        let start = self.offset;
                         self.consume(data, amt);
-                        return Ok(tok);
+                        return Ok((start, tok, self.offset));
                     }
                 }
             }
             // We cannot generate a token with what we are holding.
             // we are done.
-            return Ok(None);
+            return Ok((self.offset, None, self.offset));
         }
     }
 

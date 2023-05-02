@@ -179,7 +179,7 @@ use smallvec::SmallVec;
 /* The state of the parser is completely contained in an instance of
 ** the following structure */
 #[allow(non_camel_case_types)]
-pub struct yyParser {
+pub struct yyParser<'input> {
     yyidx: usize, /* Index to top element of the stack */
     #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
     yyhwm: usize, /* High-water mark of the stack */
@@ -191,7 +191,7 @@ pub struct yyParser {
 
 use std::cmp::Ordering;
 use std::ops::Neg;
-impl yyParser {
+impl yyParser<'_> {
     fn shift(&self, shift: i8) -> usize {
         assert!(shift <= 1);
         match shift.cmp(&0) {
@@ -225,7 +225,7 @@ impl yyParser {
 }
 
 use std::ops::{Index, IndexMut};
-impl Index<i8> for yyParser {
+impl Index<i8> for yyParser<'_> {
     type Output = yyStackEntry;
 
     fn index(&self, shift: i8) -> &yyStackEntry {
@@ -233,7 +233,7 @@ impl Index<i8> for yyParser {
         &self.yystack[idx]
     }
 }
-impl IndexMut<i8> for yyParser {
+impl IndexMut<i8> for yyParser<'_> {
     fn index_mut(&mut self, shift: i8) -> &mut yyStackEntry {
         let idx = self.shift(shift);
         &mut self.yystack[idx]
@@ -263,7 +263,7 @@ static yyRuleName: [&str; YYNRULE] = [
 ** Try to increase the size of the parser stack.  Return the number
 ** of errors.  Return 0 on success.
 */
-impl yyParser {
+impl yyParser<'_> {
     fn yy_grow_stack_if_needed(&mut self) -> bool {
         if self.yyidx >= self.yystack.capacity() {
             if self.yyGrowStack() {
@@ -316,7 +316,7 @@ impl yyParser {
 
 /* Initialize a new parser.
 */
-impl yyParser {
+impl yyParser<'_> {
     pub fn new(
 %%               /* Optional %extra_context parameter */
     ) -> yyParser {
@@ -337,7 +337,7 @@ impl yyParser {
 /*
 ** Pop the parser's stack once.
 */
-impl yyParser {
+impl yyParser<'_> {
     fn yy_pop_parser_stack(&mut self) {
         use std::mem::take;
         let yytos = take(&mut self.yystack[self.yyidx]);
@@ -356,7 +356,7 @@ impl yyParser {
 /*
 ** Clear all secondary memory allocations from the parser
 */
-impl yyParser {
+impl yyParser<'_> {
     #[allow(non_snake_case)]
     pub fn ParseFinalize(&mut self) {
         while self.yyidx > 0 {
@@ -370,7 +370,7 @@ impl yyParser {
 ** Return the peak depth of the stack for a parser.
 */
 #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
-impl yyParser {
+impl yyParser<'_> {
     #[allow(non_snake_case)]
     pub fn ParseStackPeak(&self) -> usize {
         self.yyhwm
@@ -383,7 +383,7 @@ impl yyParser {
     }
 }
 #[cfg(not(feature = "YYTRACKMAXSTACKDEPTH"))]
-impl yyParser {
+impl yyParser<'_> {
     #[inline]
     fn yyhwm_incr(&mut self) {}
 }
@@ -520,7 +520,7 @@ fn yy_find_reduce_action(
 /*
 ** The following routine is called if the stack overflows.
 */
-impl yyParser {
+impl yyParser<'_> {
     #[allow(non_snake_case)]
     fn yyStackOverflow(&mut self) {
         #[cfg(not(feature = "NDEBUG"))]
@@ -541,7 +541,7 @@ impl yyParser {
 /*
 ** Print tracing information for a SHIFT action
 */
-impl yyParser {
+impl yyParser<'_> {
     #[allow(non_snake_case)]
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE, zTag: &str) {
         #[cfg(not(feature = "NDEBUG"))]
@@ -568,13 +568,13 @@ impl yyParser {
 /*
 ** Perform a shift action.
 */
-impl yyParser {
+impl yyParser<'_> {
     #[allow(non_snake_case)]
     fn yy_shift(
         &mut self,
         mut yyNewState: YYACTIONTYPE,    /* The new state to shift in */
         yyMajor: YYCODETYPE,             /* The major token to shift in */
-        yyMinor: Option<ParseTOKENTYPE>, /* The minor token to shift in */
+        yyMinor: ParseTOKENTYPE, /* The minor token to shift in */
     ) {
         self.yyidx_shift(1);
         self.yyhwm_incr();
@@ -618,12 +618,12 @@ static yyRuleInfoNRhs: [i8; YYNRULE] = [
 ** only called from one place, optimizing compilers will in-line it, which
 ** means that the extra parameters have no performance impact.
 */
-impl yyParser {
+impl yyParser<'_> {
     fn yy_reduce(
         &mut self,
         yyruleno: YYACTIONTYPE,    /* Number of the rule by which to reduce */
         yy_look_ahead: YYCODETYPE, /* Lookahead token, or YYNOCODE if none */
-        yy_lookahead_token: Option<&ParseTOKENTYPE>, /* Value of the lookahead token */
+        yy_lookahead_token: &ParseTOKENTYPE, /* Value of the lookahead token */
     ) -> Result<YYACTIONTYPE, ParseError> {
         let _ = yy_look_ahead;
         let _ = yy_lookahead_token;
@@ -667,7 +667,7 @@ impl yyParser {
 /*
 ** The following code executes when the parse fails
 */
-impl yyParser {
+impl yyParser<'_> {
     #[cfg(not(feature = "YYNOERRORRECOVERY"))]
     fn yy_parse_failed(&mut self) {
         #[cfg(not(feature = "NDEBUG"))]
@@ -690,11 +690,11 @@ impl yyParser {
 /*
 ** The following code executes when a syntax error first occurs.
 */
-impl yyParser {
+impl yyParser<'_> {
     fn yy_syntax_error(
         &mut self,
         yymajor: YYCODETYPE,              /* The major type of the error token */
-        yyminor: Option<&ParseTOKENTYPE>, /* The minor type of the error token */
+        yyminor: &ParseTOKENTYPE, /* The minor type of the error token */
     ) {
         /************ Begin %syntax_error code ****************************************/
 %%
@@ -705,7 +705,7 @@ impl yyParser {
 /*
 ** The following is executed when the parser accepts
 */
-impl yyParser {
+impl yyParser<'_> {
     fn yy_accept(&mut self) {
         #[cfg(not(feature = "NDEBUG"))]
         {
@@ -742,12 +742,12 @@ impl yyParser {
 ** Outputs:
 ** None.
 */
-impl yyParser {
+impl yyParser<'_> {
     #[allow(non_snake_case)]
     pub fn Parse(
         &mut self,
         yymajor: TokenType,                  /* The major token code number */
-        mut yyminor: Option<ParseTOKENTYPE>, /* The value for the token */
+        mut yyminor: ParseTOKENTYPE, /* The value for the token */
     ) -> Result<(), ParseError> {
         let mut yymajor = yymajor as YYCODETYPE;
         //#[cfg(all(not(feature = "YYERRORSYMBOL"), not(feature = "YYNOERRORRECOVERY")))]
@@ -817,7 +817,7 @@ impl yyParser {
                         break;
                     }
                 }
-                yyact = self.yy_reduce(yyruleno, yymajor, yyminor.as_ref())?;
+                yyact = self.yy_reduce(yyruleno, yymajor, &yyminor)?;
             } else if yyact <= YY_MAX_SHIFTREDUCE {
                 self.yy_shift(yyact, yymajor, yyminor.take());
                 if cfg!(not(feature = "YYNOERRORRECOVERY")) {
@@ -855,7 +855,7 @@ impl yyParser {
                      **
                      */
                     if self.yyerrcnt < 0 {
-                        self.yy_syntax_error(yymajor, yyminor.as_ref());
+                        self.yy_syntax_error(yymajor, &yyminor);
                     }
                     let yymx = self[0].major;
                     if yymx == YYERRORSYMBOL || yyerrorhit {
@@ -899,7 +899,7 @@ impl yyParser {
                      ** Applications can set this macro (for example inside %include) if
                      ** they intend to abandon the parse upon the first syntax error seen.
                      */
-                    self.yy_syntax_error(yymajor, yyminor.as_ref());
+                    self.yy_syntax_error(yymajor, &yyminor);
                     break;
                 } else {
                     /* YYERRORSYMBOL is not defined */
@@ -913,7 +913,7 @@ impl yyParser {
                      ** three input tokens have been successfully shifted.
                      */
                     if self.yyerrcnt <= 0 {
-                        self.yy_syntax_error(yymajor, yyminor.as_ref());
+                        self.yy_syntax_error(yymajor, &yyminor);
                     }
                     self.yyerrcnt = 3;
                     if yyendofinput {

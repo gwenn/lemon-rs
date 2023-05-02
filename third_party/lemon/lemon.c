@@ -4054,13 +4054,6 @@ void print_stack_union(
     exit(1);
   }
 
-  char *tokentype = 0;
-  if( lemp->tokentype ){
-    tokentype = (char*)malloc(lemonStrlen(lemp->tokentype) + 9);
-    lemon_sprintf(tokentype, "Option<%s>", lemp->tokentype);
-  }
-
-
   /* Build a hash table of datatypes. The ".dtnum" field of each symbol
   ** is filled in with the hash index plus 1.  A ".dtnum" value of 0 is
   ** used for terminal symbols.  If there is no %default_type defined then
@@ -4085,7 +4078,7 @@ void print_stack_union(
     while( *cp ) stddt[j++] = *cp++;
     while( j>0 && ISSPACE(stddt[j-1]) ) j--;
     stddt[j] = 0;
-    if( tokentype && strcmp(stddt, tokentype)==0 ){
+    if( lemp->tokentype && strcmp(stddt, lemp->tokentype)==0 ){
       sp->dtnum = 0;
       continue;
     }
@@ -4122,7 +4115,7 @@ void print_stack_union(
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
   fprintf(out,"enum YYMINORTYPE {\n"); lineno++;
   fprintf(out,"    yyinit(),\n"); lineno++;
-  fprintf(out,"    yy0(Option<%sTOKENTYPE>),\n",name); lineno++;
+  fprintf(out,"    yy0(%sTOKENTYPE),\n",name); lineno++;
   for(i=0; i<arraysize; i++){
     if( types[i]==0 ) continue;
     fprintf(out,"    yy%d(%s),\n",i+1,types[i]); lineno++;
@@ -4132,7 +4125,6 @@ void print_stack_union(
     fprintf(out,"    yy%d(i32),\n",lemp->errsym->dtnum); lineno++;
   }
   free(stddt);
-  free(tokentype);
   fprintf(out,"}\n"); lineno++;
 
   fprintf(out,"impl Default for YYMINORTYPE {\n"); lineno++;
@@ -4142,7 +4134,7 @@ void print_stack_union(
   fprintf(out,"}\n"); lineno++;
 
   fprintf(out,"impl yyStackEntry {\n"); lineno++;
-  fprintf(out,"    fn yy0(self) -> Option<%sTOKENTYPE> {\n",name); lineno++;
+  fprintf(out,"    fn yy0(self) -> %sTOKENTYPE {\n",name); lineno++;
   fprintf(out,"        if let YYMINORTYPE::yy0(v) = self.minor {\n"); lineno++;
   fprintf(out,"            v\n"); lineno++;
   fprintf(out,"        } else {\n"); lineno++;
@@ -4721,7 +4713,7 @@ void ReportTable(
   /* Generate %extra_context field declaration
   */
   if( lemp->ctx && lemp->ctx[0] ){
-    fprintf(out,"    pub %s,\n",lemp->ctx);  lineno++;
+    fprintf(out,"    pub %s<'input>,\n",lemp->ctx);  lineno++;
   }
   tplt_xfer(lemp->name, in, out, &lineno);
 

@@ -1,5 +1,6 @@
 //! SQLite dialect
 
+use std::fmt::Formatter;
 use std::str;
 use uncased::UncasedStr;
 
@@ -7,38 +8,61 @@ mod token;
 pub use token::TokenType;
 
 /// Token value (lexeme)
-pub type Token = Option<String>;
+pub struct Token(pub usize, pub Option<String>, pub usize);
+
+pub(crate) fn sentinel(start: usize) -> Token {
+    Token(start, None, start)
+}
+
+impl Token {
+    pub fn unwrap(self) -> String {
+        self.1.unwrap()
+    }
+    pub fn take(&mut self) -> Self {
+        Token(self.0, self.1.take(), self.2)
+    }
+}
+
+impl std::fmt::Debug for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Token").field(&self.1).finish()
+    }
+}
 
 impl TokenType {
     // TODO try Cow<&'static, str> (Borrowed<&'static str> for keyword and Owned<String> for below),
     // => Syntax error on keyword will be better
     // => `from_token` will become unnecessary
-    pub fn to_token(self, value: &[u8]) -> Token {
-        match self {
-            TokenType::TK_CTIME_KW => Some(from_bytes(value)),
-            TokenType::TK_JOIN_KW => Some(from_bytes(value)),
-            TokenType::TK_LIKE_KW => Some(from_bytes(value)),
-            TokenType::TK_PTR => Some(from_bytes(value)),
-            // Identifiers
-            TokenType::TK_STRING => Some(from_bytes(value)),
-            TokenType::TK_ID => Some(from_bytes(value)),
-            TokenType::TK_VARIABLE => Some(from_bytes(value)),
-            // Values
-            TokenType::TK_ANY => Some(from_bytes(value)),
-            TokenType::TK_BLOB => Some(from_bytes(value)),
-            TokenType::TK_INTEGER => Some(from_bytes(value)),
-            TokenType::TK_FLOAT => Some(from_bytes(value)),
-            _ => None,
-        }
+    pub(crate) fn to_token(self, start: usize, value: &[u8], end: usize) -> Token {
+        Token(
+            start,
+            match self {
+                TokenType::TK_CTIME_KW => Some(from_bytes(value)),
+                TokenType::TK_JOIN_KW => Some(from_bytes(value)),
+                TokenType::TK_LIKE_KW => Some(from_bytes(value)),
+                TokenType::TK_PTR => Some(from_bytes(value)),
+                // Identifiers
+                TokenType::TK_STRING => Some(from_bytes(value)),
+                TokenType::TK_ID => Some(from_bytes(value)),
+                TokenType::TK_VARIABLE => Some(from_bytes(value)),
+                // Values
+                TokenType::TK_ANY => Some(from_bytes(value)),
+                TokenType::TK_BLOB => Some(from_bytes(value)),
+                TokenType::TK_INTEGER => Some(from_bytes(value)),
+                TokenType::TK_FLOAT => Some(from_bytes(value)),
+                _ => None,
+            },
+            end,
+        )
     }
 }
 
-pub fn from_bytes(bytes: &[u8]) -> String {
+fn from_bytes(bytes: &[u8]) -> String {
     unsafe { str::from_utf8_unchecked(bytes).to_owned() }
 }
 
 include!(concat!(env!("OUT_DIR"), "/keywords.rs"));
-pub const MAX_KEYWORD_LEN: usize = 17;
+pub(crate) const MAX_KEYWORD_LEN: usize = 17;
 
 pub fn keyword_token(word: &[u8]) -> Option<TokenType> {
     KEYWORDS
@@ -46,7 +70,7 @@ pub fn keyword_token(word: &[u8]) -> Option<TokenType> {
         .cloned()
 }
 
-pub fn is_identifier(name: &str) -> bool {
+pub(crate) fn is_identifier(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
@@ -55,11 +79,11 @@ pub fn is_identifier(name: &str) -> bool {
         && (bytes.len() == 1 || bytes[1..].iter().all(|b| is_identifier_continue(*b)))
 }
 
-pub fn is_identifier_start(b: u8) -> bool {
+pub(crate) fn is_identifier_start(b: u8) -> bool {
     b.is_ascii_uppercase() || b == b'_' || b.is_ascii_lowercase() || b > b'\x7F'
 }
 
-pub fn is_identifier_continue(b: u8) -> bool {
+pub(crate) fn is_identifier_continue(b: u8) -> bool {
     b == b'$'
         || b.is_ascii_digit()
         || b.is_ascii_uppercase()
@@ -70,9 +94,9 @@ pub fn is_identifier_continue(b: u8) -> bool {
 
 // keyword may become an identifier
 // see %fallback in parse.y
-pub fn from_token(ty: u16, value: Token) -> String {
+pub(crate) fn from_token(ty: u16, value: Token) -> String {
     use TokenType::*;
-    if let Some(str) = value {
+    if let Some(str) = value.1 {
         return str;
     }
     match ty {
@@ -227,7 +251,6 @@ impl TokenType {
             TK_ANALYZE => Some("ANALYZE"),
             TK_ALWAYS => Some("ALWAYS"),
             TK_AND => Some("AND"),
-            TK_ANY => Some("ANY"),
             TK_AS => Some("AS"),
             TK_ASC => Some("ASC"),
             TK_ATTACH => Some("ATTACH"),
