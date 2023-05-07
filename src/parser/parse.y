@@ -238,17 +238,19 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 //
 %token_class id  ID|INDEXED.
 
-
 // And "ids" is an identifer-or-string.
 //
 %token_class ids  ID|STRING.
 
+// An identifier or a join-keyword
+//
+%token_class idj  ID|INDEXED|JOIN_KW.
+
 // The name of a column or table can be any of the following:
 //
 %type nm {Name}
-nm(A) ::= id(X). { A = Name::from_token(@X, X); }
+nm(A) ::= idj(X). { A = Name::from_token(@X, X); }
 nm(A) ::= STRING(X). { A = Name::from_token(@X, X); }
-nm(A) ::= JOIN_KW(X). { A = Name::from_token(@X, X); }
 
 // A typetoken is really zero or more tokens that form a type name such
 // as can be found after the column name in a CREATE TABLE statement.
@@ -890,8 +892,7 @@ idlist(A) ::= nm(Y).
 
 expr(A) ::= term(A).
 expr(A) ::= LP expr(X) RP. {A = Expr::parenthesized(X);}
-expr(A) ::= id(X).          {A= Expr::id(@X, X); /*A-overwrites-X*/}
-expr(A) ::= JOIN_KW(X).     {A= Expr::id(@X, X); /*A-overwrites-X*/}
+expr(A) ::= idj(X).          {A= Expr::id(@X, X); /*A-overwrites-X*/}
 expr(A) ::= nm(X) DOT nm(Y). {
   A = Expr::Qualified(X, Y); /*A-overwrites-X*/
 }
@@ -916,18 +917,18 @@ expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
 }
 %endif  SQLITE_OMIT_CAST
 
-expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP. {
+expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP. {
   A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, filter_over: None }; /*A-overwrites-X*/
 }
-expr(A) ::= id(X) LP STAR RP. {
+expr(A) ::= idj(X) LP STAR RP. {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: None }; /*A-overwrites-X*/
 }
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
-expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
+expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
   A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, filter_over: Some(Z) }; /*A-overwrites-X*/
 }
-expr(A) ::= id(X) LP STAR RP filter_over(Z). {
+expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: Some(Z) }; /*A-overwrites-X*/
 }
 %endif
