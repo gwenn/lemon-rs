@@ -2,9 +2,11 @@
 use fallible_iterator::FallibleIterator;
 use memchr::memchr;
 
-use crate::dialect::TokenType::*;
-use crate::dialect::{is_identifier_continue, is_identifier_start, keyword_token, sentinel, MAX_KEYWORD_LEN};
 pub use crate::dialect::TokenType;
+use crate::dialect::TokenType::*;
+use crate::dialect::{
+    is_identifier_continue, is_identifier_start, keyword_token, sentinel, MAX_KEYWORD_LEN,
+};
 use crate::parser::ast::Cmd;
 use crate::parser::parse::{yyParser, YYCODETYPE};
 use crate::parser::Context;
