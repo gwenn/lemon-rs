@@ -1,4 +1,6 @@
 [![Build Status](https://github.com/gwenn/lemon-rs/workflows/CI/badge.svg)](https://github.com/gwenn/lemon-rs/actions)
+[![Latest Version](https://img.shields.io/crates/v/sqlite3-parser.svg)](https://crates.io/crates/sqlite3-parser)
+[![Docs](https://docs.rs/sqlite3-parser/badge.svg)](https://docs.rs/sqlite3-parser)
 [![dependency status](https://deps.rs/repo/github/gwenn/lemon-rs/status.svg)](https://deps.rs/repo/github/gwenn/lemon-rs)
 
 [LEMON parser generator](https://www.sqlite.org/src/doc/trunk/doc/lemon.html) modified to generate Rust code.
