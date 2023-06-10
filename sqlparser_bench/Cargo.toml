@@ -6,10 +6,10 @@ edition = "2018"
 
 [dependencies]
 sqlite3-parser = { path = "..", default-features = false, features = ["YYNOERRORRECOVERY"] }
-fallible-iterator = "0.2"
+fallible-iterator = "0.3"
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = "0.5"
 
 [[bench]]
 name = "sqlparser_bench"
