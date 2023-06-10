@@ -28,7 +28,7 @@ fn main() -> Result<()> {
             .success());
     }
 
-    let sql_parser = Path::new("src").join("parser").join("parse.y");
+    let sql_parser = "src/parser/parse.y";
     // run rlemon / generate parser:
     {
         assert!(Command::new(rlemon)
