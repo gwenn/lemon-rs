@@ -231,7 +231,6 @@ impl<'input> FallibleIterator for Parser<'input> {
             return Err(err);
         }
         let cmd = self.parser.ctx.cmd();
-        assert_ne!(cmd, None);
         Ok(cmd)
     }
 }

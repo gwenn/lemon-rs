@@ -77,3 +77,32 @@ fn vtab_args() -> Result<(), Error> {
     assert_eq!(args[1], "body TEXT CHECK(length(body)<10240)");
     Ok(())
 }
+
+#[test]
+fn only_semicolons_no_statements() {
+    let sqls = [
+        "",
+        ";",
+        ";;;",
+    ];
+    for sql in sqls.iter() {
+        let mut parser = Parser::new(sql.as_bytes());
+        assert_eq!(parser.next().unwrap(), None);
+    }
+}
+
+#[test]
+fn extra_semicolons_between_statements() {
+    let sqls = [
+        "SELECT 1; SELECT 2",
+        "SELECT 1; SELECT 2;",
+        "; SELECT 1; SELECT 2",
+        ";; SELECT 1;; SELECT 2;;",
+    ];
+    for sql in sqls.iter() {
+        let mut parser = Parser::new(sql.as_bytes());
+        assert!(matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. }))));
+        assert!(matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. }))));
+        assert_eq!(parser.next().unwrap(), None);
+    }
+}
