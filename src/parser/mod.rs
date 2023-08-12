@@ -10,6 +10,7 @@ pub mod parse {
     #![allow(clippy::absurd_extreme_comparisons)] // FIXME
     #![allow(clippy::needless_return)]
     #![allow(clippy::upper_case_acronyms)]
+    #![allow(clippy::manual_range_patterns)]
 
     include!(concat!(env!("OUT_DIR"), "/parse.rs"));
 }
