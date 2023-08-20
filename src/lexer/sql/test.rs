@@ -58,7 +58,9 @@ fn duplicate_column() {
     let sql = "CREATE TABLE t (x TEXT, x TEXT)";
     let mut parser = Parser::new(sql.as_bytes());
     let r = parser.next();
-    let Error::ParserError(ParserError::Custom(msg),_) = r.unwrap_err() else { panic!("unexpected error type")};
+    let Error::ParserError(ParserError::Custom(msg), _) = r.unwrap_err() else {
+        panic!("unexpected error type")
+    };
     assert!(msg.contains("duplicate column name"));
 }
 
@@ -69,7 +71,18 @@ fn vtab_args() -> Result<(), Error> {
   body TEXT CHECK(length(body)<10240)
 );"#;
     let mut parser = Parser::new(sql.as_bytes());
-    let Cmd::Stmt(Stmt::CreateVirtualTable{tbl_name: QualifiedName{name: Name(tbl_name), ..}, module_name: Name(module_name), args: Some(args), ..}) = parser.next()?.unwrap() else { panic!("unexpected AST")};
+    let Cmd::Stmt(Stmt::CreateVirtualTable {
+        tbl_name: QualifiedName {
+            name: Name(tbl_name),
+            ..
+        },
+        module_name: Name(module_name),
+        args: Some(args),
+        ..
+    }) = parser.next()?.unwrap()
+    else {
+        panic!("unexpected AST")
+    };
     assert_eq!(tbl_name, "mail");
     assert_eq!(module_name, "fts3");
     assert_eq!(args.len(), 2);
@@ -80,11 +93,7 @@ fn vtab_args() -> Result<(), Error> {
 
 #[test]
 fn only_semicolons_no_statements() {
-    let sqls = [
-        "",
-        ";",
-        ";;;",
-    ];
+    let sqls = ["", ";", ";;;"];
     for sql in sqls.iter() {
         let mut parser = Parser::new(sql.as_bytes());
         assert_eq!(parser.next().unwrap(), None);
@@ -101,8 +110,14 @@ fn extra_semicolons_between_statements() {
     ];
     for sql in sqls.iter() {
         let mut parser = Parser::new(sql.as_bytes());
-        assert!(matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. }))));
-        assert!(matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. }))));
+        assert!(matches!(
+            parser.next().unwrap(),
+            Some(Cmd::Stmt(Stmt::Select { .. }))
+        ));
+        assert!(matches!(
+            parser.next().unwrap(),
+            Some(Cmd::Stmt(Stmt::Select { .. }))
+        ));
         assert_eq!(parser.next().unwrap(), None);
     }
 }
