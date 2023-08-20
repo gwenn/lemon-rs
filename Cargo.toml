@@ -23,6 +23,7 @@ YYSTACKDYNAMIC = []
 YYCOVERAGE = []
 NDEBUG = []
 default = ["YYNOERRORRECOVERY"]
+rust_variable = []
 
 [dependencies]
 phf = { version = "0.11", features = ["uncased"] }
