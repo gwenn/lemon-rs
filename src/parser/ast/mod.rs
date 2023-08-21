@@ -1061,8 +1061,6 @@ impl ToTokens for Expr {
                 Some(c) if c == '$' || c == '@' || c == '#' || c == ':' => {
                     s.append(TK_VARIABLE, Some(var))
                 }
-                #[cfg(feature = "rust_variable")]
-                Some(c) if !c.is_ascii_digit() => s.append(TK_VARIABLE, Some(var)),
                 Some(_) => s.append(TK_VARIABLE, Some(&("?".to_owned() + var))),
                 None => s.append(TK_VARIABLE, Some("?")),
             },

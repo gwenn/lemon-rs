@@ -410,14 +410,6 @@ impl Splitter for Tokenizer {
                     Err(Error::UnterminatedBracket(None))
                 }
             }
-            #[cfg(feature = "rust_variable")]
-            b'{' => {
-                if let Some(i) = memchr(b'}', data) {
-                    Ok((Some((&data[1..i], TK_VARIABLE)), i + 1))
-                } else {
-                    Err(Error::UnterminatedBracket(None))
-                }
-            }
             b'?' => {
                 match data.iter().skip(1).position(|&b| !b.is_ascii_digit()) {
                     Some(i) => {
