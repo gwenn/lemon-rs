@@ -15,7 +15,7 @@
 ** The canonical source code to this file ("parse.y") is a Lemon grammar 
 ** file that specifies the input grammar and actions to take while parsing.
 ** That input file is processed by Lemon to generate a C-language 
-** implementation of a parser for the given grammer.  You might be reading
+** implementation of a parser for the given grammar.  You might be reading
 ** this comment as part of the translated C-code.  Edits should be made
 ** to the original parse.y sources.
 */
@@ -209,7 +209,7 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 %wildcard ANY.
 
 // Define operator precedence early so that this is the first occurrence
-// of the operator tokens in the grammer.  Keeping the operators together
+// of the operator tokens in the grammar.  Keeping the operators together
 // causes them to be assigned integer values that are close together,
 // which keeps parser tables smaller.
 //
@@ -918,7 +918,10 @@ expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
 %endif  SQLITE_OMIT_CAST
 
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP. {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, filter_over: None }; /*A-overwrites-X*/
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: None, filter_over: None }; /*A-overwrites-X*/
+}
+expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP. {
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(O), filter_over: None }; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP. {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: None }; /*A-overwrites-X*/
@@ -926,7 +929,10 @@ expr(A) ::= idj(X) LP STAR RP. {
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, filter_over: Some(Z) }; /*A-overwrites-X*/
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: None, filter_over: Some(Z) }; /*A-overwrites-X*/
+}
+expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP filter_over(Z). {
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(O), filter_over: Some(Z) }; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: Some(Z) }; /*A-overwrites-X*/

@@ -723,6 +723,7 @@ pub enum Expr {
         name: Id,
         distinctness: Option<Distinctness>,
         args: Option<Vec<Expr>>,
+        order_by: Option<Vec<SortedColumn>>,
         filter_over: Option<FunctionTail>,
     },
     // Function call expression with '*' as arg
@@ -931,6 +932,7 @@ impl ToTokens for Expr {
                 name,
                 distinctness,
                 args,
+                order_by,
                 filter_over,
             } => {
                 name.to_tokens(s)?;
@@ -940,6 +942,11 @@ impl ToTokens for Expr {
                 }
                 if let Some(args) = args {
                     comma(args, s)?;
+                }
+                if let Some(order_by) = order_by {
+                    s.append(TK_ORDER, None)?;
+                    s.append(TK_BY, None)?;
+                    comma(order_by, s)?;
                 }
                 s.append(TK_RP, None)?;
                 if let Some(filter_over) = filter_over {
