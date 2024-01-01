@@ -8,8 +8,7 @@ use crate::parser::{
 
 #[test]
 fn count_placeholders() -> Result<(), Error> {
-    let sql = "SELECT ? WHERE 1 = ?";
-    let mut parser = Parser::new(sql.as_bytes());
+    let mut parser = Parser::new(b"SELECT ? WHERE 1 = ?");
     let ast = parser.next()?.unwrap();
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
@@ -19,8 +18,7 @@ fn count_placeholders() -> Result<(), Error> {
 
 #[test]
 fn count_numbered_placeholders() -> Result<(), Error> {
-    let sql = "SELECT ?1 WHERE 1 = ?2 AND 0 = ?1";
-    let mut parser = Parser::new(sql.as_bytes());
+    let mut parser = Parser::new(b"SELECT ?1 WHERE 1 = ?2 AND 0 = ?1");
     let ast = parser.next()?.unwrap();
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
@@ -30,8 +28,7 @@ fn count_numbered_placeholders() -> Result<(), Error> {
 
 #[test]
 fn count_unused_placeholders() -> Result<(), Error> {
-    let sql = "SELECT ?1 WHERE 1 = ?3";
-    let mut parser = Parser::new(sql.as_bytes());
+    let mut parser = Parser::new(b"SELECT ?1 WHERE 1 = ?3");
     let ast = parser.next()?.unwrap();
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
@@ -41,8 +38,7 @@ fn count_unused_placeholders() -> Result<(), Error> {
 
 #[test]
 fn count_named_placeholders() -> Result<(), Error> {
-    let sql = "SELECT :x, :y WHERE 1 = :y";
-    let mut parser = Parser::new(sql.as_bytes());
+    let mut parser = Parser::new(b"SELECT :x, :y WHERE 1 = :y");
     let ast = parser.next()?.unwrap();
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
@@ -55,13 +51,28 @@ fn count_named_placeholders() -> Result<(), Error> {
 
 #[test]
 fn duplicate_column() {
-    let sql = "CREATE TABLE t (x TEXT, x TEXT)";
-    let mut parser = Parser::new(sql.as_bytes());
+    let mut parser = Parser::new(b"CREATE TABLE t (x TEXT, x TEXT)");
     let r = parser.next();
     let Error::ParserError(ParserError::Custom(msg), _) = r.unwrap_err() else {
         panic!("unexpected error type")
     };
     assert!(msg.contains("duplicate column name"));
+}
+
+#[test]
+fn create_table_without_column() {
+    let mut parser = Parser::new(b"CREATE TABLE t ()");
+    let r = parser.next();
+    let Error::ParserError(
+        ParserError::SyntaxError {
+            token_type: "RP",
+            found: None,
+        },
+        _,
+    ) = r.unwrap_err()
+    else {
+        panic!("unexpected error type")
+    };
 }
 
 #[test]
