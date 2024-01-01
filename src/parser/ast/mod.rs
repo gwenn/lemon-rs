@@ -154,6 +154,26 @@ impl Display for Cmd {
     }
 }
 
+impl Cmd {
+    /// Like `sqlite3_column_count` but more limited
+    pub fn column_count(&self) -> ColumnCount {
+        match self {
+            Cmd::Explain(_) => ColumnCount::Fixed(8),
+            Cmd::ExplainQueryPlan(_) => ColumnCount::Fixed(4),
+            Cmd::Stmt(stmt) => stmt.column_count(),
+        }
+    }
+
+    /// Like `sqlite3_stmt_readonly`
+    pub fn readonly(&self) -> bool {
+        match self {
+            Cmd::Explain(stmt) => stmt.readonly(),
+            Cmd::ExplainQueryPlan(stmt) => stmt.readonly(),
+            Cmd::Stmt(stmt) => stmt.readonly(),
+        }
+    }
+}
+
 pub(crate) enum ExplainKind {
     Explain,
     QueryPlan,
@@ -687,6 +707,64 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
+        }
+    }
+}
+
+/// Column count
+pub enum ColumnCount {
+    /// With `SELECT *` / EXPLAIN / PRAGMA
+    Dynamic,
+    ///
+    Fixed(usize),
+    /// No column
+    None,
+}
+
+impl ColumnCount {
+    fn incr(&mut self) {
+        if let ColumnCount::Fixed(n) = self {
+            *n += 1;
+        }
+    }
+}
+
+impl Stmt {
+    /// Like `sqlite3_column_count` but more limited
+    pub fn column_count(&self) -> ColumnCount {
+        match self {
+            Stmt::Delete {
+                returning: Some(returning),
+                ..
+            } => column_count(returning),
+            Stmt::Insert {
+                returning: Some(returning),
+                ..
+            } => column_count(returning),
+            Stmt::Pragma(..) => ColumnCount::Dynamic,
+            Stmt::Select(s) => s.body.select.column_count(),
+            Stmt::Update {
+                returning: Some(returning),
+                ..
+            } => column_count(returning),
+            _ => ColumnCount::None,
+        }
+    }
+
+    /// Like `sqlite3_stmt_readonly`
+    pub fn readonly(&self) -> bool {
+        match self {
+            Stmt::Attach { .. } => true,
+            Stmt::Begin(..) => true,
+            Stmt::Commit(..) => true,
+            Stmt::Detach(..) => true,
+            Stmt::Pragma(..) => true, // TODO check all
+            Stmt::Reindex { .. } => true,
+            Stmt::Release(..) => true,
+            Stmt::Rollback { .. } => true,
+            Stmt::Savepoint(..) => true,
+            Stmt::Select(..) => true,
+            _ => false,
         }
     }
 }
@@ -1440,6 +1518,19 @@ impl ToTokens for OneSelect {
     }
 }
 
+impl OneSelect {
+    /// Like `sqlite3_column_count` but more limited
+    pub fn column_count(&self) -> ColumnCount {
+        match self {
+            OneSelect::Select { columns, .. } => column_count(columns),
+            OneSelect::Values(values) => {
+                assert!(!values.is_empty()); // TODO Validate
+                ColumnCount::Fixed(values[0].len())
+            }
+        }
+    }
+}
+
 // https://sqlite.org/syntax/join-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FromClause {
@@ -1536,6 +1627,26 @@ impl ToTokens for ResultColumn {
             }
         }
     }
+}
+
+impl ResultColumn {
+    fn column_count(&self) -> ColumnCount {
+        match self {
+            ResultColumn::Expr(..) => ColumnCount::Fixed(1),
+            _ => ColumnCount::Dynamic,
+        }
+    }
+}
+fn column_count(cols: &[ResultColumn]) -> ColumnCount {
+    assert!(!cols.is_empty());
+    let mut count = ColumnCount::Fixed(0);
+    for col in cols {
+        match col.column_count() {
+            ColumnCount::Fixed(_) => count.incr(),
+            _ => return ColumnCount::Dynamic,
+        }
+    }
+    count
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
