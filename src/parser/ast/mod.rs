@@ -155,6 +155,15 @@ impl Display for Cmd {
 }
 
 impl Cmd {
+    /// Statement accessor
+    pub fn stmt(&self) -> &Stmt {
+        match self {
+            Cmd::Explain(stmt) => stmt,
+            Cmd::ExplainQueryPlan(stmt) => stmt,
+            Cmd::Stmt(stmt) => stmt,
+        }
+    }
+
     /// Like `sqlite3_column_count` but more limited
     pub fn column_count(&self) -> ColumnCount {
         match self {
@@ -166,11 +175,12 @@ impl Cmd {
 
     /// Like `sqlite3_stmt_readonly`
     pub fn readonly(&self) -> bool {
-        match self {
-            Cmd::Explain(stmt) => stmt.readonly(),
-            Cmd::ExplainQueryPlan(stmt) => stmt.readonly(),
-            Cmd::Stmt(stmt) => stmt.readonly(),
-        }
+        self.stmt().readonly()
+    }
+
+    /// check for extra rules
+    pub fn check(&self) -> Result<(), ParserError> {
+        self.stmt().check()
     }
 }
 
@@ -765,6 +775,38 @@ impl Stmt {
             Stmt::Savepoint(..) => true,
             Stmt::Select(..) => true,
             _ => false,
+        }
+    }
+
+    /// check for extra rules
+    pub fn check(&self) -> Result<(), ParserError> {
+        match self {
+            Stmt::CreateTable { body, .. } => Ok(()), // TODO ...
+            Stmt::CreateView {
+                columns: Some(columns),
+                select,
+                ..
+            } => {
+                match select.body.select.column_count() {
+                    ColumnCount::Fixed(n) if n != columns.len() => Err(ParserError::Custom(
+                        format!("incoherent column numbers {} <> {}", columns.len(), n),
+                    )), // TODO find original SQLite error msg
+                    _ => Ok(()),
+                }
+            }
+            Stmt::Insert {
+                columns: Some(columns),
+                body: InsertBody::Select(select, ..),
+                ..
+            } => {
+                match select.body.select.column_count() {
+                    ColumnCount::Fixed(n) if n != columns.len() => Err(ParserError::Custom(
+                        format!("incoherent column numbers {} <> {}", columns.len(), n),
+                    )), // TODO find original SQLite error msg
+                    _ => Ok(()),
+                }
+            }
+            _ => Ok(()),
         }
     }
 }
