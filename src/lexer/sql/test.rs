@@ -143,3 +143,14 @@ fn insert_mismatch_count() {
         panic!("unexpected error type")
     };
 }
+
+#[test]
+fn create_view_mismatch_count() {
+    let mut parser = Parser::new(b"CREATE VIEW v (c1, c2) AS SELECT 1");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(msg, "expected 2 columns for v but got 1");
+    } else {
+        panic!("unexpected error type")
+    };
+}

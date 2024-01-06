@@ -783,14 +783,20 @@ impl Stmt {
         match self {
             Stmt::CreateTable { body, .. } => Ok(()), // TODO ...
             Stmt::CreateView {
+                view_name,
                 columns: Some(columns),
                 select,
                 ..
             } => {
                 match select.body.select.column_count() {
-                    ColumnCount::Fixed(n) if n != columns.len() => Err(ParserError::Custom(
-                        format!("incoherent column numbers {} <> {}", columns.len(), n),
-                    )), // TODO find original SQLite error msg
+                    ColumnCount::Fixed(n) if n != columns.len() => {
+                        Err(ParserError::Custom(format!(
+                            "expected {} columns for {} but got {}",
+                            columns.len(),
+                            view_name,
+                            n
+                        )))
+                    }
                     _ => Ok(()),
                 }
             }
@@ -2023,6 +2029,11 @@ impl ToTokens for QualifiedName {
             alias.to_tokens(s)?;
         }
         Ok(())
+    }
+}
+impl Display for QualifiedName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.to_fmt(f)
     }
 }
 
