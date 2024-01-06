@@ -231,6 +231,9 @@ impl<'input> FallibleIterator for Parser<'input> {
             return Err(err);
         }
         let cmd = self.parser.ctx.cmd();
+        if let Some(ref cmd) = cmd {
+            cmd.check()?;
+        }
         Ok(cmd)
     }
 }

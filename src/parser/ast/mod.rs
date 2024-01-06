@@ -801,8 +801,8 @@ impl Stmt {
             } => {
                 match select.body.select.column_count() {
                     ColumnCount::Fixed(n) if n != columns.len() => Err(ParserError::Custom(
-                        format!("incoherent column numbers {} <> {}", columns.len(), n),
-                    )), // TODO find original SQLite error msg
+                        format!("{} values for {} columns", n, columns.len()),
+                    )),
                     _ => Ok(()),
                 }
             }
