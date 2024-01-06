@@ -781,25 +781,21 @@ impl Stmt {
     /// check for extra rules
     pub fn check(&self) -> Result<(), ParserError> {
         match self {
-            Stmt::CreateTable { body, .. } => Ok(()), // TODO ...
+            Stmt::CreateTable { body, .. } => body.check(),
             Stmt::CreateView {
                 view_name,
                 columns: Some(columns),
                 select,
                 ..
-            } => {
-                match select.body.select.column_count() {
-                    ColumnCount::Fixed(n) if n != columns.len() => {
-                        Err(ParserError::Custom(format!(
-                            "expected {} columns for {} but got {}",
-                            columns.len(),
-                            view_name,
-                            n
-                        )))
-                    }
-                    _ => Ok(()),
-                }
-            }
+            } => match select.body.select.column_count() {
+                ColumnCount::Fixed(n) if n != columns.len() => Err(ParserError::Custom(format!(
+                    "expected {} columns for {} but got {}",
+                    columns.len(),
+                    view_name,
+                    n
+                ))),
+                _ => Ok(()),
+            },
             Stmt::Insert {
                 columns: Some(columns),
                 body: InsertBody::Select(select, ..),
@@ -2097,6 +2093,28 @@ impl CreateTableBody {
             constraints,
             options,
         })
+    }
+
+    /// check for extra rules
+    pub fn check(&self) -> Result<(), ParserError> {
+        if let CreateTableBody::ColumnsAndConstraints {
+            columns,
+            constraints,
+            options,
+        } = self
+        {
+            // TODO columns.constraints : check no duplicate names
+            // TODO constraints: check no duplicated names, use only valid column names
+            if options.contains(TableOptions::STRICT) {
+                // TODO check columns type
+                // Every column definition must specify a datatype for that column. The freedom to specify a column without a datatype is removed.
+                // The datatype must be one of following: INT INTEGER REAL TEXT BLOB ANY
+            }
+            if options.contains(TableOptions::WITHOUT_ROWID) {
+                // TODO Every WITHOUT ROWID table must have a PRIMARY KEY.
+            }
+        }
+        Ok(())
     }
 }
 
