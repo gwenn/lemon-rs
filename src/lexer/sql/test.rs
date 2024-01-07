@@ -1,8 +1,9 @@
 use fallible_iterator::FallibleIterator;
 
 use super::{Error, Parser};
+use crate::parser::ast::fmt::ToTokens;
 use crate::parser::{
-    ast::{Cmd, Name, ParameterInfo, QualifiedName, Stmt, ToTokens},
+    ast::{Cmd, Name, ParameterInfo, QualifiedName, Stmt},
     ParserError,
 };
 
