@@ -148,15 +148,25 @@ impl CreateTableBody {
             // TODO columns.constraints : check no duplicate names
             // TODO constraints: check no duplicated names, use only valid column names
             if options.contains(TableOptions::STRICT) {
-                // TODO check columns type
-                // Every column definition must specify a datatype for that column. The freedom to specify a column without a datatype is removed.
-                // The datatype must be one of following: INT INTEGER REAL TEXT BLOB ANY
                 for c in columns {
                     match &c.col_type {
-                        Some(Type { name, .. })
-                            if name.eq_ignore_ascii_case("INT")
-                                || name.eq_ignore_ascii_case("INTEGER") => {}
+                        Some(Type { name, .. }) => {
+                            // The datatype must be one of following: INT INTEGER REAL TEXT BLOB ANY
+                            if !(name.eq_ignore_ascii_case("INT")
+                                || name.eq_ignore_ascii_case("INTEGER")
+                                || name.eq_ignore_ascii_case("REAL")
+                                || name.eq_ignore_ascii_case("TEXT")
+                                || name.eq_ignore_ascii_case("BLOB")
+                                || name.eq_ignore_ascii_case("ANY"))
+                            {
+                                return Err(ParserError::Custom(format!(
+                                    "unknown datatype for {}.{}: \"{}\"",
+                                    tbl_name, c.col_name, name
+                                )));
+                            }
+                        }
                         _ => {
+                            // Every column definition must specify a datatype for that column. The freedom to specify a column without a datatype is removed.
                             return Err(ParserError::Custom(format!(
                                 "missing datatype for {}.{}",
                                 tbl_name, c.col_name

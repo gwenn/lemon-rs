@@ -177,3 +177,25 @@ fn create_table_without_rowid_missing_pk() {
         panic!("unexpected error type")
     };
 }
+
+#[test]
+fn create_table_strict_missing_datatype() {
+    let mut parser = Parser::new(b"CREATE TABLE tbl (c1) STRICT");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(msg, "missing datatype for tbl.c1");
+    } else {
+        panic!("unexpected error type")
+    };
+}
+
+#[test]
+fn create_table_strict_unknown_datatype() {
+    let mut parser = Parser::new(b"CREATE TABLE tbl (c1 BOOL) STRICT");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(msg, "unknown datatype for tbl.c1: \"BOOL\"");
+    } else {
+        panic!("unexpected error type")
+    };
+}
