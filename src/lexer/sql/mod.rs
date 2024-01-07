@@ -232,7 +232,10 @@ impl<'input> FallibleIterator for Parser<'input> {
         }
         let cmd = self.parser.ctx.cmd();
         if let Some(ref cmd) = cmd {
-            cmd.check()?;
+            if let Err(e) = cmd.check() {
+                let err = Error::ParserError(e, Some((self.scanner.line(), self.scanner.column())));
+                return Err(err);
+            }
         }
         Ok(cmd)
     }
