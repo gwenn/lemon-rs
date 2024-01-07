@@ -154,3 +154,25 @@ fn create_view_mismatch_count() {
         panic!("unexpected error type")
     };
 }
+
+#[test]
+fn create_view_duplicate_column_name() {
+    let mut parser = Parser::new(b"CREATE VIEW v (c1, c1) AS SELECT 1, 2");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(msg, "duplicate column name: c1");
+    } else {
+        panic!("unexpected error type")
+    };
+}
+
+#[test]
+fn create_table_without_rowid_missing_pk() {
+    let mut parser = Parser::new(b"CREATE TABLE tbl (c1) WITHOUT ROWID");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(msg, "PRIMARY KEY missing on table tbl");
+    } else {
+        panic!("unexpected error type")
+    };
+}

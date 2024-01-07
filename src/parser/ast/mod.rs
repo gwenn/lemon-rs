@@ -781,21 +781,37 @@ impl Stmt {
     /// check for extra rules
     pub fn check(&self) -> Result<(), ParserError> {
         match self {
-            Stmt::CreateTable { body, .. } => body.check(),
+            Stmt::CreateTable { tbl_name, body, .. } => body.check(tbl_name),
             Stmt::CreateView {
                 view_name,
                 columns: Some(columns),
                 select,
                 ..
-            } => match select.body.select.column_count() {
-                ColumnCount::Fixed(n) if n != columns.len() => Err(ParserError::Custom(format!(
-                    "expected {} columns for {} but got {}",
-                    columns.len(),
-                    view_name,
-                    n
-                ))),
-                _ => Ok(()),
-            },
+            } => {
+                // SQLite3 engine renames duplicates:
+                for (i, c) in columns.iter().enumerate() {
+                    for o in &columns[i + 1..] {
+                        if c.col_name == o.col_name {
+                            return Err(ParserError::Custom(format!(
+                                "duplicate column name: {}",
+                                c.col_name,
+                            )));
+                        }
+                    }
+                }
+                // SQLite3 engine raises this error later (not while parsing):
+                match select.body.select.column_count() {
+                    ColumnCount::Fixed(n) if n != columns.len() => {
+                        Err(ParserError::Custom(format!(
+                            "expected {} columns for {} but got {}",
+                            columns.len(),
+                            view_name,
+                            n
+                        )))
+                    }
+                    _ => Ok(()),
+                }
+            }
             Stmt::Insert {
                 columns: Some(columns),
                 body: InsertBody::Select(select, ..),
@@ -2096,7 +2112,7 @@ impl CreateTableBody {
     }
 
     /// check for extra rules
-    pub fn check(&self) -> Result<(), ParserError> {
+    pub fn check(&self, tbl_name: &QualifiedName) -> Result<(), ParserError> {
         if let CreateTableBody::ColumnsAndConstraints {
             columns,
             constraints,
@@ -2110,11 +2126,40 @@ impl CreateTableBody {
                 // Every column definition must specify a datatype for that column. The freedom to specify a column without a datatype is removed.
                 // The datatype must be one of following: INT INTEGER REAL TEXT BLOB ANY
             }
-            if options.contains(TableOptions::WITHOUT_ROWID) {
-                // TODO Every WITHOUT ROWID table must have a PRIMARY KEY.
+            if options.contains(TableOptions::WITHOUT_ROWID) && !self.has_primary_key() {
+                return Err(ParserError::Custom(format!(
+                    "PRIMARY KEY missing on table {}",
+                    tbl_name,
+                )));
             }
         }
         Ok(())
+    }
+
+    /// explicit primary key constraint ?
+    pub fn has_primary_key(&self) -> bool {
+        if let CreateTableBody::ColumnsAndConstraints {
+            columns,
+            constraints,
+            ..
+        } = self
+        {
+            for col in columns {
+                for c in &col.constraints {
+                    if let ColumnConstraint::PrimaryKey { .. } = c.constraint {
+                        return true;
+                    }
+                }
+            }
+            if let Some(constraints) = constraints {
+                for c in constraints {
+                    if let TableConstraint::PrimaryKey { .. } = c.constraint {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 }
 
