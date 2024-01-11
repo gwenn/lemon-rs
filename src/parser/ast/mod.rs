@@ -807,7 +807,7 @@ pub struct ColumnDefinition {
 impl ColumnDefinition {
     pub fn add_column(
         columns: &mut Vec<ColumnDefinition>,
-        cd: ColumnDefinition,
+        mut cd: ColumnDefinition,
     ) -> Result<(), ParserError> {
         if columns
             .iter()
@@ -817,6 +817,32 @@ impl ColumnDefinition {
                 "duplicate column name: {}",
                 cd.col_name
             )));
+        }
+        // https://github.com/sqlite/sqlite/blob/e452bf40a14aca57fd9047b330dff282f3e4bbcc/src/build.c#L1511-L1514
+        if let Some(ref mut col_type) = cd.col_type {
+            let mut split = col_type.name.split_ascii_whitespace();
+            let truncate = if split
+                .next_back()
+                .map_or(false, |s| s.eq_ignore_ascii_case("ALWAYS"))
+                && split
+                    .next_back()
+                    .map_or(false, |s| s.eq_ignore_ascii_case("GENERATED"))
+            {
+                let mut generated = false;
+                for constraint in &cd.constraints {
+                    if let ColumnConstraint::Generated { .. } = constraint.constraint {
+                        generated = true;
+                        break;
+                    }
+                }
+                generated
+            } else {
+                false
+            };
+            if truncate {
+                // str_split_whitespace_remainder
+                col_type.name = split.collect(); // FIXME join(' ')
+            }
         }
         columns.push(cd);
         Ok(())
