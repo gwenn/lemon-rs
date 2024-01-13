@@ -516,7 +516,7 @@ selectnowith(A) ::= oneselect(X). {
 %ifndef SQLITE_OMIT_COMPOUND_SELECT
 selectnowith(A) ::= selectnowith(A) multiselect_op(Y) oneselect(Z).  {
   let cs = CompoundSelect{ operator: Y, select: Z };
-  A.push(cs);
+  A.push(cs)?;
 }
 %type multiselect_op {CompoundOperator}
 multiselect_op(A) ::= UNION.             {A = CompoundOperator::Union;}

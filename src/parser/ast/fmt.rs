@@ -872,6 +872,12 @@ impl ToTokens for CompoundOperator {
     }
 }
 
+impl Display for CompoundOperator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.to_fmt(f)
+    }
+}
+
 impl ToTokens for OneSelect {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {

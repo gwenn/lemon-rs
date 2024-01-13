@@ -497,12 +497,24 @@ pub struct SelectBody {
 }
 
 impl SelectBody {
-    pub(crate) fn push(&mut self, cs: CompoundSelect) {
+    pub(crate) fn push(&mut self, cs: CompoundSelect) -> Result<(), ParserError> {
+        use crate::ast::check::ColumnCount;
+        if let ColumnCount::Fixed(n) = self.select.column_count() {
+            if let ColumnCount::Fixed(m) = cs.select.column_count() {
+                if n != m {
+                    return Err(ParserError::Custom(format!(
+                        "SELECTs to the left and right of {} do not have the same number of result columns",
+                        cs.operator
+                    )));
+                }
+            }
+        }
         if let Some(ref mut v) = self.compounds {
             v.push(cs);
         } else {
             self.compounds = Some(vec![cs]);
         }
+        Ok(())
     }
 }
 

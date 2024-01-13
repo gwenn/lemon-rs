@@ -224,3 +224,17 @@ fn create_strict_table_generated_column() {
     let r = parser.next();
     r.unwrap();
 }
+
+#[test]
+fn selects_compound_mismatch_columns_count() {
+    let mut parser = Parser::new(b"SELECT 1 UNION SELECT 1, 2");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(
+            msg,
+            "SELECTs to the left and right of UNION do not have the same number of result columns"
+        );
+    } else {
+        panic!("unexpected error type")
+    };
+}
