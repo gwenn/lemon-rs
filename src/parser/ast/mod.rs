@@ -841,7 +841,8 @@ impl ColumnDefinition {
             };
             if truncate {
                 // str_split_whitespace_remainder
-                col_type.name = split.collect(); // FIXME join(' ')
+                let new_type: Vec<&str> = split.collect();
+                col_type.name = new_type.join(" ");
             }
         }
         columns.push(cd);

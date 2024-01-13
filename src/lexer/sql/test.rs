@@ -179,7 +179,7 @@ fn create_table_without_rowid_missing_pk() {
 }
 
 #[test]
-fn create_table_strict_missing_datatype() {
+fn create_strict_table_missing_datatype() {
     let mut parser = Parser::new(b"CREATE TABLE tbl (c1) STRICT");
     let r = parser.next();
     if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
@@ -190,7 +190,7 @@ fn create_table_strict_missing_datatype() {
 }
 
 #[test]
-fn create_table_strict_unknown_datatype() {
+fn create_strict_table_unknown_datatype() {
     let mut parser = Parser::new(b"CREATE TABLE tbl (c1 BOOL) STRICT");
     let r = parser.next();
     if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
@@ -198,4 +198,18 @@ fn create_table_strict_unknown_datatype() {
     } else {
         panic!("unexpected error type")
     };
+}
+
+#[test]
+fn create_strict_table_generated_column() {
+    let mut parser = Parser::new(
+        b"CREATE TABLE IF NOT EXISTS transactions (
+      debit REAL,
+      credit REAL,
+      amount REAL GENERATED ALWAYS AS (ifnull(credit, 0.0) -ifnull(debit, 0.0))
+  ) STRICT;
+",
+    );
+    let r = parser.next();
+    r.unwrap();
 }
