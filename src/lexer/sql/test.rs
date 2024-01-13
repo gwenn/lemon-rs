@@ -146,6 +146,17 @@ fn insert_mismatch_count() {
 }
 
 #[test]
+fn insert_default_values() {
+    let mut parser = Parser::new(b"INSERT INTO tbl (a) DEFAULT VALUES");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(msg, "0 values for 1 columns");
+    } else {
+        panic!("unexpected error type")
+    };
+}
+
+#[test]
 fn create_view_mismatch_count() {
     let mut parser = Parser::new(b"CREATE VIEW v (c1, c2) AS SELECT 1");
     let r = parser.next();

@@ -131,6 +131,14 @@ impl Stmt {
                     _ => Ok(()),
                 }
             }
+            Stmt::Insert {
+                columns: Some(columns),
+                body: InsertBody::DefaultValues,
+                ..
+            } => Err(ParserError::Custom(format!(
+                "0 values for {} columns",
+                columns.len()
+            ))),
             _ => Ok(()),
         }
     }
