@@ -547,7 +547,7 @@ values(A) ::= VALUES LP nexprlist(X) RP. {
 }
 values(A) ::= values(A) COMMA LP nexprlist(Y) RP. {
   let exprs = Y;
-  A.push(exprs);
+  OneSelect::push(A, exprs)?;
 }
 
 // The "distinct" nonterminal is true (1) if the DISTINCT keyword is

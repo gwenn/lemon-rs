@@ -59,7 +59,7 @@ impl Stmt {
                 ..
             } => column_count(returning),
             Stmt::Pragma(..) => ColumnCount::Dynamic,
-            Stmt::Select(s) => s.body.select.column_count(),
+            Stmt::Select(s) => s.column_count(),
             Stmt::Update {
                 returning: Some(returning),
                 ..
@@ -107,7 +107,7 @@ impl Stmt {
                     }
                 }
                 // SQLite3 engine raises this error later (not while parsing):
-                match select.body.select.column_count() {
+                match select.column_count() {
                     ColumnCount::Fixed(n) if n != columns.len() => {
                         Err(ParserError::Custom(format!(
                             "expected {} columns for {} but got {}",
@@ -227,6 +227,13 @@ impl CreateTableBody {
     }
 }
 
+impl Select {
+    /// Like `sqlite3_column_count` but more limited
+    pub fn column_count(&self) -> ColumnCount {
+        self.body.select.column_count()
+    }
+}
+
 impl OneSelect {
     /// Like `sqlite3_column_count` but more limited
     pub fn column_count(&self) -> ColumnCount {
@@ -237,6 +244,15 @@ impl OneSelect {
                 ColumnCount::Fixed(values[0].len())
             }
         }
+    }
+
+    pub fn push(values: &mut [Vec<Expr>], v: Vec<Expr>) -> Result<(), ParserError> {
+        if values[0].len() != v.len() {
+            return Err(ParserError::Custom(
+                "all VALUES must have the same number of terms".to_owned(),
+            ));
+        }
+        Ok(())
     }
 }
 

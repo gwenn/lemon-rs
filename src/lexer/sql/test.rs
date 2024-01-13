@@ -249,3 +249,14 @@ fn update_order_by_without_limit() {
         panic!("unexpected error type")
     };
 }
+
+#[test]
+fn values_mismatch_columns_count() {
+    let mut parser = Parser::new(b"INSERT INTO test VALUES (1), (1,2)");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(msg, "all VALUES must have the same number of terms");
+    } else {
+        panic!("unexpected error type")
+    };
+}
