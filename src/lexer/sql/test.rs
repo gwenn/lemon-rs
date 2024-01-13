@@ -238,3 +238,14 @@ fn selects_compound_mismatch_columns_count() {
         panic!("unexpected error type")
     };
 }
+
+#[test]
+fn update_order_by_without_limit() {
+    let mut parser = Parser::new(b"UPDATE test SET data = 1 ORDER BY data");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(msg, "ORDER BY without LIMIT on UPDATE");
+    } else {
+        panic!("unexpected error type")
+    };
+}

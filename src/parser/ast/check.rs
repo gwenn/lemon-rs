@@ -139,6 +139,13 @@ impl Stmt {
                 "0 values for {} columns",
                 columns.len()
             ))),
+            Stmt::Update {
+                order_by: Some(_),
+                limit: None,
+                ..
+            } => Err(ParserError::Custom(
+                "ORDER BY without LIMIT on UPDATE".to_owned(),
+            )),
             _ => Ok(()),
         }
     }
