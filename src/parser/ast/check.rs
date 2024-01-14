@@ -94,6 +94,8 @@ impl Stmt {
                         return Err(ParserError::Custom(
                             "Cannot add a PRIMARY KEY column".to_owned(),
                         ));
+                    } else if let ColumnConstraint::Unique(..) = c {
+                        return Err(ParserError::Custom("Cannot add a UNIQUE column".to_owned()));
                     }
                 }
                 Ok(())
