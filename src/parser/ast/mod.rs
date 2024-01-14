@@ -9,6 +9,7 @@ use std::str::FromStr;
 use fmt::{ToTokens, TokenStream};
 use indexmap::IndexSet;
 
+use crate::custom_err;
 use crate::dialect::TokenType::{self, *};
 use crate::dialect::{from_token, is_identifier, Token};
 use crate::parser::{parse::YYCODETYPE, ParserError};
@@ -502,10 +503,10 @@ impl SelectBody {
         if let ColumnCount::Fixed(n) = self.select.column_count() {
             if let ColumnCount::Fixed(m) = cs.select.column_count() {
                 if n != m {
-                    return Err(ParserError::Custom(format!(
+                    return Err(custom_err!(
                         "SELECTs to the left and right of {} do not have the same number of result columns",
                         cs.operator
-                    )));
+                    ));
                 }
             }
         }
@@ -648,10 +649,12 @@ impl JoinOperator {
             if (jt & (JoinType::INNER | JoinType::OUTER)) == (JoinType::INNER | JoinType::OUTER)
                 || (jt & (JoinType::OUTER | JoinType::LEFT | JoinType::RIGHT)) == JoinType::OUTER
             {
-                return Err(ParserError::Custom(format!(
+                return Err(custom_err!(
                     "unsupported JOIN type: {} {:?} {:?}",
-                    t, n1, n2
-                )));
+                    t,
+                    n1,
+                    n2
+                ));
             }
             JoinOperator::TypedJoin(Some(jt))
         } else {
@@ -694,7 +697,7 @@ impl TryFrom<&str> for JoinType {
         } else if "OUTER".eq_ignore_ascii_case(s) {
             Ok(JoinType::OUTER)
         } else {
-            Err(ParserError::Custom(format!("unsupported JOIN type: {}", s)))
+            Err(custom_err!("unsupported JOIN type: {}", s))
         }
     }
 }
@@ -825,10 +828,8 @@ impl ColumnDefinition {
             .iter()
             .any(|c| c.col_name.0.eq_ignore_ascii_case(&cd.col_name.0))
         {
-            return Err(ParserError::Custom(format!(
-                "duplicate column name: {}",
-                cd.col_name
-            )));
+            // TODO unquote
+            return Err(custom_err!("duplicate column name: {}", cd.col_name));
         }
         // https://github.com/sqlite/sqlite/blob/e452bf40a14aca57fd9047b330dff282f3e4bbcc/src/build.c#L1511-L1514
         if let Some(ref mut col_type) = cd.col_type {
@@ -1119,10 +1120,7 @@ impl CommonTableExpr {
             .iter()
             .any(|c| c.tbl_name.0.eq_ignore_ascii_case(&cte.tbl_name.0))
         {
-            return Err(ParserError::Custom(format!(
-                "duplicate WITH table name: {}",
-                cte.tbl_name
-            )));
+            return Err(custom_err!("duplicate WITH table name: {}", cte.tbl_name));
         }
         ctes.push(cte);
         Ok(())

@@ -45,6 +45,19 @@ impl std::fmt::Display for ParserError {
 
 impl std::error::Error for ParserError {}
 
+#[macro_export]
+macro_rules! custom_err {
+    ($msg:literal $(,)?) => {
+        $crate::parser::ParserError::Custom($msg.to_owned())
+    };
+    ($err:expr $(,)?) => {
+        $crate::parser::ParserError::Custom(format!($err))
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        $crate::parser::ParserError::Custom(format!($fmt, $($arg)*))
+    };
+}
+
 /// Parser context
 pub struct Context<'input> {
     input: &'input [u8],

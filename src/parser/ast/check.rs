@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::custom_err;
 use std::fmt::{Display, Formatter};
 
 impl Cmd {
@@ -91,11 +92,9 @@ impl Stmt {
             Stmt::AlterTable(.., AlterTableBody::AddColumn(cd)) => {
                 for c in cd {
                     if let ColumnConstraint::PrimaryKey { .. } = c {
-                        return Err(ParserError::Custom(
-                            "Cannot add a PRIMARY KEY column".to_owned(),
-                        ));
+                        return Err(custom_err!("Cannot add a PRIMARY KEY column"));
                     } else if let ColumnConstraint::Unique(..) = c {
-                        return Err(ParserError::Custom("Cannot add a UNIQUE column".to_owned()));
+                        return Err(custom_err!("Cannot add a UNIQUE column"));
                     }
                 }
                 Ok(())
@@ -111,23 +110,18 @@ impl Stmt {
                 for (i, c) in columns.iter().enumerate() {
                     for o in &columns[i + 1..] {
                         if c.col_name == o.col_name {
-                            return Err(ParserError::Custom(format!(
-                                "duplicate column name: {}",
-                                c.col_name,
-                            )));
+                            return Err(custom_err!("duplicate column name: {}", c.col_name,));
                         }
                     }
                 }
                 // SQLite3 engine raises this error later (not while parsing):
                 match select.column_count() {
-                    ColumnCount::Fixed(n) if n != columns.len() => {
-                        Err(ParserError::Custom(format!(
-                            "expected {} columns for {} but got {}",
-                            columns.len(),
-                            view_name,
-                            n
-                        )))
-                    }
+                    ColumnCount::Fixed(n) if n != columns.len() => Err(custom_err!(
+                        "expected {} columns for {} but got {}",
+                        columns.len(),
+                        view_name,
+                        n
+                    )),
                     _ => Ok(()),
                 }
             }
@@ -135,29 +129,22 @@ impl Stmt {
                 columns: Some(columns),
                 body: InsertBody::Select(select, ..),
                 ..
-            } => {
-                match select.body.select.column_count() {
-                    ColumnCount::Fixed(n) if n != columns.len() => Err(ParserError::Custom(
-                        format!("{} values for {} columns", n, columns.len()),
-                    )),
-                    _ => Ok(()),
+            } => match select.body.select.column_count() {
+                ColumnCount::Fixed(n) if n != columns.len() => {
+                    Err(custom_err!("{} values for {} columns", n, columns.len()))
                 }
-            }
+                _ => Ok(()),
+            },
             Stmt::Insert {
                 columns: Some(columns),
                 body: InsertBody::DefaultValues,
                 ..
-            } => Err(ParserError::Custom(format!(
-                "0 values for {} columns",
-                columns.len()
-            ))),
+            } => Err(custom_err!("0 values for {} columns", columns.len())),
             Stmt::Update {
                 order_by: Some(_),
                 limit: None,
                 ..
-            } => Err(ParserError::Custom(
-                "ORDER BY without LIMIT on UPDATE".to_owned(),
-            )),
+            } => Err(custom_err!("ORDER BY without LIMIT on UPDATE")),
             _ => Ok(()),
         }
     }
@@ -186,27 +173,27 @@ impl CreateTableBody {
                                 || name.eq_ignore_ascii_case("BLOB")
                                 || name.eq_ignore_ascii_case("ANY"))
                             {
-                                return Err(ParserError::Custom(format!(
+                                return Err(custom_err!(
                                     "unknown datatype for {}.{}: \"{}\"",
-                                    tbl_name, c.col_name, name
-                                )));
+                                    tbl_name,
+                                    c.col_name,
+                                    name
+                                ));
                             }
                         }
                         _ => {
                             // Every column definition must specify a datatype for that column. The freedom to specify a column without a datatype is removed.
-                            return Err(ParserError::Custom(format!(
+                            return Err(custom_err!(
                                 "missing datatype for {}.{}",
-                                tbl_name, c.col_name
-                            )));
+                                tbl_name,
+                                c.col_name
+                            ));
                         }
                     }
                 }
             }
             if options.contains(TableOptions::WITHOUT_ROWID) && !self.has_primary_key() {
-                return Err(ParserError::Custom(format!(
-                    "PRIMARY KEY missing on table {}",
-                    tbl_name,
-                )));
+                return Err(custom_err!("PRIMARY KEY missing on table {}", tbl_name,));
             }
         }
         Ok(())
@@ -272,9 +259,7 @@ impl OneSelect {
 
     pub fn push(values: &mut [Vec<Expr>], v: Vec<Expr>) -> Result<(), ParserError> {
         if values[0].len() != v.len() {
-            return Err(ParserError::Custom(
-                "all VALUES must have the same number of terms".to_owned(),
-            ));
+            return Err(custom_err!("all VALUES must have the same number of terms"));
         }
         Ok(())
     }
