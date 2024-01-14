@@ -88,6 +88,16 @@ impl Stmt {
     /// check for extra rules
     pub fn check(&self) -> Result<(), ParserError> {
         match self {
+            Stmt::AlterTable(.., AlterTableBody::AddColumn(cd)) => {
+                for c in cd {
+                    if let ColumnConstraint::PrimaryKey { .. } = c {
+                        return Err(ParserError::Custom(
+                            "Cannot add a PRIMARY KEY column".to_owned(),
+                        ));
+                    }
+                }
+                Ok(())
+            }
             Stmt::CreateTable { tbl_name, body, .. } => body.check(tbl_name),
             Stmt::CreateView {
                 view_name,
@@ -209,8 +219,8 @@ impl CreateTableBody {
         } = self
         {
             for col in columns {
-                for c in &col.constraints {
-                    if let ColumnConstraint::PrimaryKey { .. } = c.constraint {
+                for c in col {
+                    if let ColumnConstraint::PrimaryKey { .. } = c {
                         return true;
                     }
                 }
@@ -224,6 +234,18 @@ impl CreateTableBody {
             }
         }
         false
+    }
+}
+
+impl<'a> IntoIterator for &'a ColumnDefinition {
+    type Item = &'a ColumnConstraint;
+    type IntoIter = std::iter::Map<
+        std::slice::Iter<'a, NamedColumnConstraint>,
+        fn(&'a NamedColumnConstraint) -> &'a ColumnConstraint,
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.constraints.iter().map(|nc| &nc.constraint)
     }
 }
 

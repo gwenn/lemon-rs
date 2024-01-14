@@ -260,3 +260,14 @@ fn values_mismatch_columns_count() {
         panic!("unexpected error type")
     };
 }
+
+#[test]
+fn alter_add_column_primary_key() {
+    let mut parser = Parser::new(b"ALTER TABLE test ADD COLUMN c PRIMARY KEY");
+    let r = parser.next();
+    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
+        assert_eq!(msg, "Cannot add a PRIMARY KEY column");
+    } else {
+        panic!("unexpected error type")
+    };
+}
