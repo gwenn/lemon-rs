@@ -136,79 +136,58 @@ fn extra_semicolons_between_statements() {
 
 #[test]
 fn insert_mismatch_count() {
-    let mut parser = Parser::new(b"INSERT INTO tbl (a, b) VALUES (1)");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "1 values for 2 columns");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"INSERT INTO tbl (a, b) VALUES (1)",
+        "1 values for 2 columns",
+    );
 }
 
 #[test]
 fn insert_default_values() {
-    let mut parser = Parser::new(b"INSERT INTO tbl (a) DEFAULT VALUES");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "0 values for 1 columns");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"INSERT INTO tbl (a) DEFAULT VALUES",
+        "0 values for 1 columns",
+    );
 }
 
 #[test]
 fn create_view_mismatch_count() {
-    let mut parser = Parser::new(b"CREATE VIEW v (c1, c2) AS SELECT 1");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "expected 2 columns for v but got 1");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"CREATE VIEW v (c1, c2) AS SELECT 1",
+        "expected 2 columns for v but got 1",
+    );
 }
 
 #[test]
 fn create_view_duplicate_column_name() {
-    let mut parser = Parser::new(b"CREATE VIEW v (c1, c1) AS SELECT 1, 2");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "duplicate column name: c1");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"CREATE VIEW v (c1, c1) AS SELECT 1, 2",
+        "duplicate column name: c1",
+    );
 }
 
 #[test]
 fn create_table_without_rowid_missing_pk() {
-    let mut parser = Parser::new(b"CREATE TABLE tbl (c1) WITHOUT ROWID");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "PRIMARY KEY missing on table tbl");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"CREATE TABLE tbl (c1) WITHOUT ROWID",
+        "PRIMARY KEY missing on table tbl",
+    );
 }
 
 #[test]
 fn create_strict_table_missing_datatype() {
-    let mut parser = Parser::new(b"CREATE TABLE tbl (c1) STRICT");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "missing datatype for tbl.c1");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"CREATE TABLE tbl (c1) STRICT",
+        "missing datatype for tbl.c1",
+    );
 }
 
 #[test]
 fn create_strict_table_unknown_datatype() {
-    let mut parser = Parser::new(b"CREATE TABLE tbl (c1 BOOL) STRICT");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "unknown datatype for tbl.c1: \"BOOL\"");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"CREATE TABLE tbl (c1 BOOL) STRICT",
+        "unknown datatype for tbl.c1: \"BOOL\"",
+    );
 }
 
 #[test]
@@ -227,57 +206,49 @@ fn create_strict_table_generated_column() {
 
 #[test]
 fn selects_compound_mismatch_columns_count() {
-    let mut parser = Parser::new(b"SELECT 1 UNION SELECT 1, 2");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(
-            msg,
-            "SELECTs to the left and right of UNION do not have the same number of result columns"
-        );
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"SELECT 1 UNION SELECT 1, 2",
+        "SELECTs to the left and right of UNION do not have the same number of result columns",
+    );
 }
 
 #[test]
 fn update_order_by_without_limit() {
-    let mut parser = Parser::new(b"UPDATE test SET data = 1 ORDER BY data");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "ORDER BY without LIMIT on UPDATE");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"UPDATE test SET data = 1 ORDER BY data",
+        "ORDER BY without LIMIT on UPDATE",
+    );
 }
 
 #[test]
 fn values_mismatch_columns_count() {
-    let mut parser = Parser::new(b"INSERT INTO test VALUES (1), (1,2)");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "all VALUES must have the same number of terms");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"INSERT INTO test VALUES (1), (1,2)",
+        "all VALUES must have the same number of terms",
+    );
 }
 
 #[test]
 fn alter_add_column_primary_key() {
-    let mut parser = Parser::new(b"ALTER TABLE test ADD COLUMN c PRIMARY KEY");
-    let r = parser.next();
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "Cannot add a PRIMARY KEY column");
-    } else {
-        panic!("unexpected error type")
-    };
+    expect_parser_err(
+        b"ALTER TABLE test ADD COLUMN c PRIMARY KEY",
+        "Cannot add a PRIMARY KEY column",
+    );
 }
 
 #[test]
 fn alter_add_column_unique() {
-    let mut parser = Parser::new(b"ALTER TABLE test ADD COLUMN c UNIQUE");
+    expect_parser_err(
+        b"ALTER TABLE test ADD COLUMN c UNIQUE",
+        "Cannot add a UNIQUE column",
+    );
+}
+
+fn expect_parser_err(input: &[u8], error_msg: &str) {
+    let mut parser = Parser::new(input);
     let r = parser.next();
     if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, "Cannot add a UNIQUE column");
+        assert_eq!(msg, error_msg);
     } else {
         panic!("unexpected error type")
     };
