@@ -136,16 +136,13 @@ fn extra_semicolons_between_statements() {
 
 #[test]
 fn insert_mismatch_count() {
-    expect_parser_err(
-        b"INSERT INTO tbl (a, b) VALUES (1)",
-        "1 values for 2 columns",
-    );
+    expect_parser_err(b"INSERT INTO t (a, b) VALUES (1)", "1 values for 2 columns");
 }
 
 #[test]
 fn insert_default_values() {
     expect_parser_err(
-        b"INSERT INTO tbl (a) DEFAULT VALUES",
+        b"INSERT INTO t (a) DEFAULT VALUES",
         "0 values for 1 columns",
     );
 }
@@ -169,24 +166,21 @@ fn create_view_duplicate_column_name() {
 #[test]
 fn create_table_without_rowid_missing_pk() {
     expect_parser_err(
-        b"CREATE TABLE tbl (c1) WITHOUT ROWID",
-        "PRIMARY KEY missing on table tbl",
+        b"CREATE TABLE t (c1) WITHOUT ROWID",
+        "PRIMARY KEY missing on table t",
     );
 }
 
 #[test]
 fn create_strict_table_missing_datatype() {
-    expect_parser_err(
-        b"CREATE TABLE tbl (c1) STRICT",
-        "missing datatype for tbl.c1",
-    );
+    expect_parser_err(b"CREATE TABLE t (c1) STRICT", "missing datatype for t.c1");
 }
 
 #[test]
 fn create_strict_table_unknown_datatype() {
     expect_parser_err(
-        b"CREATE TABLE tbl (c1 BOOL) STRICT",
-        "unknown datatype for tbl.c1: \"BOOL\"",
+        b"CREATE TABLE t (c1 BOOL) STRICT",
+        "unknown datatype for t.c1: \"BOOL\"",
     );
 }
 
@@ -215,7 +209,7 @@ fn selects_compound_mismatch_columns_count() {
 #[test]
 fn delete_order_by_without_limit() {
     expect_parser_err(
-        b"DELETE FROM test ORDER BY x",
+        b"DELETE FROM t ORDER BY x",
         "ORDER BY without LIMIT on DELETE",
     );
 }
@@ -223,7 +217,7 @@ fn delete_order_by_without_limit() {
 #[test]
 fn update_order_by_without_limit() {
     expect_parser_err(
-        b"UPDATE test SET data = 1 ORDER BY data",
+        b"UPDATE t SET x = 1 ORDER BY x",
         "ORDER BY without LIMIT on UPDATE",
     );
 }
@@ -231,7 +225,7 @@ fn update_order_by_without_limit() {
 #[test]
 fn values_mismatch_columns_count() {
     expect_parser_err(
-        b"INSERT INTO test VALUES (1), (1,2)",
+        b"INSERT INTO t VALUES (1), (1,2)",
         "all VALUES must have the same number of terms",
     );
 }
@@ -239,7 +233,7 @@ fn values_mismatch_columns_count() {
 #[test]
 fn alter_add_column_primary_key() {
     expect_parser_err(
-        b"ALTER TABLE test ADD COLUMN c PRIMARY KEY",
+        b"ALTER TABLE t ADD COLUMN c PRIMARY KEY",
         "Cannot add a PRIMARY KEY column",
     );
 }
@@ -247,7 +241,7 @@ fn alter_add_column_primary_key() {
 #[test]
 fn alter_add_column_unique() {
     expect_parser_err(
-        b"ALTER TABLE test ADD COLUMN c UNIQUE",
+        b"ALTER TABLE t ADD COLUMN c UNIQUE",
         "Cannot add a UNIQUE column",
     );
 }
@@ -255,8 +249,20 @@ fn alter_add_column_unique() {
 #[test]
 fn alter_rename_same() {
     expect_parser_err(
-        b"ALTER TABLE test RENAME TO test",
-        "there is already another table or index with this name: test",
+        b"ALTER TABLE t RENAME TO t",
+        "there is already another table or index with this name: t",
+    );
+}
+
+#[test]
+fn natural_join_on() {
+    expect_parser_err(
+        b"SELECT x FROM t NATURAL JOIN t USING (x)",
+        "a NATURAL join may not have an ON or USING clause",
+    );
+    expect_parser_err(
+        b"SELECT x FROM t NATURAL JOIN t ON t.x = t.x",
+        "a NATURAL join may not have an ON or USING clause",
     );
 }
 

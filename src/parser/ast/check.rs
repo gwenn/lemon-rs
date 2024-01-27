@@ -1,3 +1,5 @@
+use bitflags::Flags;
+
 use crate::ast::*;
 use crate::custom_err;
 use std::fmt::{Display, Formatter};
@@ -154,6 +156,7 @@ impl Stmt {
                 body: InsertBody::DefaultValues,
                 ..
             } => Err(custom_err!("0 values for {} columns", columns.len())),
+            Stmt::Select(select) => select.check(),
             Stmt::Update {
                 order_by: Some(_),
                 limit: None,
@@ -258,6 +261,17 @@ impl Select {
     pub fn column_count(&self) -> ColumnCount {
         self.body.select.column_count()
     }
+
+    /// check for extra rules
+    pub fn check(&self) -> Result<(), ParserError> {
+        self.body.select.check()?;
+        if let Some(ref compounds) = self.body.compounds {
+            for compound in compounds {
+                compound.select.check()?
+            }
+        }
+        Ok(())
+    }
 }
 
 impl OneSelect {
@@ -277,6 +291,41 @@ impl OneSelect {
             return Err(custom_err!("all VALUES must have the same number of terms"));
         }
         Ok(())
+    }
+
+    /// check for extra rules
+    pub fn check(&self) -> Result<(), ParserError> {
+        match self {
+            OneSelect::Select {
+                from: Some(from), ..
+            } => from.check(),
+            _ => Ok(()),
+        }
+    }
+}
+
+impl FromClause {
+    /// check for extra rules
+    pub fn check(&self) -> Result<(), ParserError> {
+        if let Some(joins) = &self.joins {
+            for join in joins {
+                if join.operator.is_natural() && join.constraint.is_some() {
+                    return Err(custom_err!(
+                        "a NATURAL join may not have an ON or USING clause"
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl JoinOperator {
+    fn is_natural(&self) -> bool {
+        match self {
+            JoinOperator::TypedJoin(Some(jt)) => jt.contains(JoinType::NATURAL),
+            _ => false,
+        }
     }
 }
 
