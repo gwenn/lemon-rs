@@ -31,9 +31,9 @@ impl Cmd {
 
 /// Column count
 pub enum ColumnCount {
-    /// With `SELECT *` / EXPLAIN / PRAGMA
+    /// With `SELECT *` / PRAGMA
     Dynamic,
-    ///
+    /// Constant count
     Fixed(usize),
     /// No column
     None,
@@ -161,6 +161,7 @@ impl CreateTableBody {
         {
             // TODO columns.constraints : check no duplicate names
             // TODO constraints: check no duplicated names, use only valid column names
+
             if options.contains(TableOptions::STRICT) {
                 for c in columns {
                     match &c.col_type {

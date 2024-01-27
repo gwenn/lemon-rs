@@ -38,7 +38,7 @@ TODO:
   - [ ] [If a keyword in double quotes is used in a context where it cannot be resolved to an identifier but where a string literal is allowed, then the token is understood to be a string literal instead of an identifier.](https://sqlite.org/lang_keywords.html)
   - [ ] Tests
   - [ ] Do not panic while parsing
-  - [ ] CREATE VIRTUAL TABLE args
+  - [x] CREATE VIRTUAL TABLE args
   - [ ] Zero copy (at least tokens)
 
 ### Unsupported by Rust
@@ -47,7 +47,7 @@ TODO:
 
 ## API change
 
-* No `ParseAlloc`/`ParseFree` anymore 
+* No `ParseAlloc`/`ParseFree` anymore
 
 ## Features not tested
 
