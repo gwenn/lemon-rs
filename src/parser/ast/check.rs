@@ -134,6 +134,11 @@ impl Stmt {
                     _ => Ok(()),
                 }
             }
+            Stmt::Delete {
+                order_by: Some(_),
+                limit: None,
+                ..
+            } => Err(custom_err!("ORDER BY without LIMIT on DELETE")),
             Stmt::Insert {
                 columns: Some(columns),
                 body: InsertBody::Select(select, ..),

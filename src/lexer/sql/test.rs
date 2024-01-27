@@ -213,6 +213,14 @@ fn selects_compound_mismatch_columns_count() {
 }
 
 #[test]
+fn delete_order_by_without_limit() {
+    expect_parser_err(
+        b"DELETE FROM test ORDER BY x",
+        "ORDER BY without LIMIT on DELETE",
+    );
+}
+
+#[test]
 fn update_order_by_without_limit() {
     expect_parser_err(
         b"UPDATE test SET data = 1 ORDER BY data",
