@@ -89,6 +89,15 @@ impl Stmt {
     /// check for extra rules
     pub fn check(&self) -> Result<(), ParserError> {
         match self {
+            Stmt::AlterTable(old_name, AlterTableBody::RenameTo(new_name)) => {
+                if *new_name == old_name.name {
+                    return Err(custom_err!(
+                        "there is already another table or index with this name: {}",
+                        new_name
+                    ));
+                }
+                Ok(())
+            }
             Stmt::AlterTable(.., AlterTableBody::AddColumn(cd)) => {
                 for c in cd {
                     if let ColumnConstraint::PrimaryKey { .. } = c {

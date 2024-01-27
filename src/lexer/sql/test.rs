@@ -244,6 +244,14 @@ fn alter_add_column_unique() {
     );
 }
 
+#[test]
+fn alter_rename_same() {
+    expect_parser_err(
+        b"ALTER TABLE test RENAME TO test",
+        "there is already another table or index with this name: test",
+    );
+}
+
 fn expect_parser_err(input: &[u8], error_msg: &str) {
     let mut parser = Parser::new(input);
     let r = parser.next();
