@@ -12,9 +12,9 @@
 *************************************************************************
 ** This file contains SQLite's SQL parser.
 **
-** The canonical source code to this file ("parse.y") is a Lemon grammar 
+** The canonical source code to this file ("parse.y") is a Lemon grammar
 ** file that specifies the input grammar and actions to take while parsing.
-** That input file is processed by Lemon to generate a C-language 
+** That input file is processed by Lemon to generate a C-language
 ** implementation of a parser for the given grammar.  You might be reading
 ** this comment as part of the translated C-code.  Edits should be made
 ** to the original parse.y sources.
@@ -170,7 +170,7 @@ columnlist(A) ::= columnname(X) carglist(Y). {
 %type columnname {(Name, Option<Type>)}
 columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 
-// Declare some tokens early in order to influence their values, to 
+// Declare some tokens early in order to influence their values, to
 // improve performance and reduce the executable size.  The goal here is
 // to get the "jump" operations in ISNULL through ESCAPE to have numeric
 // values that are early enough so that all jump operations are clustered
@@ -612,26 +612,26 @@ seltablist(A) ::= stl_prefix(A) fullname(Y) as(Z) indexed_opt(I)
                   on_using(N). {
     let st = SelectTable::Table(Y, Z, I);
     let jc = N;
-    A.push(st, jc);
+    A.push(st, jc)?;
 }
 seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z)
                   on_using(N). {
     let st = SelectTable::TableCall(Y, E, Z);
     let jc = N;
-    A.push(st, jc);
+    A.push(st, jc)?;
 }
 %ifndef SQLITE_OMIT_SUBQUERY
   seltablist(A) ::= stl_prefix(A) LP select(S) RP
                     as(Z) on_using(N). {
     let st = SelectTable::Select(S, Z);
     let jc = N;
-    A.push(st, jc);
+    A.push(st, jc)?;
   }
   seltablist(A) ::= stl_prefix(A) LP seltablist(F) RP
                     as(Z) on_using(N). {
     let st = SelectTable::Sub(F, Z);
     let jc = N;
-    A.push(st, jc);
+    A.push(st, jc)?;
   }
 %endif  SQLITE_OMIT_SUBQUERY
 
@@ -693,8 +693,8 @@ on_using(N) ::= .                 [OR] {N = None;}
 // with z pointing to the token data and n containing the number of bytes
 // in the token.
 //
-// If there is a "NOT INDEXED" clause, then (z==0 && n==1), which is 
-// normally illegal. The sqlite3SrcListIndexedBy() function 
+// If there is a "NOT INDEXED" clause, then (z==0 && n==1), which is
+// normally illegal. The sqlite3SrcListIndexedBy() function
 // recognizes and interprets this as a special case.
 //
 %type indexed_opt {Option<Indexed>}
@@ -743,18 +743,18 @@ having_opt(A) ::= HAVING expr(X).  {A = Some(X);}
 
 // The destructor for limit_opt will never fire in the current grammar.
 // The limit_opt non-terminal only occurs at the end of a single production
-// rule for SELECT statements.  As soon as the rule that create the 
+// rule for SELECT statements.  As soon as the rule that create the
 // limit_opt non-terminal reduces, the SELECT statement rule will also
-// reduce.  So there is never a limit_opt non-terminal on the stack 
+// reduce.  So there is never a limit_opt non-terminal on the stack
 // except as a transient.  So there is never anything to destroy.
 //
 //%destructor limit_opt {sqlite3ExprDelete(pParse->db, $$);}
 limit_opt(A) ::= .       {A = None;}
 limit_opt(A) ::= LIMIT expr(X).
                          {A = Some(Limit{ expr: X, offset: None });}
-limit_opt(A) ::= LIMIT expr(X) OFFSET expr(Y). 
+limit_opt(A) ::= LIMIT expr(X) OFFSET expr(Y).
                          {A = Some(Limit{ expr: X, offset: Some(Y) });}
-limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y). 
+limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y).
                          {A = Some(Limit{ expr: X, offset: Some(Y) });}
 
 /////////////////////////// The DELETE statement /////////////////////////////
@@ -1204,7 +1204,7 @@ trigger_cmd_list(A) ::= trigger_cmd(X) SEMI. {
 }
 
 // Disallow qualified table names on INSERT, UPDATE, and DELETE statements
-// within a trigger.  The table to INSERT, UPDATE, or DELETE is always in 
+// within a trigger.  The table to INSERT, UPDATE, or DELETE is always in
 // the same database as the table that the trigger fires on.
 //
 %type trnm {Name}
@@ -1235,7 +1235,7 @@ tridxby ::= NOT INDEXED. {
 
 
 %type trigger_cmd {TriggerCmd}
-// UPDATE 
+// UPDATE
 trigger_cmd(A) ::=
    UPDATE orconf(R) trnm(X) tridxby SET setlist(Y) from(F) where_opt(Z).
    {A = TriggerCmd::Update{ or_conflict: R, tbl_name: X, sets: Y, from: F, where_clause: Z };}

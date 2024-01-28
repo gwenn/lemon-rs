@@ -564,7 +564,11 @@ impl FromClause {
         }
     }
 
-    pub(crate) fn push(&mut self, table: SelectTable, jc: Option<JoinConstraint>) {
+    pub(crate) fn push(
+        &mut self,
+        table: SelectTable,
+        jc: Option<JoinConstraint>,
+    ) -> Result<(), ParserError> {
         let op = self.op.take();
         if let Some(op) = op {
             let jst = JoinedSelectTable {
@@ -572,6 +576,11 @@ impl FromClause {
                 table,
                 constraint: jc,
             };
+            if jst.operator.is_natural() && jst.constraint.is_some() {
+                return Err(custom_err!(
+                    "a NATURAL join may not have an ON or USING clause"
+                ));
+            }
             if let Some(ref mut joins) = self.joins {
                 joins.push(jst);
             } else {
@@ -583,6 +592,7 @@ impl FromClause {
             debug_assert!(self.joins.is_none());
             self.select = Some(Box::new(table));
         }
+        Ok(())
     }
 
     pub(crate) fn push_op(&mut self, op: JoinOperator) {
@@ -660,6 +670,12 @@ impl JoinOperator {
         } else {
             unreachable!()
         })
+    }
+    fn is_natural(&self) -> bool {
+        match self {
+            JoinOperator::TypedJoin(Some(jt)) => jt.contains(JoinType::NATURAL),
+            _ => false,
+        }
     }
 }
 
