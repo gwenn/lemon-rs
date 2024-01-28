@@ -21,12 +21,18 @@ use ast::{Cmd, ExplainKind, Name, Stmt};
 /// Parser error
 #[derive(Debug)]
 pub enum ParserError {
+    /// Stack overflow
     StackOverflow,
+    /// Syntax error
     SyntaxError {
+        ///
         token_type: &'static str,
+        ///
         found: Option<String>,
     },
+    /// Unexpected EOF
     UnexpectedEof,
+    /// Custom error
     Custom(String),
 }
 
@@ -45,6 +51,7 @@ impl std::fmt::Display for ParserError {
 
 impl std::error::Error for ParserError {}
 
+/// Custom error constructor
 #[macro_export]
 macro_rules! custom_err {
     ($msg:literal $(,)?) => {

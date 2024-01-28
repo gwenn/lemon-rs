@@ -6,7 +6,9 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
+/// Error with position
 pub trait ScanError: Error + From<io::Error> + Sized {
+    /// Update the position where the error occurs
     fn position(&mut self, line: u64, column: usize);
 }
 
@@ -17,8 +19,10 @@ type SplitResult<'input, TokenType, Error> =
 
 /// Split function used to tokenize the input
 pub trait Splitter: Sized {
+    /// Potential error raised
     type Error: ScanError;
     //type Item: ?Sized;
+    /// Token generated
     type TokenType;
 
     /// The arguments are an initial substring of the remaining unprocessed
@@ -55,6 +59,7 @@ pub struct Scanner<S: Splitter> {
 }
 
 impl<S: Splitter> Scanner<S> {
+    /// Constructor
     pub fn new(splitter: S) -> Scanner<S> {
         Scanner {
             offset: 0,
@@ -74,14 +79,15 @@ impl<S: Splitter> Scanner<S> {
     pub fn column(&self) -> usize {
         self.column
     }
-
+    /// Associated splitter
     pub fn splitter(&self) -> &S {
         &self.splitter
     }
-
+    /// Mark current position
     pub fn mark(&mut self) {
         self.mark = (self.offset, self.line, self.column);
     }
+    /// Reset to mark
     pub fn reset_to_mark(&mut self) {
         (self.offset, self.line, self.column) = self.mark;
     }

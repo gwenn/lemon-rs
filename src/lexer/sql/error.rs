@@ -5,20 +5,31 @@ use std::io;
 use crate::lexer::scan::ScanError;
 use crate::parser::ParserError;
 
+/// SQL lexer and parser errors
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum Error {
     /// I/O Error
     Io(io::Error),
+    /// Lexer error
     UnrecognizedToken(Option<(u64, usize)>),
+    /// Missing quote or double-quote or backtick
     UnterminatedLiteral(Option<(u64, usize)>),
+    /// Missing `]`
     UnterminatedBracket(Option<(u64, usize)>),
+    /// Missing `*/`
     UnterminatedBlockComment(Option<(u64, usize)>),
+    /// Invalid parameter name
     BadVariableName(Option<(u64, usize)>),
+    /// Invalid number format
     BadNumber(Option<(u64, usize)>),
+    /// Invalid or missing sign after `!`
     ExpectedEqualsSign(Option<(u64, usize)>),
+    /// BLOB literals are string literals containing hexadecimal data and preceded by a single "x" or "X" character.
     MalformedBlobLiteral(Option<(u64, usize)>),
+    /// Hexadecimal integer literals follow the C-language notation of "0x" or "0X" followed by hexadecimal digits.
     MalformedHexInteger(Option<(u64, usize)>),
+    /// Grammar error
     ParserError(ParserError, Option<(u64, usize)>),
 }
 

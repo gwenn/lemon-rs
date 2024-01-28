@@ -15,9 +15,11 @@ pub(crate) fn sentinel(start: usize) -> Token {
 }
 
 impl Token {
+    /// Access token value
     pub fn unwrap(self) -> String {
         self.1.unwrap()
     }
+    /// Take token value
     pub fn take(&mut self) -> Self {
         Token(self.0, self.1.take(), self.2)
     }
@@ -64,6 +66,7 @@ fn from_bytes(bytes: &[u8]) -> String {
 include!(concat!(env!("OUT_DIR"), "/keywords.rs"));
 pub(crate) const MAX_KEYWORD_LEN: usize = 17;
 
+/// Check if `word` is a keyword
 pub fn keyword_token(word: &[u8]) -> Option<TokenType> {
     KEYWORDS
         .get(UncasedStr::new(unsafe { str::from_utf8_unchecked(word) }))
@@ -239,6 +242,7 @@ pub(crate) fn from_token(ty: u16, value: Token) -> String {
 }
 
 impl TokenType {
+    /// Return the associated string (mainly for testing)
     pub const fn as_str(&self) -> Option<&'static str> {
         use TokenType::*;
         match self {

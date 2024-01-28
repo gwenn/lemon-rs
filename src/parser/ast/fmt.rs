@@ -1,3 +1,4 @@
+//! AST node format
 use std::fmt::{self, Display, Formatter, Write};
 
 use crate::ast::*;
@@ -45,15 +46,19 @@ impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
     }
 }
 
+/// Stream of token
 pub trait TokenStream {
+    /// Potential error raised
     type Error;
-
+    /// Push token to this stream
     fn append(&mut self, ty: TokenType, value: Option<&str>) -> Result<(), Self::Error>;
 }
 
+/// Generate token(s) from AST node
 pub trait ToTokens {
+    /// Send token(s) to the specified stream
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error>;
-
+    /// Format AST node
     fn to_fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut s = FmtTokenStream { f, spaced: true };
         self.to_tokens(&mut s)
