@@ -530,7 +530,7 @@ impl Literal {
     }
 }
 
-/// Like operators
+/// Textual comparison operator in an expression
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LikeOperator {
     /// `GLOB`
@@ -1564,7 +1564,7 @@ pub struct Type {
     pub size: Option<TypeSize>,
 }
 
-/// Column type size
+/// Column type size limit(s)
 // https://sqlite.org/syntax/type-name.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeSize {
