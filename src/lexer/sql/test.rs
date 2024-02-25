@@ -135,6 +135,28 @@ fn extra_semicolons_between_statements() {
 }
 
 #[test]
+fn extra_comments_between_statements() {
+    let sqls = [
+        "-- abc\nSELECT 1; --def\nSELECT 2 -- ghj",
+        "/* abc */ SELECT 1; /* def */ SELECT 2; /* ghj */",
+        "/* abc */; SELECT 1 /* def */; SELECT 2 /* ghj */",
+        "/* abc */;; SELECT 1;/* def */; SELECT 2; /* ghj */; /* klm */",
+    ];
+    for sql in sqls.iter() {
+        let mut parser = Parser::new(sql.as_bytes());
+        assert!(matches!(
+            parser.next().unwrap(),
+            Some(Cmd::Stmt(Stmt::Select { .. }))
+        ));
+        assert!(matches!(
+            parser.next().unwrap(),
+            Some(Cmd::Stmt(Stmt::Select { .. }))
+        ));
+        assert_eq!(parser.next().unwrap(), None);
+    }
+}
+
+#[test]
 fn insert_mismatch_count() {
     expect_parser_err(b"INSERT INTO t (a, b) VALUES (1)", "1 values for 2 columns");
 }
