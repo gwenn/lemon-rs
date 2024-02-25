@@ -20,6 +20,14 @@ impl Cmd {
             Cmd::Stmt(stmt) => stmt.column_count(),
         }
     }
+    /// Like `sqlite3_stmt_isexplain`
+    pub fn is_explain(&self) -> bool {
+        match self {
+            Cmd::Explain(_) => true,
+            Cmd::ExplainQueryPlan(_) => true,
+            _ => false,
+        }
+    }
     /// Like `sqlite3_stmt_readonly`
     pub fn readonly(&self) -> bool {
         self.stmt().readonly()

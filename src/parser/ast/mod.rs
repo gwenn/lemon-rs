@@ -17,7 +17,7 @@ use crate::parser::{parse::YYCODETYPE, ParserError};
 /// `?` or `$` Prepared statement arg placeholder(s)
 #[derive(Default)]
 pub struct ParameterInfo {
-    /// Number of SQL parameters in a prepared statement
+    /// Number of SQL parameters in a prepared statement, like `sqlite3_bind_parameter_count`
     pub count: u32,
     /// Parameter name(s) if any
     pub names: IndexSet<String>,
