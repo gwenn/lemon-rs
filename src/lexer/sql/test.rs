@@ -193,6 +193,14 @@ fn create_temporary_table_with_qualified_name() {
 }
 
 #[test]
+fn create_table_with_only_generated_column() {
+    expect_parser_err(
+        b"CREATE TABLE test(data AS (1))",
+        "must have at least one non-generated column",
+    );
+}
+
+#[test]
 fn create_strict_table_missing_datatype() {
     expect_parser_err(b"CREATE TABLE t (c1) STRICT", "missing datatype for t.c1");
 }

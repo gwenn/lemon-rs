@@ -196,8 +196,17 @@ impl CreateTableBody {
             options,
         } = self
         {
-            // TODO columns.constraints : check no duplicate names
-            // TODO constraints: check no duplicated names, use only valid column names
+            let mut generated_count = 0;
+            for c in columns {
+                for cs in c.constraints.iter() {
+                    if let ColumnConstraint::Generated { .. } = cs.constraint {
+                        generated_count += 1;
+                    }
+                }
+            }
+            if generated_count == columns.len() {
+                return Err(custom_err!("must have at least one non-generated column"));
+            }
 
             if options.contains(TableOptions::STRICT) {
                 for c in columns {

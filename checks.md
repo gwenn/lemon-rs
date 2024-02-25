@@ -31,7 +31,7 @@ Parse error: temporary table name must be unqualified
 sqlite> CREATE TEMPORARY TABLE temp.x AS SELECT 1;
 -- OK
 ```
-- [ ] must have at least one non-generated column
+- [X] must have at least one non-generated column
 ```sql
 sqlite> CREATE TABLE test(data AS (1));
 Parse error: must have at least one non-generated column
