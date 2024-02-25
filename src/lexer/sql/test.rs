@@ -8,52 +8,43 @@ use crate::parser::{
 };
 
 #[test]
-fn count_placeholders() -> Result<(), Error> {
-    let mut parser = Parser::new(b"SELECT ? WHERE 1 = ?");
-    let ast = parser.next()?.unwrap();
+fn count_placeholders() {
+    let ast = parse_cmd(b"SELECT ? WHERE 1 = ?");
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 2);
-    Ok(())
 }
 
 #[test]
-fn count_numbered_placeholders() -> Result<(), Error> {
-    let mut parser = Parser::new(b"SELECT ?1 WHERE 1 = ?2 AND 0 = ?1");
-    let ast = parser.next()?.unwrap();
+fn count_numbered_placeholders() {
+    let ast = parse_cmd(b"SELECT ?1 WHERE 1 = ?2 AND 0 = ?1");
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 2);
-    Ok(())
 }
 
 #[test]
-fn count_unused_placeholders() -> Result<(), Error> {
-    let mut parser = Parser::new(b"SELECT ?1 WHERE 1 = ?3");
-    let ast = parser.next()?.unwrap();
+fn count_unused_placeholders() {
+    let ast = parse_cmd(b"SELECT ?1 WHERE 1 = ?3");
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 3);
-    Ok(())
 }
 
 #[test]
-fn count_named_placeholders() -> Result<(), Error> {
-    let mut parser = Parser::new(b"SELECT :x, :y WHERE 1 = :y");
-    let ast = parser.next()?.unwrap();
+fn count_named_placeholders() {
+    let ast = parse_cmd(b"SELECT :x, :y WHERE 1 = :y");
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 2);
     assert_eq!(info.names.len(), 2);
     assert!(info.names.contains(":x"));
     assert!(info.names.contains(":y"));
-    Ok(())
 }
 
 #[test]
 fn duplicate_column() {
-    let mut parser = Parser::new(b"CREATE TABLE t (x TEXT, x TEXT)");
-    let r = parser.next();
+    let r = parse(b"CREATE TABLE t (x TEXT, x TEXT)");
     let Error::ParserError(ParserError::Custom(msg), _) = r.unwrap_err() else {
         panic!("unexpected error type")
     };
@@ -62,8 +53,7 @@ fn duplicate_column() {
 
 #[test]
 fn create_table_without_column() {
-    let mut parser = Parser::new(b"CREATE TABLE t ()");
-    let r = parser.next();
+    let r = parse(b"CREATE TABLE t ()");
     let Error::ParserError(
         ParserError::SyntaxError {
             token_type: "RP",
@@ -82,7 +72,7 @@ fn vtab_args() -> Result<(), Error> {
   subject VARCHAR(256) NOT NULL,
   body TEXT CHECK(length(body)<10240)
 );"#;
-    let mut parser = Parser::new(sql.as_bytes());
+    let r = parse_cmd(sql.as_bytes());
     let Cmd::Stmt(Stmt::CreateVirtualTable {
         tbl_name: QualifiedName {
             name: Name(tbl_name),
@@ -91,7 +81,7 @@ fn vtab_args() -> Result<(), Error> {
         module_name: Name(module_name),
         args: Some(args),
         ..
-    }) = parser.next()?.unwrap()
+    }) = r
     else {
         panic!("unexpected AST")
     };
@@ -107,8 +97,8 @@ fn vtab_args() -> Result<(), Error> {
 fn only_semicolons_no_statements() {
     let sqls = ["", ";", ";;;"];
     for sql in sqls.iter() {
-        let mut parser = Parser::new(sql.as_bytes());
-        assert_eq!(parser.next().unwrap(), None);
+        let r = parse(sql.as_bytes());
+        assert_eq!(r.unwrap(), None);
     }
 }
 
@@ -194,6 +184,15 @@ fn create_table_without_rowid_missing_pk() {
 }
 
 #[test]
+fn create_temporary_table_with_qualified_name() {
+    expect_parser_err(
+        b"CREATE TEMPORARY TABLE mem.x AS SELECT 1",
+        "temporary table name must be unqualified",
+    );
+    parse_cmd(b"CREATE TEMPORARY TABLE temp.x AS SELECT 1");
+}
+
+#[test]
 fn create_strict_table_missing_datatype() {
     expect_parser_err(b"CREATE TABLE t (c1) STRICT", "missing datatype for t.c1");
 }
@@ -208,16 +207,13 @@ fn create_strict_table_unknown_datatype() {
 
 #[test]
 fn create_strict_table_generated_column() {
-    let mut parser = Parser::new(
+    parse_cmd(
         b"CREATE TABLE IF NOT EXISTS transactions (
       debit REAL,
       credit REAL,
       amount REAL GENERATED ALWAYS AS (ifnull(credit, 0.0) -ifnull(debit, 0.0))
-  ) STRICT;
-",
+  ) STRICT;",
     );
-    let r = parser.next();
-    r.unwrap();
 }
 
 #[test]
@@ -289,11 +285,17 @@ fn natural_join_on() {
 }
 
 fn expect_parser_err(input: &[u8], error_msg: &str) {
-    let mut parser = Parser::new(input);
-    let r = parser.next();
+    let r = parse(input);
     if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
         assert_eq!(msg, error_msg);
     } else {
         panic!("unexpected error type")
     };
+}
+fn parse_cmd(input: &[u8]) -> Cmd {
+    parse(input).unwrap().unwrap()
+}
+fn parse(input: &[u8]) -> Result<Option<Cmd>, Error> {
+    let mut parser = Parser::new(input);
+    parser.next()
 }

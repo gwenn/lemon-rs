@@ -117,7 +117,21 @@ impl Stmt {
                 }
                 Ok(())
             }
-            Stmt::CreateTable { tbl_name, body, .. } => body.check(tbl_name),
+            Stmt::CreateTable {
+                temporary,
+                tbl_name,
+                body,
+                ..
+            } => {
+                if *temporary {
+                    if let Some(ref db_name) = tbl_name.db_name {
+                        if !"TEMP".eq_ignore_ascii_case(&db_name.0) {
+                            return Err(custom_err!("temporary table name must be unqualified"));
+                        }
+                    }
+                }
+                body.check(tbl_name)
+            }
             Stmt::CreateView {
                 view_name,
                 columns: Some(columns),

@@ -21,7 +21,7 @@
 ## TODO
 
 ### `CREATE TABLE`
-- [ ] qualified (different of `temp`) temporary table
+- [X] qualified (different of `temp`) temporary table
 ```sql
 sqlite> ATTACH DATABASE ':memory:' AS mem;
 sqlite> CREATE TEMPORARY TABLE mem.x AS SELECT 1;
