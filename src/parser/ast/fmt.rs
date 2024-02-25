@@ -2,7 +2,7 @@
 use std::fmt::{self, Display, Formatter, Write};
 
 use crate::ast::*;
-use crate::dialect::TokenType::{self, *};
+use crate::dialect::TokenType::*;
 
 struct FmtTokenStream<'a, 'b> {
     f: &'a mut Formatter<'b>,
