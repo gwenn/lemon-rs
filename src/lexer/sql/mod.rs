@@ -258,15 +258,15 @@ impl Tokenizer {
     }
 }
 
-/// ```compile_fail
+/// ```rust
 /// use sqlite3_parser::lexer::sql::Tokenizer;
 /// use sqlite3_parser::lexer::Scanner;
 ///
 /// let tokenizer = Tokenizer::new();
 /// let input = "PRAGMA parser_trace=ON;".as_bytes();
-/// let mut s = Scanner::new(input, tokenizer);
-/// let (token1, _) = s.scan().unwrap().unwrap();
-/// s.scan().unwrap().unwrap();
+/// let mut s = Scanner::new(tokenizer);
+/// let Ok((_, Some((token1, _)), _)) = s.scan(input) else { panic!() };
+/// s.scan(input).unwrap();
 /// assert!(b"PRAGMA".eq_ignore_ascii_case(token1));
 /// ```
 impl Splitter for Tokenizer {
