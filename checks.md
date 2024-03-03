@@ -40,10 +40,32 @@ Parse error: must have at least one non-generated column
 - [ ] table constraint(s) checks
 
 ### `HAVING`
-- [ ] HAVING clause on a non-aggregate query (`GroupBy::having`)
+- [X] HAVING clause on a non-aggregate query (`GroupBy::having`): grammar already prevents this case (grammar differs from SQLite official grammar).
+```sql
+sqlite> SELECT 1 as i HAVING i > 1;
+Parse error: HAVING clause on a non-aggregate query
+```
+vs
+```
+[ERROR sqlite3Parser] near HAVING, "Token(None)": syntax error
+Err: near HAVING, "None": syntax error at (1, 21) in SELECT 1 as i HAVING i > 1
+```
+
+### `SELECT ...`
+- [ ] no duplicated column name in `selcollist`/`Select::columns`
+```sql
+sqlite> SELECT 1 as i, 2 as i;
+-- no error (idem for postgres)
+```
 
 ### `SELECT ... ORDER BY ...`
 - [ ] ORDER BY term does not match any column in the result set (`Select::order_by`)
+```sql
+sqlite> SELECT 1 as i ORDER BY j;
+Parse error: no such column: j
+  SELECT 1 as i ORDER BY j;
+                         ^--- error here
+```
 
 ### `WITH`
-- [ ] no duplicated column name in `CommonTableExpr#IndexedColumn`
+- [ ] no duplicated column name in `CommonTableExpr::IndexedColumn`
