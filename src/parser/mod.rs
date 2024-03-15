@@ -19,7 +19,7 @@ use crate::dialect::Token;
 use ast::{Cmd, ExplainKind, Name, Stmt};
 
 /// Parser error
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParserError {
     /// Stack overflow
     StackOverflow,
