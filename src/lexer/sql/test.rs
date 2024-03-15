@@ -44,11 +44,10 @@ fn count_named_placeholders() {
 
 #[test]
 fn duplicate_column() {
-    let r = parse(b"CREATE TABLE t (x TEXT, x TEXT)");
-    let Error::ParserError(ParserError::Custom(msg), _) = r.unwrap_err() else {
-        panic!("unexpected error type")
-    };
-    assert!(msg.contains("duplicate column name"));
+    expect_parser_err(
+        b"CREATE TABLE t (x TEXT, x TEXT)",
+        "duplicate column name: x",
+    );
 }
 
 #[test]
