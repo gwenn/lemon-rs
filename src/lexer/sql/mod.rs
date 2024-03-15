@@ -24,6 +24,7 @@ pub use error::Error;
 // TODO Extract scanning stuff and move this into the parser crate
 // to make possible to use the tokenizer without depending on the parser...
 
+/// SQL parser
 pub struct Parser<'input> {
     input: &'input [u8],
     scanner: Scanner<Tokenizer>,
@@ -31,6 +32,7 @@ pub struct Parser<'input> {
 }
 
 impl<'input> Parser<'input> {
+    /// Constructor
     pub fn new(input: &'input [u8]) -> Parser<'input> {
         let lexer = Tokenizer::new();
         let scanner = Scanner::new(lexer);
@@ -42,15 +44,16 @@ impl<'input> Parser<'input> {
             parser,
         }
     }
-
+    /// Parse new `input`
     pub fn reset(&mut self, input: &'input [u8]) {
         self.input = input;
         self.scanner.reset();
     }
-
+    /// Current line position in input
     pub fn line(&self) -> u64 {
         self.scanner.line()
     }
+    /// Current column position in input
     pub fn column(&self) -> usize {
         self.scanner.column()
     }
@@ -231,30 +234,39 @@ impl<'input> FallibleIterator for Parser<'input> {
             return Err(err);
         }
         let cmd = self.parser.ctx.cmd();
+        if let Some(ref cmd) = cmd {
+            if let Err(e) = cmd.check() {
+                let err = Error::ParserError(e, Some((self.scanner.line(), self.scanner.column())));
+                return Err(err);
+            }
+        }
         Ok(cmd)
     }
 }
 
+/// SQL token
 pub type Token<'input> = (&'input [u8], TokenType);
 
+/// SQL lexer
 #[derive(Default)]
 pub struct Tokenizer {}
 
 impl Tokenizer {
+    /// Constructor
     pub fn new() -> Tokenizer {
         Tokenizer {}
     }
 }
 
-/// ```compile_fail
+/// ```rust
 /// use sqlite3_parser::lexer::sql::Tokenizer;
 /// use sqlite3_parser::lexer::Scanner;
 ///
 /// let tokenizer = Tokenizer::new();
 /// let input = "PRAGMA parser_trace=ON;".as_bytes();
-/// let mut s = Scanner::new(input, tokenizer);
-/// let (token1, _) = s.scan().unwrap().unwrap();
-/// s.scan().unwrap().unwrap();
+/// let mut s = Scanner::new(tokenizer);
+/// let Ok((_, Some((token1, _)), _)) = s.scan(input) else { panic!() };
+/// s.scan(input).unwrap();
 /// assert!(b"PRAGMA".eq_ignore_ascii_case(token1));
 /// ```
 impl Splitter for Tokenizer {

@@ -5,7 +5,7 @@
 // Renamed manually.
 // To be keep in sync.
 #[non_exhaustive]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, missing_docs)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 #[repr(u16)]
 pub enum TokenType {

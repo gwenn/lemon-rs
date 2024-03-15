@@ -3,7 +3,7 @@ use std::env;
 use std::fs::read;
 use std::panic;
 
-use sqlite3_parser::lexer::sql::Parser;
+use sqlite3_parser::lexer::sql::{Error, Parser};
 
 /// Parse specified files and print all commands.
 fn main() {
@@ -19,7 +19,10 @@ fn main() {
                     Ok(None) => break,
                     Err(err) => {
                         eprintln!("Err: {err} in {arg}");
-                        break;
+                        if let Error::ParserError(..) = err {
+                        } else {
+                            break;
+                        }
                     }
                     Ok(Some(cmd)) => {
                         println!("{cmd}");

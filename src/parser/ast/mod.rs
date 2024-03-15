@@ -1,59 +1,25 @@
 //! Abstract Syntax Tree
 
-use std::fmt::{self, Display, Formatter, Write};
+pub mod check;
+pub mod fmt;
+
 use std::num::ParseIntError;
 use std::str::FromStr;
 
+use fmt::{ToTokens, TokenStream};
 use indexmap::IndexSet;
 
+use crate::custom_err;
 use crate::dialect::TokenType::{self, *};
 use crate::dialect::{from_token, is_identifier, Token};
 use crate::parser::{parse::YYCODETYPE, ParserError};
 
-struct FmtTokenStream<'a, 'b> {
-    f: &'a mut Formatter<'b>,
-    spaced: bool,
-}
-impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
-    type Error = fmt::Error;
-
-    fn append(&mut self, ty: TokenType, value: Option<&str>) -> fmt::Result {
-        if !self.spaced {
-            match ty {
-                TK_COMMA | TK_SEMI | TK_RP | TK_DOT => {}
-                _ => {
-                    self.f.write_char(' ')?;
-                    self.spaced = true;
-                }
-            };
-        }
-        if ty == TK_BLOB {
-            self.f.write_char('X')?;
-            self.f.write_char('\'')?;
-            if let Some(str) = value {
-                self.f.write_str(str)?;
-            }
-            return self.f.write_char('\'');
-        } else if let Some(str) = ty.as_str() {
-            self.f.write_str(str)?;
-            self.spaced = ty == TK_LP || ty == TK_DOT; // str should not be whitespace
-        }
-        if let Some(str) = value {
-            // trick for pretty-print
-            self.spaced = str.bytes().all(|b| b.is_ascii_whitespace());
-            /*if !self.spaced {
-                self.f.write_char(' ')?;
-            }*/
-            self.f.write_str(str)
-        } else {
-            Ok(())
-        }
-    }
-}
-
+/// `?` or `$` Prepared statement arg placeholder(s)
 #[derive(Default)]
 pub struct ParameterInfo {
+    /// Number of SQL parameters in a prepared statement, like `sqlite3_bind_parameter_count`
     pub count: u32,
+    /// Parameter name(s) if any
     pub names: IndexSet<String>,
 }
 
@@ -80,98 +46,16 @@ impl TokenStream for ParameterInfo {
     }
 }
 
-pub trait TokenStream {
-    type Error;
-
-    fn append(&mut self, ty: TokenType, value: Option<&str>) -> Result<(), Self::Error>;
-}
-
-pub trait ToTokens {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error>;
-
-    fn to_fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut s = FmtTokenStream { f, spaced: true };
-        self.to_tokens(&mut s)
-    }
-}
-
-impl<T: ?Sized + ToTokens> ToTokens for &T {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        ToTokens::to_tokens(&**self, s)
-    }
-}
-
-impl ToTokens for String {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_ANY, Some(self.as_ref()))
-    }
-}
-
-/* FIXME: does not work, find why
-impl Display for dyn ToTokens {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut s = FmtTokenStream { f, spaced: true };
-        match self.to_tokens(&mut s) {
-            Err(_) => Err(fmt::Error),
-            Ok(()) => Ok(()),
-        }
-    }
-}
-*/
-
+/// Statement or Explain statement
 // https://sqlite.org/syntax/sql-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cmd {
+    /// `EXPLAIN` statement
     Explain(Stmt),
+    /// `EXPLAIN QUERY PLAN` statement
     ExplainQueryPlan(Stmt),
+    /// statement
     Stmt(Stmt),
-}
-
-impl ToTokens for Cmd {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            Cmd::Explain(stmt) => {
-                s.append(TK_EXPLAIN, None)?;
-                stmt.to_tokens(s)?;
-            }
-            Cmd::ExplainQueryPlan(stmt) => {
-                s.append(TK_EXPLAIN, None)?;
-                s.append(TK_QUERY, None)?;
-                s.append(TK_PLAN, None)?;
-                stmt.to_tokens(s)?;
-            }
-            Cmd::Stmt(stmt) => {
-                stmt.to_tokens(s)?;
-            }
-        }
-        s.append(TK_SEMI, None)
-    }
-}
-
-impl Display for Cmd {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.to_fmt(f)
-    }
-}
-
-impl Cmd {
-    /// Like `sqlite3_column_count` but more limited
-    pub fn column_count(&self) -> ColumnCount {
-        match self {
-            Cmd::Explain(_) => ColumnCount::Fixed(8),
-            Cmd::ExplainQueryPlan(_) => ColumnCount::Fixed(4),
-            Cmd::Stmt(stmt) => stmt.column_count(),
-        }
-    }
-
-    /// Like `sqlite3_stmt_readonly`
-    pub fn readonly(&self) -> bool {
-        match self {
-            Cmd::Explain(stmt) => stmt.readonly(),
-            Cmd::ExplainQueryPlan(stmt) => stmt.readonly(),
-            Cmd::Stmt(stmt) => stmt.readonly(),
-        }
-    }
 }
 
 pub(crate) enum ExplainKind {
@@ -179,699 +63,358 @@ pub(crate) enum ExplainKind {
     QueryPlan,
 }
 
+/// SQL statement
 // https://sqlite.org/syntax/sql-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stmt {
-    // table name, body
+    /// `ALTER TABLE`: table name, body
     AlterTable(QualifiedName, AlterTableBody),
-    // object name
+    /// `ANALYSE`: object name
     Analyze(Option<QualifiedName>),
+    /// `ATTACH DATABASE`
     Attach {
+        /// filename
         // TODO distinction between ATTACH and ATTACH DATABASE
         expr: Expr,
+        /// schema name
         db_name: Expr,
+        /// password
         key: Option<Expr>,
     },
-    // tx type, tx name
+    /// `BEGIN`: tx type, tx name
     Begin(Option<TransactionType>, Option<Name>),
-    // tx name
+    /// `COMMIT`/`END`: tx name
     Commit(Option<Name>), // TODO distinction between COMMIT and END
+    /// `CREATE INDEX`
     CreateIndex {
+        /// `UNIQUE`
         unique: bool,
+        /// `IF NOT EXISTS`
         if_not_exists: bool,
+        /// index name
         idx_name: QualifiedName,
+        /// table name
         tbl_name: Name,
+        /// indexed columns or expressions
         columns: Vec<SortedColumn>,
+        /// partial index
         where_clause: Option<Expr>,
     },
+    /// `CREATE TABLE`
     CreateTable {
+        /// `TEMPORARY`
         temporary: bool, // TODO distinction between TEMP and TEMPORARY
+        /// `IF NOT EXISTS`
         if_not_exists: bool,
+        /// table name
         tbl_name: QualifiedName,
+        /// table body
         body: CreateTableBody,
     },
+    /// `CREATE TRIGGER`
     CreateTrigger {
+        /// `TEMPORARY`
         temporary: bool,
+        /// `IF NOT EXISTS`
         if_not_exists: bool,
+        /// trigger name
         trigger_name: QualifiedName,
+        /// `BEFORE`/`AFTER`/`INSTEAD OF`
         time: Option<TriggerTime>,
+        /// `DELETE`/`INSERT`/`UPDATE`
         event: TriggerEvent,
+        /// table name
         tbl_name: QualifiedName,
+        /// `FOR EACH ROW`
         for_each_row: bool,
+        /// `WHEN`
         when_clause: Option<Expr>,
+        /// statements
         commands: Vec<TriggerCmd>,
     },
+    /// `CREATE VIEW`
     CreateView {
+        /// `TEMPORARY`
         temporary: bool,
+        /// `IF NOT EXISTS`
         if_not_exists: bool,
+        /// view name
         view_name: QualifiedName,
+        /// columns
         columns: Option<Vec<IndexedColumn>>,
+        /// query
         select: Select,
     },
+    /// `CREATE VIRTUAL TABLE`
     CreateVirtualTable {
+        /// `IF NOT EXISTS`
         if_not_exists: bool,
+        /// table name
         tbl_name: QualifiedName,
+        /// module
         module_name: Name,
+        /// args
         args: Option<Vec<String>>, // TODO smol str
     },
+    /// `DELETE`
     Delete {
+        /// CTE
         with: Option<With>,
+        /// `FROM` table name
         tbl_name: QualifiedName,
+        /// `INDEXED`
         indexed: Option<Indexed>,
+        /// `WHERE` clause
         where_clause: Option<Expr>,
+        /// `RETURNING`
         returning: Option<Vec<ResultColumn>>,
+        /// `ORDER BY`
         order_by: Option<Vec<SortedColumn>>,
+        /// `LIMIT`
         limit: Option<Limit>,
     },
-    // db name
+    /// `DETACH DATABASE`: db name
     Detach(Expr), // TODO distinction between DETACH and DETACH DATABASE
+    /// `DROP INDEX`
     DropIndex {
+        /// `IF EXISTS`
         if_exists: bool,
+        /// index name
         idx_name: QualifiedName,
     },
+    /// `DROP TABLE`
     DropTable {
+        /// `IF EXISTS`
         if_exists: bool,
+        /// table name
         tbl_name: QualifiedName,
     },
+    /// `DROP TRIGGER`
     DropTrigger {
+        /// `IF EXISTS`
         if_exists: bool,
+        /// trigger name
         trigger_name: QualifiedName,
     },
+    /// `DROP VIEW`
     DropView {
+        /// `IF EXISTS`
         if_exists: bool,
+        /// view name
         view_name: QualifiedName,
     },
+    /// `INSERT`
     Insert {
+        /// CTE
         with: Option<With>,
+        /// `OR`
         or_conflict: Option<ResolveType>, // TODO distinction between REPLACE and INSERT OR REPLACE
+        /// table name
         tbl_name: QualifiedName,
+        /// `COLUMNS`
         columns: Option<Vec<Name>>,
+        /// `VALUES` or `SELECT`
         body: InsertBody,
+        /// `RETURNING`
         returning: Option<Vec<ResultColumn>>,
     },
-    // pragma name, body
+    /// `PRAGMA`: pragma name, body
     Pragma(QualifiedName, Option<PragmaBody>),
+    /// `REINDEX`
     Reindex {
+        /// collation or index or table name
         obj_name: Option<QualifiedName>,
     },
-    // savepoint name
+    /// `RELEASE`: savepoint name
     Release(Name), // TODO distinction between RELEASE and RELEASE SAVEPOINT
+    /// `ROLLBACK`
     Rollback {
+        /// transaction name
         tx_name: Option<Name>,
+        /// savepoint name
         savepoint_name: Option<Name>, // TODO distinction between TO and TO SAVEPOINT
     },
-    // savepoint name
+    /// `SAVEPOINT`: savepoint name
     Savepoint(Name),
+    /// `SELECT`
     Select(Select),
+    /// `UPDATE`
     Update {
+        /// CTE
         with: Option<With>,
+        /// `OR`
         or_conflict: Option<ResolveType>,
+        /// table name
         tbl_name: QualifiedName,
+        /// `INDEXED`
         indexed: Option<Indexed>,
+        /// `SET` assigments
         sets: Vec<Set>,
+        /// `FROM`
         from: Option<FromClause>,
+        /// `WHERE` clause
         where_clause: Option<Expr>,
+        /// `RETURNING`
         returning: Option<Vec<ResultColumn>>,
+        /// `ORDER BY`
         order_by: Option<Vec<SortedColumn>>,
+        /// `LIMIT`
         limit: Option<Limit>,
     },
-    // database name, into expr
+    /// `VACUUM`: database name, into expr
     Vacuum(Option<Name>, Option<Expr>),
 }
 
-impl ToTokens for Stmt {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            Stmt::AlterTable(tbl_name, body) => {
-                s.append(TK_ALTER, None)?;
-                s.append(TK_TABLE, None)?;
-                tbl_name.to_tokens(s)?;
-                body.to_tokens(s)
-            }
-            Stmt::Analyze(obj_name) => {
-                s.append(TK_ANALYZE, None)?;
-                if let Some(obj_name) = obj_name {
-                    obj_name.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::Attach { expr, db_name, key } => {
-                s.append(TK_ATTACH, None)?;
-                expr.to_tokens(s)?;
-                s.append(TK_AS, None)?;
-                db_name.to_tokens(s)?;
-                if let Some(key) = key {
-                    s.append(TK_KEY, None)?;
-                    key.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::Begin(tx_type, tx_name) => {
-                s.append(TK_BEGIN, None)?;
-                if let Some(tx_type) = tx_type {
-                    tx_type.to_tokens(s)?;
-                }
-                if let Some(tx_name) = tx_name {
-                    s.append(TK_TRANSACTION, None)?;
-                    tx_name.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::Commit(tx_name) => {
-                s.append(TK_COMMIT, None)?;
-                if let Some(tx_name) = tx_name {
-                    s.append(TK_TRANSACTION, None)?;
-                    tx_name.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::CreateIndex {
-                unique,
-                if_not_exists,
-                idx_name,
-                tbl_name,
-                columns,
-                where_clause,
-            } => {
-                s.append(TK_CREATE, None)?;
-                if *unique {
-                    s.append(TK_UNIQUE, None)?;
-                }
-                s.append(TK_INDEX, None)?;
-                if *if_not_exists {
-                    s.append(TK_IF, None)?;
-                    s.append(TK_NOT, None)?;
-                    s.append(TK_EXISTS, None)?;
-                }
-                idx_name.to_tokens(s)?;
-                s.append(TK_ON, None)?;
-                tbl_name.to_tokens(s)?;
-                s.append(TK_LP, None)?;
-                comma(columns, s)?;
-                s.append(TK_RP, None)?;
-                if let Some(where_clause) = where_clause {
-                    s.append(TK_WHERE, None)?;
-                    where_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::CreateTable {
-                temporary,
-                if_not_exists,
-                tbl_name,
-                body,
-            } => {
-                s.append(TK_CREATE, None)?;
-                if *temporary {
-                    s.append(TK_TEMP, None)?;
-                }
-                s.append(TK_TABLE, None)?;
-                if *if_not_exists {
-                    s.append(TK_IF, None)?;
-                    s.append(TK_NOT, None)?;
-                    s.append(TK_EXISTS, None)?;
-                }
-                tbl_name.to_tokens(s)?;
-                body.to_tokens(s)
-            }
-            Stmt::CreateTrigger {
-                temporary,
-                if_not_exists,
-                trigger_name,
-                time,
-                event,
-                tbl_name,
-                for_each_row,
-                when_clause,
-                commands,
-            } => {
-                s.append(TK_CREATE, None)?;
-                if *temporary {
-                    s.append(TK_TEMP, None)?;
-                }
-                s.append(TK_TRIGGER, None)?;
-                if *if_not_exists {
-                    s.append(TK_IF, None)?;
-                    s.append(TK_NOT, None)?;
-                    s.append(TK_EXISTS, None)?;
-                }
-                trigger_name.to_tokens(s)?;
-                if let Some(time) = time {
-                    time.to_tokens(s)?;
-                }
-                event.to_tokens(s)?;
-                s.append(TK_ON, None)?;
-                tbl_name.to_tokens(s)?;
-                if *for_each_row {
-                    s.append(TK_FOR, None)?;
-                    s.append(TK_EACH, None)?;
-                    s.append(TK_ROW, None)?;
-                }
-                if let Some(when_clause) = when_clause {
-                    s.append(TK_WHEN, None)?;
-                    when_clause.to_tokens(s)?;
-                }
-                s.append(TK_BEGIN, Some("\n"))?;
-                for command in commands {
-                    command.to_tokens(s)?;
-                    s.append(TK_SEMI, Some("\n"))?;
-                }
-                s.append(TK_END, None)
-            }
-            Stmt::CreateView {
-                temporary,
-                if_not_exists,
-                view_name,
-                columns,
-                select,
-            } => {
-                s.append(TK_CREATE, None)?;
-                if *temporary {
-                    s.append(TK_TEMP, None)?;
-                }
-                s.append(TK_VIEW, None)?;
-                if *if_not_exists {
-                    s.append(TK_IF, None)?;
-                    s.append(TK_NOT, None)?;
-                    s.append(TK_EXISTS, None)?;
-                }
-                view_name.to_tokens(s)?;
-                if let Some(columns) = columns {
-                    s.append(TK_LP, None)?;
-                    comma(columns, s)?;
-                    s.append(TK_RP, None)?;
-                }
-                s.append(TK_AS, None)?;
-                select.to_tokens(s)
-            }
-            Stmt::CreateVirtualTable {
-                if_not_exists,
-                tbl_name,
-                module_name,
-                args,
-            } => {
-                s.append(TK_CREATE, None)?;
-                s.append(TK_VIRTUAL, None)?;
-                s.append(TK_TABLE, None)?;
-                if *if_not_exists {
-                    s.append(TK_IF, None)?;
-                    s.append(TK_NOT, None)?;
-                    s.append(TK_EXISTS, None)?;
-                }
-                tbl_name.to_tokens(s)?;
-                s.append(TK_USING, None)?;
-                module_name.to_tokens(s)?;
-                s.append(TK_LP, None)?;
-                if let Some(args) = args {
-                    comma(args, s)?;
-                }
-                s.append(TK_RP, None)
-            }
-            Stmt::Delete {
-                with,
-                tbl_name,
-                indexed,
-                where_clause,
-                returning,
-                order_by,
-                limit,
-            } => {
-                if let Some(with) = with {
-                    with.to_tokens(s)?;
-                }
-                s.append(TK_DELETE, None)?;
-                s.append(TK_FROM, None)?;
-                tbl_name.to_tokens(s)?;
-                if let Some(indexed) = indexed {
-                    indexed.to_tokens(s)?;
-                }
-                if let Some(where_clause) = where_clause {
-                    s.append(TK_WHERE, None)?;
-                    where_clause.to_tokens(s)?;
-                }
-                if let Some(returning) = returning {
-                    s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
-                }
-                if let Some(order_by) = order_by {
-                    s.append(TK_ORDER, None)?;
-                    s.append(TK_BY, None)?;
-                    comma(order_by, s)?;
-                }
-                if let Some(limit) = limit {
-                    limit.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::Detach(expr) => {
-                s.append(TK_DETACH, None)?;
-                expr.to_tokens(s)
-            }
-            Stmt::DropIndex {
-                if_exists,
-                idx_name,
-            } => {
-                s.append(TK_DROP, None)?;
-                s.append(TK_INDEX, None)?;
-                if *if_exists {
-                    s.append(TK_IF, None)?;
-                    s.append(TK_EXISTS, None)?;
-                }
-                idx_name.to_tokens(s)
-            }
-            Stmt::DropTable {
-                if_exists,
-                tbl_name,
-            } => {
-                s.append(TK_DROP, None)?;
-                s.append(TK_TABLE, None)?;
-                if *if_exists {
-                    s.append(TK_IF, None)?;
-                    s.append(TK_EXISTS, None)?;
-                }
-                tbl_name.to_tokens(s)
-            }
-            Stmt::DropTrigger {
-                if_exists,
-                trigger_name,
-            } => {
-                s.append(TK_DROP, None)?;
-                s.append(TK_TRIGGER, None)?;
-                if *if_exists {
-                    s.append(TK_IF, None)?;
-                    s.append(TK_EXISTS, None)?;
-                }
-                trigger_name.to_tokens(s)
-            }
-            Stmt::DropView {
-                if_exists,
-                view_name,
-            } => {
-                s.append(TK_DROP, None)?;
-                s.append(TK_VIEW, None)?;
-                if *if_exists {
-                    s.append(TK_IF, None)?;
-                    s.append(TK_EXISTS, None)?;
-                }
-                view_name.to_tokens(s)
-            }
-            Stmt::Insert {
-                with,
-                or_conflict,
-                tbl_name,
-                columns,
-                body,
-                returning,
-            } => {
-                if let Some(with) = with {
-                    with.to_tokens(s)?;
-                }
-                if let Some(ResolveType::Replace) = or_conflict {
-                    s.append(TK_REPLACE, None)?;
-                } else {
-                    s.append(TK_INSERT, None)?;
-                    if let Some(or_conflict) = or_conflict {
-                        s.append(TK_OR, None)?;
-                        or_conflict.to_tokens(s)?;
-                    }
-                }
-                s.append(TK_INTO, None)?;
-                tbl_name.to_tokens(s)?;
-                if let Some(columns) = columns {
-                    s.append(TK_LP, None)?;
-                    comma(columns, s)?;
-                    s.append(TK_RP, None)?;
-                }
-                body.to_tokens(s)?;
-                if let Some(returning) = returning {
-                    s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
-                }
-                Ok(())
-            }
-            Stmt::Pragma(name, value) => {
-                s.append(TK_PRAGMA, None)?;
-                name.to_tokens(s)?;
-                if let Some(value) = value {
-                    value.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::Reindex { obj_name } => {
-                s.append(TK_REINDEX, None)?;
-                if let Some(obj_name) = obj_name {
-                    obj_name.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::Release(name) => {
-                s.append(TK_RELEASE, None)?;
-                name.to_tokens(s)
-            }
-            Stmt::Rollback {
-                tx_name,
-                savepoint_name,
-            } => {
-                s.append(TK_ROLLBACK, None)?;
-                if let Some(tx_name) = tx_name {
-                    s.append(TK_TRANSACTION, None)?;
-                    tx_name.to_tokens(s)?;
-                }
-                if let Some(savepoint_name) = savepoint_name {
-                    s.append(TK_TO, None)?;
-                    savepoint_name.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::Savepoint(name) => {
-                s.append(TK_SAVEPOINT, None)?;
-                name.to_tokens(s)
-            }
-            Stmt::Select(select) => select.to_tokens(s),
-            Stmt::Update {
-                with,
-                or_conflict,
-                tbl_name,
-                indexed,
-                sets,
-                from,
-                where_clause,
-                returning,
-                order_by,
-                limit,
-            } => {
-                if let Some(with) = with {
-                    with.to_tokens(s)?;
-                }
-                s.append(TK_UPDATE, None)?;
-                if let Some(or_conflict) = or_conflict {
-                    s.append(TK_OR, None)?;
-                    or_conflict.to_tokens(s)?;
-                }
-                tbl_name.to_tokens(s)?;
-                if let Some(indexed) = indexed {
-                    indexed.to_tokens(s)?;
-                }
-                s.append(TK_SET, None)?;
-                comma(sets, s)?;
-                if let Some(from) = from {
-                    s.append(TK_FROM, None)?;
-                    from.to_tokens(s)?;
-                }
-                if let Some(where_clause) = where_clause {
-                    s.append(TK_WHERE, None)?;
-                    where_clause.to_tokens(s)?;
-                }
-                if let Some(returning) = returning {
-                    s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
-                }
-                if let Some(order_by) = order_by {
-                    s.append(TK_ORDER, None)?;
-                    s.append(TK_BY, None)?;
-                    comma(order_by, s)?;
-                }
-                if let Some(limit) = limit {
-                    limit.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Stmt::Vacuum(name, expr) => {
-                s.append(TK_VACUUM, None)?;
-                if let Some(ref name) = name {
-                    name.to_tokens(s)?;
-                }
-                if let Some(ref expr) = expr {
-                    s.append(TK_INTO, None)?;
-                    expr.to_tokens(s)?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-/// Column count
-pub enum ColumnCount {
-    /// With `SELECT *` / EXPLAIN / PRAGMA
-    Dynamic,
-    ///
-    Fixed(usize),
-    /// No column
-    None,
-}
-
-impl ColumnCount {
-    fn incr(&mut self) {
-        if let ColumnCount::Fixed(n) = self {
-            *n += 1;
-        }
-    }
-}
-
-impl Stmt {
-    /// Like `sqlite3_column_count` but more limited
-    pub fn column_count(&self) -> ColumnCount {
-        match self {
-            Stmt::Delete {
-                returning: Some(returning),
-                ..
-            } => column_count(returning),
-            Stmt::Insert {
-                returning: Some(returning),
-                ..
-            } => column_count(returning),
-            Stmt::Pragma(..) => ColumnCount::Dynamic,
-            Stmt::Select(s) => s.body.select.column_count(),
-            Stmt::Update {
-                returning: Some(returning),
-                ..
-            } => column_count(returning),
-            _ => ColumnCount::None,
-        }
-    }
-
-    /// Like `sqlite3_stmt_readonly`
-    pub fn readonly(&self) -> bool {
-        match self {
-            Stmt::Attach { .. } => true,
-            Stmt::Begin(..) => true,
-            Stmt::Commit(..) => true,
-            Stmt::Detach(..) => true,
-            Stmt::Pragma(..) => true, // TODO check all
-            Stmt::Reindex { .. } => true,
-            Stmt::Release(..) => true,
-            Stmt::Rollback { .. } => true,
-            Stmt::Savepoint(..) => true,
-            Stmt::Select(..) => true,
-            _ => false,
-        }
-    }
-}
-
+/// SQL expression
 // https://sqlite.org/syntax/expr.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
+    /// `BETWEEN`
     Between {
+        /// expression
         lhs: Box<Expr>,
+        /// `NOT`
         not: bool,
+        /// start
         start: Box<Expr>,
+        /// end
         end: Box<Expr>,
     },
+    /// binary expression
     Binary(Box<Expr>, Operator, Box<Expr>),
-    // CASE expression
+    /// `CASE` expression
     Case {
+        /// operand
         base: Option<Box<Expr>>,
+        /// `WHEN` condition `THEN` result
         when_then_pairs: Vec<(Expr, Expr)>,
+        /// `ELSE` result
         else_expr: Option<Box<Expr>>,
     },
-    // CAST expression
+    /// CAST expression
     Cast {
+        /// expression
         expr: Box<Expr>,
+        /// `AS` type name
         type_name: Type,
     },
-    // COLLATE expression
+    /// `COLLATE`: expression
     Collate(Box<Expr>, String),
-    // schema-name.table-name.column-name
+    /// schema-name.table-name.column-name
     DoublyQualified(Name, Name, Name),
-    // EXISTS subquery
+    /// `EXISTS` subquery
     Exists(Box<Select>),
-    // call to a built-in function
+    /// call to a built-in function
     FunctionCall {
+        /// function name
         name: Id,
+        /// `DISTINCT`
         distinctness: Option<Distinctness>,
+        /// arguments
         args: Option<Vec<Expr>>,
+        /// `ORDER BY`
         order_by: Option<Vec<SortedColumn>>,
+        /// `FILTER`
         filter_over: Option<FunctionTail>,
     },
-    // Function call expression with '*' as arg
+    /// Function call expression with '*' as arg
     FunctionCallStar {
+        /// function name
         name: Id,
+        /// `FILTER`
         filter_over: Option<FunctionTail>,
     },
-    // Identifier
+    /// Identifier
     Id(Id),
+    /// `IN`
     InList {
+        /// expression
         lhs: Box<Expr>,
+        /// `NOT`
         not: bool,
+        /// values
         rhs: Option<Vec<Expr>>,
     },
+    /// `IN` subselect
     InSelect {
+        /// expression
         lhs: Box<Expr>,
+        /// `NOT`
         not: bool,
+        /// subquery
         rhs: Box<Select>,
     },
+    /// `IN` table name / function
     InTable {
+        /// expression
         lhs: Box<Expr>,
+        /// `NOT`
         not: bool,
+        /// table name
         rhs: QualifiedName,
+        /// table function arguments
         args: Option<Vec<Expr>>,
     },
+    /// `IS NULL`
     IsNull(Box<Expr>),
+    /// `LIKE`
     Like {
+        /// expression
         lhs: Box<Expr>,
+        /// `NOT`
         not: bool,
+        /// operator
         op: LikeOperator,
+        /// pattern
         rhs: Box<Expr>,
+        /// `ESCAPE` char
         escape: Option<Box<Expr>>,
     },
-    // Literal expression
+    /// Literal expression
     Literal(Literal),
+    /// Name
     Name(Name),
-    // "NOT NULL" or "NOTNULL"
+    /// `NOT NULL` or `NOTNULL`
     NotNull(Box<Expr>),
-    // Parenthesized subexpression
+    /// Parenthesized subexpression
     Parenthesized(Vec<Expr>),
+    /// Qualified name
     Qualified(Name, Name),
-    // RAISE function call
+    /// `RAISE` function call
     Raise(ResolveType, Option<Name>),
-    // Subquery expression
+    /// Subquery expression
     Subquery(Box<Select>),
-    // Unary expression
+    /// Unary expression
     Unary(UnaryOperator, Box<Expr>),
-    // Parameters
+    /// Parameters
     Variable(String),
 }
 
 impl Expr {
+    /// Constructor
     pub fn parenthesized(x: Expr) -> Expr {
         Expr::Parenthesized(vec![x])
     }
+    /// Constructor
     pub fn id(xt: YYCODETYPE, x: Token) -> Expr {
         Expr::Id(Id::from_token(xt, x))
     }
+    /// Constructor
     pub fn collate(x: Expr, ct: YYCODETYPE, c: Token) -> Expr {
         Expr::Collate(Box::new(x), from_token(ct, c))
     }
+    /// Constructor
     pub fn cast(x: Expr, type_name: Type) -> Expr {
         Expr::Cast {
             expr: Box::new(x),
             type_name,
         }
     }
+    /// Constructor
     pub fn binary(left: Expr, op: YYCODETYPE, right: Expr) -> Expr {
         Expr::Binary(Box::new(left), Operator::from(op), Box::new(right))
     }
+    /// Constructor
     pub fn ptr(left: Expr, op: Token, right: Expr) -> Expr {
         let mut ptr = Operator::ArrowRight;
         if let Some(ref op) = op.1 {
@@ -881,6 +424,7 @@ impl Expr {
         }
         Expr::Binary(Box::new(left), ptr, Box::new(right))
     }
+    /// Constructor
     pub fn like(lhs: Expr, not: bool, op: LikeOperator, rhs: Expr, escape: Option<Expr>) -> Expr {
         Expr::Like {
             lhs: Box::new(lhs),
@@ -890,6 +434,7 @@ impl Expr {
             escape: escape.map(Box::new),
         }
     }
+    /// Constructor
     pub fn not_null(x: Expr, op: YYCODETYPE) -> Expr {
         if op == TK_ISNULL as YYCODETYPE {
             Expr::IsNull(Box::new(x))
@@ -899,9 +444,11 @@ impl Expr {
             unreachable!()
         }
     }
+    /// Constructor
     pub fn unary(op: UnaryOperator, x: Expr) -> Expr {
         Expr::Unary(op, Box::new(x))
     }
+    /// Constructor
     pub fn between(lhs: Expr, not: bool, start: Expr, end: Expr) -> Expr {
         Expr::Between {
             lhs: Box::new(lhs),
@@ -910,6 +457,7 @@ impl Expr {
             end: Box::new(end),
         }
     }
+    /// Constructor
     pub fn in_list(lhs: Expr, not: bool, rhs: Option<Vec<Expr>>) -> Expr {
         Expr::InList {
             lhs: Box::new(lhs),
@@ -917,6 +465,7 @@ impl Expr {
             rhs,
         }
     }
+    /// Constructor
     pub fn in_select(lhs: Expr, not: bool, rhs: Select) -> Expr {
         Expr::InSelect {
             lhs: Box::new(lhs),
@@ -924,6 +473,7 @@ impl Expr {
             rhs: Box::new(rhs),
         }
     }
+    /// Constructor
     pub fn in_table(lhs: Expr, not: bool, rhs: QualifiedName, args: Option<Vec<Expr>>) -> Expr {
         Expr::InTable {
             lhs: Box::new(lhs),
@@ -932,248 +482,37 @@ impl Expr {
             args,
         }
     }
+    /// Constructor
     pub fn sub_query(query: Select) -> Expr {
         Expr::Subquery(Box::new(query))
     }
 }
-impl ToTokens for Expr {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            Expr::Between {
-                lhs,
-                not,
-                start,
-                end,
-            } => {
-                lhs.to_tokens(s)?;
-                if *not {
-                    s.append(TK_NOT, None)?;
-                }
-                s.append(TK_BETWEEN, None)?;
-                start.to_tokens(s)?;
-                s.append(TK_AND, None)?;
-                end.to_tokens(s)
-            }
-            Expr::Binary(lhs, op, rhs) => {
-                lhs.to_tokens(s)?;
-                op.to_tokens(s)?;
-                rhs.to_tokens(s)
-            }
-            Expr::Case {
-                base,
-                when_then_pairs,
-                else_expr,
-            } => {
-                s.append(TK_CASE, None)?;
-                if let Some(ref base) = base {
-                    base.to_tokens(s)?;
-                }
-                for (when, then) in when_then_pairs {
-                    s.append(TK_WHEN, None)?;
-                    when.to_tokens(s)?;
-                    s.append(TK_THEN, None)?;
-                    then.to_tokens(s)?;
-                }
-                if let Some(ref else_expr) = else_expr {
-                    s.append(TK_ELSE, None)?;
-                    else_expr.to_tokens(s)?;
-                }
-                s.append(TK_END, None)
-            }
-            Expr::Cast { expr, type_name } => {
-                s.append(TK_CAST, None)?;
-                s.append(TK_LP, None)?;
-                expr.to_tokens(s)?;
-                s.append(TK_AS, None)?;
-                type_name.to_tokens(s)?;
-                s.append(TK_RP, None)
-            }
-            Expr::Collate(expr, collation) => {
-                expr.to_tokens(s)?;
-                s.append(TK_COLLATE, None)?;
-                double_quote(collation, s)
-            }
-            Expr::DoublyQualified(db_name, tbl_name, col_name) => {
-                db_name.to_tokens(s)?;
-                s.append(TK_DOT, None)?;
-                tbl_name.to_tokens(s)?;
-                s.append(TK_DOT, None)?;
-                col_name.to_tokens(s)
-            }
-            Expr::Exists(subquery) => {
-                s.append(TK_EXISTS, None)?;
-                s.append(TK_LP, None)?;
-                subquery.to_tokens(s)?;
-                s.append(TK_RP, None)
-            }
-            Expr::FunctionCall {
-                name,
-                distinctness,
-                args,
-                order_by,
-                filter_over,
-            } => {
-                name.to_tokens(s)?;
-                s.append(TK_LP, None)?;
-                if let Some(distinctness) = distinctness {
-                    distinctness.to_tokens(s)?;
-                }
-                if let Some(args) = args {
-                    comma(args, s)?;
-                }
-                if let Some(order_by) = order_by {
-                    s.append(TK_ORDER, None)?;
-                    s.append(TK_BY, None)?;
-                    comma(order_by, s)?;
-                }
-                s.append(TK_RP, None)?;
-                if let Some(filter_over) = filter_over {
-                    filter_over.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Expr::FunctionCallStar { name, filter_over } => {
-                name.to_tokens(s)?;
-                s.append(TK_LP, None)?;
-                s.append(TK_STAR, None)?;
-                s.append(TK_RP, None)?;
-                if let Some(filter_over) = filter_over {
-                    filter_over.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Expr::Id(id) => id.to_tokens(s),
-            Expr::InList { lhs, not, rhs } => {
-                lhs.to_tokens(s)?;
-                if *not {
-                    s.append(TK_NOT, None)?;
-                }
-                s.append(TK_IN, None)?;
-                s.append(TK_LP, None)?;
-                if let Some(rhs) = rhs {
-                    comma(rhs, s)?;
-                }
-                s.append(TK_RP, None)
-            }
-            Expr::InSelect { lhs, not, rhs } => {
-                lhs.to_tokens(s)?;
-                if *not {
-                    s.append(TK_NOT, None)?;
-                }
-                s.append(TK_IN, None)?;
-                s.append(TK_LP, None)?;
-                rhs.to_tokens(s)?;
-                s.append(TK_RP, None)
-            }
-            Expr::InTable {
-                lhs,
-                not,
-                rhs,
-                args,
-            } => {
-                lhs.to_tokens(s)?;
-                if *not {
-                    s.append(TK_NOT, None)?;
-                }
-                s.append(TK_IN, None)?;
-                rhs.to_tokens(s)?;
-                if let Some(args) = args {
-                    s.append(TK_LP, None)?;
-                    comma(args, s)?;
-                    s.append(TK_RP, None)?;
-                }
-                Ok(())
-            }
-            Expr::IsNull(sub_expr) => {
-                sub_expr.to_tokens(s)?;
-                s.append(TK_ISNULL, None)
-            }
-            Expr::Like {
-                lhs,
-                not,
-                op,
-                rhs,
-                escape,
-            } => {
-                lhs.to_tokens(s)?;
-                if *not {
-                    s.append(TK_NOT, None)?;
-                }
-                op.to_tokens(s)?;
-                rhs.to_tokens(s)?;
-                if let Some(escape) = escape {
-                    s.append(TK_ESCAPE, None)?;
-                    escape.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            Expr::Literal(lit) => lit.to_tokens(s),
-            Expr::Name(name) => name.to_tokens(s),
-            Expr::NotNull(sub_expr) => {
-                sub_expr.to_tokens(s)?;
-                s.append(TK_NOTNULL, None)
-            }
-            Expr::Parenthesized(exprs) => {
-                s.append(TK_LP, None)?;
-                comma(exprs, s)?;
-                s.append(TK_RP, None)
-            }
-            Expr::Qualified(qualifier, qualified) => {
-                qualifier.to_tokens(s)?;
-                s.append(TK_DOT, None)?;
-                qualified.to_tokens(s)
-            }
-            Expr::Raise(rt, err) => {
-                s.append(TK_RAISE, None)?;
-                s.append(TK_LP, None)?;
-                rt.to_tokens(s)?;
-                if let Some(err) = err {
-                    s.append(TK_COMMA, None)?;
-                    err.to_tokens(s)?;
-                }
-                s.append(TK_RP, None)
-            }
-            Expr::Subquery(query) => {
-                s.append(TK_LP, None)?;
-                query.to_tokens(s)?;
-                s.append(TK_RP, None)
-            }
-            Expr::Unary(op, sub_expr) => {
-                op.to_tokens(s)?;
-                sub_expr.to_tokens(s)
-            }
-            Expr::Variable(var) => match var.chars().next() {
-                Some(c) if c == '$' || c == '@' || c == '#' || c == ':' => {
-                    s.append(TK_VARIABLE, Some(var))
-                }
-                Some(_) => s.append(TK_VARIABLE, Some(&("?".to_owned() + var))),
-                None => s.append(TK_VARIABLE, Some("?")),
-            },
-        }
-    }
-}
 
-impl Display for Expr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.to_fmt(f)
-    }
-}
-
+/// SQL literal
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
+    /// Number
     Numeric(String),
+    /// String
     // TODO Check that string is already quoted and correctly escaped
     String(String),
+    /// BLOB
     // TODO Check that string is valid (only hexa)
     Blob(String),
+    /// Keyword
     Keyword(String),
+    /// `NULL`
     Null,
+    /// `CURRENT_DATE`
     CurrentDate,
+    /// `CURRENT_TIME`
     CurrentTime,
+    /// `CURRENT_TIMESTAMP`
     CurrentTimestamp,
 }
 
 impl Literal {
+    /// Constructor
     pub fn from_ctime_kw(token: Token) -> Literal {
         if let Some(ref token) = token.1 {
             if "CURRENT_DATE".eq_ignore_ascii_case(token) {
@@ -1190,30 +529,22 @@ impl Literal {
         }
     }
 }
-impl ToTokens for Literal {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            Literal::Numeric(ref num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
-            Literal::String(ref str) => s.append(TK_STRING, Some(str)),
-            Literal::Blob(ref blob) => s.append(TK_BLOB, Some(blob)),
-            Literal::Keyword(ref str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
-            Literal::Null => s.append(TK_NULL, None),
-            Literal::CurrentDate => s.append(TK_CTIME_KW, Some("CURRENT_DATE")),
-            Literal::CurrentTime => s.append(TK_CTIME_KW, Some("CURRENT_TIME")),
-            Literal::CurrentTimestamp => s.append(TK_CTIME_KW, Some("CURRENT_TIMESTAMP")),
-        }
-    }
-}
 
+/// Textual comparison operator in an expression
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LikeOperator {
+    /// `GLOB`
     Glob,
+    /// `LIKE`
     Like,
+    /// `MATCH`
     Match,
+    /// `REGEXP`
     Regexp,
 }
 
 impl LikeOperator {
+    /// Constructor
     pub fn from_token(token_type: YYCODETYPE, token: Token) -> LikeOperator {
         if token_type == TK_MATCH as YYCODETYPE {
             return LikeOperator::Match;
@@ -1231,43 +562,53 @@ impl LikeOperator {
         unreachable!()
     }
 }
-impl ToTokens for LikeOperator {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(
-            TK_LIKE_KW,
-            Some(match self {
-                LikeOperator::Glob => "GLOB",
-                LikeOperator::Like => "LIKE",
-                LikeOperator::Match => "MATCH",
-                LikeOperator::Regexp => "REGEXP",
-            }),
-        )
-    }
-}
 
+/// SQL operators
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Operator {
+    /// `+`
     Add,
+    /// `AND`
     And,
-    ArrowRight,      // ->
-    ArrowRightShift, // ->>
+    /// `->`
+    ArrowRight,
+    /// `->>`
+    ArrowRightShift,
+    /// `&`
     BitwiseAnd,
+    /// `|`
     BitwiseOr,
-    Concat, // String concatenation (||)
-    Equals, // = or ==
+    /// String concatenation (`||`)
+    Concat,
+    /// `=` or `==`
+    Equals,
+    /// `/`
     Divide,
+    /// `>`
     Greater,
+    /// `>=`
     GreaterEquals,
+    /// `IS`
     Is,
+    /// `IS NOT`
     IsNot,
+    /// `<<`
     LeftShift,
+    /// `<`
     Less,
+    /// `<=`
     LessEquals,
+    /// `%`
     Modulus,
+    /// `*`
     Multiply,
-    NotEquals, // != or <>
+    /// `!=` or `<>`
+    NotEquals,
+    /// `OR`
     Or,
+    /// `>>`
     RightShift,
+    /// `-`
     Substract,
 }
 
@@ -1298,47 +639,17 @@ impl From<YYCODETYPE> for Operator {
         }
     }
 }
-impl ToTokens for Operator {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            Operator::Add => s.append(TK_PLUS, None),
-            Operator::And => s.append(TK_AND, None),
-            Operator::ArrowRight => s.append(TK_PTR, Some("->")),
-            Operator::ArrowRightShift => s.append(TK_PTR, Some("->>")),
-            Operator::BitwiseAnd => s.append(TK_BITAND, None),
-            Operator::BitwiseOr => s.append(TK_BITOR, None),
-            Operator::Concat => s.append(TK_CONCAT, None),
-            Operator::Equals => s.append(TK_EQ, None),
-            Operator::Divide => s.append(TK_SLASH, None),
-            Operator::Greater => s.append(TK_GT, None),
-            Operator::GreaterEquals => s.append(TK_GE, None),
-            Operator::Is => s.append(TK_IS, None),
-            Operator::IsNot => {
-                s.append(TK_IS, None)?;
-                s.append(TK_NOT, None)
-            }
-            Operator::LeftShift => s.append(TK_LSHIFT, None),
-            Operator::Less => s.append(TK_LT, None),
-            Operator::LessEquals => s.append(TK_LE, None),
-            Operator::Modulus => s.append(TK_REM, None),
-            Operator::Multiply => s.append(TK_STAR, None),
-            Operator::NotEquals => s.append(TK_NE, None),
-            Operator::Or => s.append(TK_OR, None),
-            Operator::RightShift => s.append(TK_RSHIFT, None),
-            Operator::Substract => s.append(TK_MINUS, None),
-        }
-    }
-}
 
+/// Unary operators
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum UnaryOperator {
-    // bitwise negation (~)
+    /// bitwise negation (`~`)
     BitwiseNot,
-    // negative-sign
+    /// negative-sign
     Negative,
-    // "NOT"
+    /// `NOT`
     Not,
-    // positive-sign
+    /// positive-sign
     Positive,
 }
 
@@ -1353,188 +664,106 @@ impl From<YYCODETYPE> for UnaryOperator {
         }
     }
 }
-impl ToTokens for UnaryOperator {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(
-            match self {
-                UnaryOperator::BitwiseNot => TK_BITNOT,
-                UnaryOperator::Negative => TK_MINUS,
-                UnaryOperator::Not => TK_NOT,
-                UnaryOperator::Positive => TK_PLUS,
-            },
-            None,
-        )
-    }
-}
 
+/// `SELECT` statement
 // https://sqlite.org/lang_select.html
 // https://sqlite.org/syntax/factored-select-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Select {
+    /// CTE
     pub with: Option<With>,
+    /// body
     pub body: SelectBody,
-    pub order_by: Option<Vec<SortedColumn>>,
+    /// `ORDER BY`
+    pub order_by: Option<Vec<SortedColumn>>, // ORDER BY term does not match any column in the result set
+    /// `LIMIT`
     pub limit: Option<Limit>,
 }
-impl ToTokens for Select {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if let Some(ref with) = self.with {
-            with.to_tokens(s)?;
-        }
-        self.body.to_tokens(s)?;
-        if let Some(ref order_by) = self.order_by {
-            s.append(TK_ORDER, None)?;
-            s.append(TK_BY, None)?;
-            comma(order_by, s)?;
-        }
-        if let Some(ref limit) = self.limit {
-            limit.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
 
+/// `SELECT` body
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SelectBody {
+    /// first select
     pub select: OneSelect,
+    /// compounds
     pub compounds: Option<Vec<CompoundSelect>>,
 }
 
 impl SelectBody {
-    pub(crate) fn push(&mut self, cs: CompoundSelect) {
+    pub(crate) fn push(&mut self, cs: CompoundSelect) -> Result<(), ParserError> {
+        use crate::ast::check::ColumnCount;
+        if let ColumnCount::Fixed(n) = self.select.column_count() {
+            if let ColumnCount::Fixed(m) = cs.select.column_count() {
+                if n != m {
+                    return Err(custom_err!(
+                        "SELECTs to the left and right of {} do not have the same number of result columns",
+                        cs.operator
+                    ));
+                }
+            }
+        }
         if let Some(ref mut v) = self.compounds {
             v.push(cs);
         } else {
             self.compounds = Some(vec![cs]);
         }
-    }
-}
-impl ToTokens for SelectBody {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.select.to_tokens(s)?;
-        if let Some(ref compounds) = self.compounds {
-            for compound in compounds {
-                compound.to_tokens(s)?;
-            }
-        }
         Ok(())
     }
 }
 
+/// Compound select
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompoundSelect {
+    /// operator
     pub operator: CompoundOperator,
+    /// select
     pub select: OneSelect,
 }
-impl ToTokens for CompoundSelect {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.operator.to_tokens(s)?;
-        self.select.to_tokens(s)
-    }
-}
 
+/// Compound operators
 // https://sqlite.org/syntax/compound-operator.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CompoundOperator {
+    /// `UNION`
     Union,
+    /// `UNION ALL`
     UnionAll,
+    /// `EXCEPT`
     Except,
+    /// `INTERSECT`
     Intersect,
 }
-impl ToTokens for CompoundOperator {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            CompoundOperator::Union => s.append(TK_UNION, None),
-            CompoundOperator::UnionAll => {
-                s.append(TK_UNION, None)?;
-                s.append(TK_ALL, None)
-            }
-            CompoundOperator::Except => s.append(TK_EXCEPT, None),
-            CompoundOperator::Intersect => s.append(TK_INTERSECT, None),
-        }
-    }
-}
 
+/// `SELECT` core
 // https://sqlite.org/syntax/select-core.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OneSelect {
+    /// `SELECT`
     Select {
+        /// `DISTINCT`
         distinctness: Option<Distinctness>,
+        /// columns
         columns: Vec<ResultColumn>,
+        /// `FROM` clause
         from: Option<FromClause>,
+        /// `WHERE` clause
         where_clause: Option<Expr>,
+        /// `GROUP BY`
         group_by: Option<GroupBy>,
+        /// `WINDOW` definition
         window_clause: Option<Vec<WindowDef>>,
     },
+    /// `VALUES`
     Values(Vec<Vec<Expr>>),
 }
-impl ToTokens for OneSelect {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            OneSelect::Select {
-                distinctness,
-                columns,
-                from,
-                where_clause,
-                group_by,
-                window_clause,
-            } => {
-                s.append(TK_SELECT, None)?;
-                if let Some(ref distinctness) = distinctness {
-                    distinctness.to_tokens(s)?;
-                }
-                comma(columns, s)?;
-                if let Some(ref from) = from {
-                    s.append(TK_FROM, None)?;
-                    from.to_tokens(s)?;
-                }
-                if let Some(ref where_clause) = where_clause {
-                    s.append(TK_WHERE, None)?;
-                    where_clause.to_tokens(s)?;
-                }
-                if let Some(ref group_by) = group_by {
-                    group_by.to_tokens(s)?;
-                }
-                if let Some(ref window_clause) = window_clause {
-                    s.append(TK_WINDOW, None)?;
-                    comma(window_clause, s)?;
-                }
-                Ok(())
-            }
-            OneSelect::Values(values) => {
-                for (i, vals) in values.iter().enumerate() {
-                    if i == 0 {
-                        s.append(TK_VALUES, None)?;
-                    } else {
-                        s.append(TK_COMMA, None)?;
-                    }
-                    s.append(TK_LP, None)?;
-                    comma(vals, s)?;
-                    s.append(TK_RP, None)?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
 
-impl OneSelect {
-    /// Like `sqlite3_column_count` but more limited
-    pub fn column_count(&self) -> ColumnCount {
-        match self {
-            OneSelect::Select { columns, .. } => column_count(columns),
-            OneSelect::Values(values) => {
-                assert!(!values.is_empty()); // TODO Validate
-                ColumnCount::Fixed(values[0].len())
-            }
-        }
-    }
-}
-
+/// `SELECT` ... `FROM` clause
 // https://sqlite.org/syntax/join-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FromClause {
+    /// table
     pub select: Option<Box<SelectTable>>, // FIXME mandatory
+    /// `JOIN`ed tabled
     pub joins: Option<Vec<JoinedSelectTable>>,
     op: Option<JoinOperator>, // FIXME transient
 }
@@ -1547,7 +776,11 @@ impl FromClause {
         }
     }
 
-    pub(crate) fn push(&mut self, table: SelectTable, jc: Option<JoinConstraint>) {
+    pub(crate) fn push(
+        &mut self,
+        table: SelectTable,
+        jc: Option<JoinConstraint>,
+    ) -> Result<(), ParserError> {
         let op = self.op.take();
         if let Some(op) = op {
             let jst = JoinedSelectTable {
@@ -1555,6 +788,11 @@ impl FromClause {
                 table,
                 constraint: jc,
             };
+            if jst.operator.is_natural() && jst.constraint.is_some() {
+                return Err(custom_err!(
+                    "a NATURAL join may not have an ON or USING clause"
+                ));
+            }
             if let Some(ref mut joins) = self.joins {
                 joins.push(jst);
             } else {
@@ -1566,183 +804,77 @@ impl FromClause {
             debug_assert!(self.joins.is_none());
             self.select = Some(Box::new(table));
         }
+        Ok(())
     }
 
     pub(crate) fn push_op(&mut self, op: JoinOperator) {
         self.op = Some(op);
     }
 }
-impl ToTokens for FromClause {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.select.as_ref().unwrap().to_tokens(s)?;
-        if let Some(ref joins) = self.joins {
-            for join in joins {
-                join.to_tokens(s)?;
-            }
-        }
-        Ok(())
-    }
-}
 
+/// `SELECT` distinctness
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Distinctness {
+    /// `DISTINCT`
     Distinct,
+    /// `ALL`
     All,
 }
-impl ToTokens for Distinctness {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(
-            match self {
-                Distinctness::Distinct => TK_DISTINCT,
-                Distinctness::All => TK_ALL,
-            },
-            None,
-        )
-    }
-}
 
+/// `SELECT` or `RETURNING` result column
 // https://sqlite.org/syntax/result-column.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResultColumn {
+    /// expression
     Expr(Expr, Option<As>),
+    /// `*`
     Star,
-    // table name
+    /// table name.`*`
     TableStar(Name),
 }
-impl ToTokens for ResultColumn {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            ResultColumn::Expr(expr, alias) => {
-                expr.to_tokens(s)?;
-                if let Some(alias) = alias {
-                    alias.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            ResultColumn::Star => s.append(TK_STAR, None),
-            ResultColumn::TableStar(tbl_name) => {
-                tbl_name.to_tokens(s)?;
-                s.append(TK_DOT, None)?;
-                s.append(TK_STAR, None)
-            }
-        }
-    }
-}
 
-impl ResultColumn {
-    fn column_count(&self) -> ColumnCount {
-        match self {
-            ResultColumn::Expr(..) => ColumnCount::Fixed(1),
-            _ => ColumnCount::Dynamic,
-        }
-    }
-}
-fn column_count(cols: &[ResultColumn]) -> ColumnCount {
-    assert!(!cols.is_empty());
-    let mut count = ColumnCount::Fixed(0);
-    for col in cols {
-        match col.column_count() {
-            ColumnCount::Fixed(_) => count.incr(),
-            _ => return ColumnCount::Dynamic,
-        }
-    }
-    count
-}
-
+/// Alias
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum As {
+    /// `AS`
     As(Name),
+    /// no `AS`
     Elided(Name), // FIXME Ids
 }
-impl ToTokens for As {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            As::As(ref name) => {
-                s.append(TK_AS, None)?;
-                name.to_tokens(s)
-            }
-            As::Elided(ref name) => name.to_tokens(s),
-        }
-    }
-}
 
+/// `JOIN` clause
 // https://sqlite.org/syntax/join-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JoinedSelectTable {
+    /// operator
     pub operator: JoinOperator,
+    /// table
     pub table: SelectTable,
+    /// constraint
     pub constraint: Option<JoinConstraint>,
 }
-impl ToTokens for JoinedSelectTable {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.operator.to_tokens(s)?;
-        self.table.to_tokens(s)?;
-        if let Some(ref constraint) = self.constraint {
-            constraint.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
 
+/// Table or subquery
 // https://sqlite.org/syntax/table-or-subquery.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SelectTable {
+    /// table
     Table(QualifiedName, Option<As>, Option<Indexed>),
+    /// table function call
     TableCall(QualifiedName, Option<Vec<Expr>>, Option<As>),
+    /// `SELECT` subquery
     Select(Select, Option<As>),
+    ///
     Sub(FromClause, Option<As>),
 }
-impl ToTokens for SelectTable {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            SelectTable::Table(name, alias, indexed) => {
-                name.to_tokens(s)?;
-                if let Some(alias) = alias {
-                    alias.to_tokens(s)?;
-                }
-                if let Some(indexed) = indexed {
-                    indexed.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            SelectTable::TableCall(name, exprs, alias) => {
-                name.to_tokens(s)?;
-                s.append(TK_LP, None)?;
-                if let Some(exprs) = exprs {
-                    comma(exprs, s)?;
-                }
-                s.append(TK_RP, None)?;
-                if let Some(alias) = alias {
-                    alias.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            SelectTable::Select(select, alias) => {
-                s.append(TK_LP, None)?;
-                select.to_tokens(s)?;
-                s.append(TK_RP, None)?;
-                if let Some(alias) = alias {
-                    alias.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            SelectTable::Sub(from, alias) => {
-                s.append(TK_LP, None)?;
-                from.to_tokens(s)?;
-                s.append(TK_RP, None)?;
-                if let Some(alias) = alias {
-                    alias.to_tokens(s)?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
 
+/// Join operators
 // https://sqlite.org/syntax/join-operator.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum JoinOperator {
+    /// `,`
     Comma,
+    /// `JOIN`
     TypedJoin(Option<JoinType>),
 }
 
@@ -1760,43 +892,42 @@ impl JoinOperator {
             if (jt & (JoinType::INNER | JoinType::OUTER)) == (JoinType::INNER | JoinType::OUTER)
                 || (jt & (JoinType::OUTER | JoinType::LEFT | JoinType::RIGHT)) == JoinType::OUTER
             {
-                return Err(ParserError::Custom(format!(
+                return Err(custom_err!(
                     "unsupported JOIN type: {} {:?} {:?}",
-                    t, n1, n2
-                )));
+                    t,
+                    n1,
+                    n2
+                ));
             }
             JoinOperator::TypedJoin(Some(jt))
         } else {
             unreachable!()
         })
     }
-}
-impl ToTokens for JoinOperator {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+    fn is_natural(&self) -> bool {
         match self {
-            JoinOperator::Comma => s.append(TK_COMMA, None),
-            JoinOperator::TypedJoin(join_type) => {
-                if let Some(ref join_type) = join_type {
-                    join_type.to_tokens(s)?;
-                }
-                s.append(TK_JOIN, None)
-            }
+            JoinOperator::TypedJoin(Some(jt)) => jt.contains(JoinType::NATURAL),
+            _ => false,
         }
     }
 }
 
 // https://github.com/sqlite/sqlite/blob/80511f32f7e71062026edd471913ef0455563964/src/select.c#L197-L257
 bitflags::bitflags! {
+    /// `JOIN` types
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     pub struct JoinType: u8 {
+        /// `INNER`
         const INNER   = 0x01;
-        /// cross => INNER|CROSS
+        /// `CROSS` => INNER|CROSS
         const CROSS   = 0x02;
+        /// `NATURAL`
         const NATURAL = 0x04;
-        /// left => LEFT|OUTER
+        /// `LEFT` => LEFT|OUTER
         const LEFT    = 0x08;
-        /// right => RIGHT|OUTER
+        /// `RIGHT` => RIGHT|OUTER
         const RIGHT   = 0x10;
+        /// `OUTER`
         const OUTER   = 0x20;
     }
 }
@@ -1819,79 +950,27 @@ impl TryFrom<&str> for JoinType {
         } else if "OUTER".eq_ignore_ascii_case(s) {
             Ok(JoinType::OUTER)
         } else {
-            Err(ParserError::Custom(format!("unsupported JOIN type: {}", s)))
+            Err(custom_err!("unsupported JOIN type: {}", s))
         }
     }
 }
 
-impl ToTokens for JoinType {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if self.contains(JoinType::NATURAL) {
-            s.append(TK_JOIN_KW, Some("NATURAL"))?;
-        }
-        if self.contains(JoinType::INNER) {
-            if self.contains(JoinType::CROSS) {
-                s.append(TK_JOIN_KW, Some("CROSS"))?;
-            }
-            s.append(TK_JOIN_KW, Some("INNER"))?;
-        } else {
-            if self.contains(JoinType::LEFT) {
-                if self.contains(JoinType::RIGHT) {
-                    s.append(TK_JOIN_KW, Some("FULL"))?;
-                } else {
-                    s.append(TK_JOIN_KW, Some("LEFT"))?;
-                }
-            } else if self.contains(JoinType::RIGHT) {
-                s.append(TK_JOIN_KW, Some("RIGHT"))?;
-            }
-            if self.contains(JoinType::OUTER) {
-                s.append(TK_JOIN_KW, Some("OUTER"))?;
-            }
-        }
-        Ok(())
-    }
-}
-
+/// `JOIN` constraint
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JoinConstraint {
+    /// `ON`
     On(Expr),
-    // col names
+    /// `USING`: col names
     Using(Vec<Name>),
 }
 
-impl ToTokens for JoinConstraint {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            JoinConstraint::On(expr) => {
-                s.append(TK_ON, None)?;
-                expr.to_tokens(s)
-            }
-            JoinConstraint::Using(col_names) => {
-                s.append(TK_USING, None)?;
-                s.append(TK_LP, None)?;
-                comma(col_names, s)?;
-                s.append(TK_RP, None)
-            }
-        }
-    }
-}
-
+/// `GROUP BY`
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GroupBy {
+    /// expressions
     pub exprs: Vec<Expr>,
-    pub having: Option<Expr>,
-}
-impl ToTokens for GroupBy {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_GROUP, None)?;
-        s.append(TK_BY, None)?;
-        comma(&self.exprs, s)?;
-        if let Some(ref having) = self.having {
-            s.append(TK_HAVING, None)?;
-            having.to_tokens(s)?;
-        }
-        Ok(())
-    }
+    /// `HAVING`
+    pub having: Option<Expr>, // HAVING clause on a non-aggregate query
 }
 
 /// identifier or one of several keywords or `INDEXED`
@@ -1899,13 +978,9 @@ impl ToTokens for GroupBy {
 pub struct Id(pub String);
 
 impl Id {
+    /// Constructor
     pub fn from_token(ty: YYCODETYPE, token: Token) -> Id {
         Id(from_token(ty, token))
-    }
-}
-impl ToTokens for Id {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        double_quote(&self.0, s)
     }
 }
 
@@ -1916,30 +991,25 @@ impl ToTokens for Id {
 pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 impl Name {
+    /// Constructor
     pub fn from_token(ty: YYCODETYPE, token: Token) -> Name {
         Name(from_token(ty, token))
     }
 }
-impl ToTokens for Name {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        double_quote(&self.0, s)
-    }
-}
 
-impl Display for Name {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.to_fmt(f)
-    }
-}
-
+/// Qualified name
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QualifiedName {
+    /// schema
     pub db_name: Option<Name>,
+    /// object name
     pub name: Name,
+    /// alias
     pub alias: Option<Name>, // FIXME restrict alias usage (fullname vs xfullname)
 }
 
 impl QualifiedName {
+    /// Constructor
     pub fn single(name: Name) -> Self {
         QualifiedName {
             db_name: None,
@@ -1947,6 +1017,7 @@ impl QualifiedName {
             alias: None,
         }
     }
+    /// Constructor
     pub fn fullname(db_name: Name, name: Name) -> Self {
         QualifiedName {
             db_name: Some(db_name),
@@ -1954,6 +1025,7 @@ impl QualifiedName {
             alias: None,
         }
     }
+    /// Constructor
     pub fn xfullname(db_name: Name, name: Name, alias: Name) -> Self {
         QualifiedName {
             db_name: Some(db_name),
@@ -1961,6 +1033,7 @@ impl QualifiedName {
             alias: Some(alias),
         }
     }
+    /// Constructor
     pub fn alias(name: Name, alias: Name) -> Self {
         QualifiedName {
             db_name: None,
@@ -1969,71 +1042,46 @@ impl QualifiedName {
         }
     }
 }
-impl ToTokens for QualifiedName {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if let Some(ref db_name) = self.db_name {
-            db_name.to_tokens(s)?;
-            s.append(TK_DOT, None)?;
-        }
-        self.name.to_tokens(s)?;
-        if let Some(ref alias) = self.alias {
-            s.append(TK_AS, None)?;
-            alias.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
 
+/// `ALTER TABLE` body
 // https://sqlite.org/lang_altertable.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AlterTableBody {
-    // new table name
+    /// `RENAME TO`: new table name
     RenameTo(Name),
+    /// `ADD COLUMN`
     AddColumn(ColumnDefinition), // TODO distinction between ADD and ADD COLUMN
-    RenameColumn { old: Name, new: Name },
+    /// `RENAME COLUMN`
+    RenameColumn {
+        /// old name
+        old: Name,
+        /// new name
+        new: Name,
+    },
+    /// `DROP COLUMN`
     DropColumn(Name), // TODO distinction between DROP and DROP COLUMN
 }
-impl ToTokens for AlterTableBody {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            AlterTableBody::RenameTo(name) => {
-                s.append(TK_RENAME, None)?;
-                s.append(TK_TO, None)?;
-                name.to_tokens(s)
-            }
-            AlterTableBody::AddColumn(def) => {
-                s.append(TK_ADD, None)?;
-                s.append(TK_COLUMNKW, None)?;
-                def.to_tokens(s)
-            }
-            AlterTableBody::RenameColumn { old, new } => {
-                s.append(TK_RENAME, None)?;
-                old.to_tokens(s)?;
-                s.append(TK_TO, None)?;
-                new.to_tokens(s)
-            }
-            AlterTableBody::DropColumn(name) => {
-                s.append(TK_DROP, None)?;
-                s.append(TK_COLUMNKW, None)?;
-                name.to_tokens(s)
-            }
-        }
-    }
-}
 
+/// `CREATE TABLE` body
 // https://sqlite.org/lang_createtable.html
 // https://sqlite.org/syntax/create-table-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CreateTableBody {
+    /// columns and constraints
     ColumnsAndConstraints {
+        /// table column definitions
         columns: Vec<ColumnDefinition>,
+        /// table constraints
         constraints: Option<Vec<NamedTableConstraint>>,
+        /// table options
         options: TableOptions,
     },
+    /// `AS` select
     AsSelect(Select),
 }
 
 impl CreateTableBody {
+    /// Constructor
     pub fn columns_and_constraints(
         columns: Vec<ColumnDefinition>,
         constraints: Option<Vec<NamedTableConstraint>>,
@@ -2047,848 +1095,450 @@ impl CreateTableBody {
     }
 }
 
-impl ToTokens for CreateTableBody {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            CreateTableBody::ColumnsAndConstraints {
-                columns,
-                constraints,
-                options,
-            } => {
-                s.append(TK_LP, None)?;
-                comma(columns, s)?;
-                if let Some(constraints) = constraints {
-                    s.append(TK_COMMA, None)?;
-                    comma(constraints, s)?;
-                }
-                s.append(TK_RP, None)?;
-                if options.contains(TableOptions::WITHOUT_ROWID) {
-                    s.append(TK_WITHOUT, None)?;
-                    s.append(TK_ID, Some("ROWID"))?;
-                }
-                if options.contains(TableOptions::STRICT) {
-                    s.append(TK_ID, Some("STRICT"))?;
-                }
-                Ok(())
-            }
-            CreateTableBody::AsSelect(select) => {
-                s.append(TK_AS, None)?;
-                select.to_tokens(s)
-            }
-        }
-    }
-}
-
+/// Table column definition
 // https://sqlite.org/syntax/column-def.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ColumnDefinition {
+    /// column name
     pub col_name: Name,
+    /// column type
     pub col_type: Option<Type>,
+    /// column constraints
     pub constraints: Vec<NamedColumnConstraint>,
 }
-impl ToTokens for ColumnDefinition {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.col_name.to_tokens(s)?;
-        if let Some(ref col_type) = self.col_type {
-            col_type.to_tokens(s)?;
-        }
-        for constraint in self.constraints.iter() {
-            constraint.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
+
 impl ColumnDefinition {
+    /// Constructor
     pub fn add_column(
         columns: &mut Vec<ColumnDefinition>,
-        cd: ColumnDefinition,
+        mut cd: ColumnDefinition,
     ) -> Result<(), ParserError> {
         if columns
             .iter()
             .any(|c| c.col_name.0.eq_ignore_ascii_case(&cd.col_name.0))
         {
-            return Err(ParserError::Custom(format!(
-                "duplicate column name: {}",
-                cd.col_name
-            )));
+            // TODO unquote
+            return Err(custom_err!("duplicate column name: {}", cd.col_name));
+        }
+        // https://github.com/sqlite/sqlite/blob/e452bf40a14aca57fd9047b330dff282f3e4bbcc/src/build.c#L1511-L1514
+        if let Some(ref mut col_type) = cd.col_type {
+            let mut split = col_type.name.split_ascii_whitespace();
+            let truncate = if split
+                .next_back()
+                .map_or(false, |s| s.eq_ignore_ascii_case("ALWAYS"))
+                && split
+                    .next_back()
+                    .map_or(false, |s| s.eq_ignore_ascii_case("GENERATED"))
+            {
+                let mut generated = false;
+                for constraint in &cd.constraints {
+                    if let ColumnConstraint::Generated { .. } = constraint.constraint {
+                        generated = true;
+                        break;
+                    }
+                }
+                generated
+            } else {
+                false
+            };
+            if truncate {
+                // str_split_whitespace_remainder
+                let new_type: Vec<&str> = split.collect();
+                col_type.name = new_type.join(" ");
+            }
         }
         columns.push(cd);
         Ok(())
     }
 }
 
+/// Named column constraint
 // https://sqlite.org/syntax/column-constraint.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NamedColumnConstraint {
+    /// constraint name
     pub name: Option<Name>,
+    /// constraint
     pub constraint: ColumnConstraint,
 }
-impl ToTokens for NamedColumnConstraint {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if let Some(ref name) = self.name {
-            s.append(TK_CONSTRAINT, None)?;
-            name.to_tokens(s)?;
-        }
-        self.constraint.to_tokens(s)
-    }
-}
 
+/// Column constraint
 // https://sqlite.org/syntax/column-constraint.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ColumnConstraint {
+    /// `PRIMARY KEY`
     PrimaryKey {
+        ///
         order: Option<SortOrder>,
+        /// `ON CONFLICT` clause
         conflict_clause: Option<ResolveType>,
+        /// `AUTOINCREMENT`
         auto_increment: bool,
     },
+    /// `NULL`
     NotNull {
+        ///
         nullable: bool,
+        /// `ON CONFLICT` clause
         conflict_clause: Option<ResolveType>,
     },
+    /// `UNIQUE`
     Unique(Option<ResolveType>),
+    /// `CHECK`
     Check(Expr),
+    /// `DEFAULT`
     Default(Expr),
+    /// `DEFERRABLE`
     Defer(DeferSubclause), // FIXME
+    /// `COLLATE`
     Collate {
+        /// collation name
         collation_name: Name, // FIXME Ids
     },
+    /// `REFERENCES` foreign-key clause
     ForeignKey {
+        /// clause
         clause: ForeignKeyClause,
+        /// `DEFERRABLE`
         deref_clause: Option<DeferSubclause>,
     },
+    /// `GENERATED`
     Generated {
+        /// expression
         expr: Expr,
+        /// `STORED` / `VIRTUAL`
         typ: Option<Id>,
     },
 }
-impl ToTokens for ColumnConstraint {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            ColumnConstraint::PrimaryKey {
-                order,
-                conflict_clause,
-                auto_increment,
-            } => {
-                s.append(TK_PRIMARY, None)?;
-                s.append(TK_KEY, None)?;
-                if let Some(order) = order {
-                    order.to_tokens(s)?;
-                }
-                if let Some(conflict_clause) = conflict_clause {
-                    s.append(TK_ON, None)?;
-                    s.append(TK_CONFLICT, None)?;
-                    conflict_clause.to_tokens(s)?;
-                }
-                if *auto_increment {
-                    s.append(TK_AUTOINCR, None)?;
-                }
-                Ok(())
-            }
-            ColumnConstraint::NotNull {
-                nullable,
-                conflict_clause,
-            } => {
-                if !nullable {
-                    s.append(TK_NOT, None)?;
-                }
-                s.append(TK_NULL, None)?;
-                if let Some(conflict_clause) = conflict_clause {
-                    s.append(TK_ON, None)?;
-                    s.append(TK_CONFLICT, None)?;
-                    conflict_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            ColumnConstraint::Unique(conflict_clause) => {
-                s.append(TK_UNIQUE, None)?;
-                if let Some(conflict_clause) = conflict_clause {
-                    s.append(TK_ON, None)?;
-                    s.append(TK_CONFLICT, None)?;
-                    conflict_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            ColumnConstraint::Check(expr) => {
-                s.append(TK_CHECK, None)?;
-                s.append(TK_LP, None)?;
-                expr.to_tokens(s)?;
-                s.append(TK_RP, None)
-            }
-            ColumnConstraint::Default(expr) => {
-                s.append(TK_DEFAULT, None)?;
-                expr.to_tokens(s)
-            }
-            ColumnConstraint::Defer(deref_clause) => deref_clause.to_tokens(s),
-            ColumnConstraint::Collate { collation_name } => {
-                s.append(TK_COLLATE, None)?;
-                collation_name.to_tokens(s)
-            }
-            ColumnConstraint::ForeignKey {
-                clause,
-                deref_clause,
-            } => {
-                s.append(TK_REFERENCES, None)?;
-                clause.to_tokens(s)?;
-                if let Some(deref_clause) = deref_clause {
-                    deref_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            ColumnConstraint::Generated { expr, typ } => {
-                s.append(TK_AS, None)?;
-                s.append(TK_LP, None)?;
-                expr.to_tokens(s)?;
-                s.append(TK_RP, None)?;
-                if let Some(typ) = typ {
-                    typ.to_tokens(s)?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
 
+/// Named table constraint
 // https://sqlite.org/syntax/table-constraint.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NamedTableConstraint {
+    /// constraint name
     pub name: Option<Name>,
+    /// constraint
     pub constraint: TableConstraint,
 }
-impl ToTokens for NamedTableConstraint {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if let Some(ref name) = self.name {
-            s.append(TK_CONSTRAINT, None)?;
-            name.to_tokens(s)?;
-        }
-        self.constraint.to_tokens(s)
-    }
-}
 
+/// Table constraint
 // https://sqlite.org/syntax/table-constraint.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TableConstraint {
+    /// `PRIMARY KEY`
     PrimaryKey {
+        /// columns
         columns: Vec<SortedColumn>,
+        /// `AUTOINCREMENT`
         auto_increment: bool,
+        /// `ON CONFLICT` clause
         conflict_clause: Option<ResolveType>,
     },
+    /// `UNIQUE`
     Unique {
+        /// columns
         columns: Vec<SortedColumn>,
+        /// `ON CONFLICT` clause
         conflict_clause: Option<ResolveType>,
     },
+    /// `CHECK`
     Check(Expr),
+    /// `FOREIGN KEY`
     ForeignKey {
-        columns: Vec<IndexedColumn>,
+        /// columns
+        columns: Vec<IndexedColumn>, // check no duplicate
+        /// `REFERENCES`
         clause: ForeignKeyClause,
+        /// `DEFERRABLE`
         deref_clause: Option<DeferSubclause>,
     },
 }
-impl ToTokens for TableConstraint {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            TableConstraint::PrimaryKey {
-                columns,
-                auto_increment,
-                conflict_clause,
-            } => {
-                s.append(TK_PRIMARY, None)?;
-                s.append(TK_KEY, None)?;
-                s.append(TK_LP, None)?;
-                comma(columns, s)?;
-                if *auto_increment {
-                    s.append(TK_AUTOINCR, None)?;
-                }
-                s.append(TK_RP, None)?;
-                if let Some(conflict_clause) = conflict_clause {
-                    s.append(TK_ON, None)?;
-                    s.append(TK_CONFLICT, None)?;
-                    conflict_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            TableConstraint::Unique {
-                columns,
-                conflict_clause,
-            } => {
-                s.append(TK_UNIQUE, None)?;
-                s.append(TK_LP, None)?;
-                comma(columns, s)?;
-                s.append(TK_RP, None)?;
-                if let Some(conflict_clause) = conflict_clause {
-                    s.append(TK_ON, None)?;
-                    s.append(TK_CONFLICT, None)?;
-                    conflict_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            TableConstraint::Check(expr) => {
-                s.append(TK_CHECK, None)?;
-                s.append(TK_LP, None)?;
-                expr.to_tokens(s)?;
-                s.append(TK_RP, None)
-            }
-            TableConstraint::ForeignKey {
-                columns,
-                clause,
-                deref_clause,
-            } => {
-                s.append(TK_FOREIGN, None)?;
-                s.append(TK_KEY, None)?;
-                s.append(TK_LP, None)?;
-                comma(columns, s)?;
-                s.append(TK_RP, None)?;
-                s.append(TK_REFERENCES, None)?;
-                clause.to_tokens(s)?;
-                if let Some(deref_clause) = deref_clause {
-                    deref_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
 
 bitflags::bitflags! {
+    /// `CREATE TABLE` options
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     pub struct TableOptions: u8 {
+        /// None
         const NONE = 0;
+        /// `WITHOUT ROWID`
         const WITHOUT_ROWID = 1;
+        /// `STRICT`
         const STRICT = 2;
     }
 }
 
+/// Sort orders
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SortOrder {
+    /// `ASC`
     Asc,
+    /// `DESC`
     Desc,
 }
-impl ToTokens for SortOrder {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(
-            match self {
-                SortOrder::Asc => TK_ASC,
-                SortOrder::Desc => TK_DESC,
-            },
-            None,
-        )
-    }
-}
 
+/// `NULLS FIRST` or `NULLS LAST`
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum NullsOrder {
+    /// `NULLS FIRST`
     First,
+    /// `NULLS LAST`
     Last,
 }
-impl ToTokens for NullsOrder {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_NULLS, None)?;
-        s.append(
-            match self {
-                NullsOrder::First => TK_FIRST,
-                NullsOrder::Last => TK_LAST,
-            },
-            None,
-        )
-    }
-}
 
+/// `REFERENCES` clause
 // https://sqlite.org/syntax/foreign-key-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ForeignKeyClause {
+    /// foreign table name
     pub tbl_name: Name,
+    /// foreign table columns
     pub columns: Option<Vec<IndexedColumn>>,
+    ///
     pub args: Vec<RefArg>,
 }
-impl ToTokens for ForeignKeyClause {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.tbl_name.to_tokens(s)?;
-        if let Some(ref columns) = self.columns {
-            s.append(TK_LP, None)?;
-            comma(columns, s)?;
-            s.append(TK_RP, None)?;
-        }
-        for arg in self.args.iter() {
-            arg.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
 
+/// foreign-key reference args
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RefArg {
+    /// `ON DELETE`
     OnDelete(RefAct),
+    /// `ON INSERT`
     OnInsert(RefAct),
+    /// `ON UPDATE`
     OnUpdate(RefAct),
+    /// `MATCH`
     Match(Name),
 }
-impl ToTokens for RefArg {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            RefArg::OnDelete(ref action) => {
-                s.append(TK_ON, None)?;
-                s.append(TK_DELETE, None)?;
-                action.to_tokens(s)
-            }
-            RefArg::OnInsert(ref action) => {
-                s.append(TK_ON, None)?;
-                s.append(TK_INSERT, None)?;
-                action.to_tokens(s)
-            }
-            RefArg::OnUpdate(ref action) => {
-                s.append(TK_ON, None)?;
-                s.append(TK_UPDATE, None)?;
-                action.to_tokens(s)
-            }
-            RefArg::Match(ref name) => {
-                s.append(TK_MATCH, None)?;
-                name.to_tokens(s)
-            }
-        }
-    }
-}
 
+/// foreign-key reference actions
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RefAct {
+    /// `SET NULL`
     SetNull,
+    /// `SET DEFAULT`
     SetDefault,
+    /// `CASCADE`
     Cascade,
+    /// `RESTRICT`
     Restrict,
+    /// `NO ACTION`
     NoAction,
 }
-impl ToTokens for RefAct {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            RefAct::SetNull => {
-                s.append(TK_SET, None)?;
-                s.append(TK_NULL, None)
-            }
-            RefAct::SetDefault => {
-                s.append(TK_SET, None)?;
-                s.append(TK_DEFAULT, None)
-            }
-            RefAct::Cascade => s.append(TK_CASCADE, None),
-            RefAct::Restrict => s.append(TK_RESTRICT, None),
-            RefAct::NoAction => {
-                s.append(TK_NO, None)?;
-                s.append(TK_ACTION, None)
-            }
-        }
-    }
-}
 
+/// foreign-key defer clause
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeferSubclause {
+    /// `DEFERRABLE`
     pub deferrable: bool,
+    /// `INITIALLY` `DEFERRED` / `IMMEDIATE`
     pub init_deferred: Option<InitDeferredPred>,
 }
-impl ToTokens for DeferSubclause {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if !self.deferrable {
-            s.append(TK_NOT, None)?;
-        }
-        s.append(TK_DEFERRABLE, None)?;
-        if let Some(init_deferred) = self.init_deferred {
-            init_deferred.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
 
+/// `INITIALLY` `DEFERRED` / `IMMEDIATE`
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum InitDeferredPred {
+    /// `INITIALLY DEFERRED`
     InitiallyDeferred,
+    /// `INITIALLY IMMEDIATE`
     InitiallyImmediate, // default
 }
-impl ToTokens for InitDeferredPred {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_INITIALLY, None)?;
-        s.append(
-            match self {
-                InitDeferredPred::InitiallyDeferred => TK_DEFERRED,
-                InitDeferredPred::InitiallyImmediate => TK_IMMEDIATE,
-            },
-            None,
-        )
-    }
-}
 
+/// Indexed column
 // https://sqlite.org/syntax/indexed-column.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IndexedColumn {
+    /// column name
     pub col_name: Name,
+    /// `COLLATE`
     pub collation_name: Option<Name>, // FIXME Ids
+    /// `ORDER BY`
     pub order: Option<SortOrder>,
 }
-impl ToTokens for IndexedColumn {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.col_name.to_tokens(s)?;
-        if let Some(ref collation_name) = self.collation_name {
-            s.append(TK_COLLATE, None)?;
-            collation_name.to_tokens(s)?;
-        }
-        if let Some(order) = self.order {
-            order.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
 
+/// `INDEXED BY` / `NOT INDEXED`
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Indexed {
-    // idx name
+    /// `INDEXED BY`: idx name
     IndexedBy(Name),
+    /// `NOT INDEXED`
     NotIndexed,
 }
-impl ToTokens for Indexed {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            Indexed::IndexedBy(ref name) => {
-                s.append(TK_INDEXED, None)?;
-                s.append(TK_BY, None)?;
-                name.to_tokens(s)
-            }
-            Indexed::NotIndexed => {
-                s.append(TK_NOT, None)?;
-                s.append(TK_INDEXED, None)
-            }
-        }
-    }
-}
 
+/// Sorted column
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SortedColumn {
+    /// expression
     pub expr: Expr,
+    /// `ASC` / `DESC`
     pub order: Option<SortOrder>,
+    /// `NULLS FIRST` / `NULLS LAST`
     pub nulls: Option<NullsOrder>,
 }
-impl ToTokens for SortedColumn {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.expr.to_tokens(s)?;
-        if let Some(ref order) = self.order {
-            order.to_tokens(s)?;
-        }
-        if let Some(ref nulls) = self.nulls {
-            nulls.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
 
+/// `LIMIT`
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limit {
+    /// count
     pub expr: Expr,
+    /// `OFFSET`
     pub offset: Option<Expr>, // TODO distinction between LIMIT offset, count and LIMIT count OFFSET offset
 }
-impl ToTokens for Limit {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_LIMIT, None)?;
-        self.expr.to_tokens(s)?;
-        if let Some(ref offset) = self.offset {
-            s.append(TK_OFFSET, None)?;
-            offset.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
 
+/// `INSERT` body
 // https://sqlite.org/lang_insert.html
 // https://sqlite.org/syntax/insert-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InsertBody {
+    /// `SELECT` or `VALUES`
     Select(Select, Option<Upsert>),
+    /// `DEFAULT VALUES`
     DefaultValues,
 }
-impl ToTokens for InsertBody {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            InsertBody::Select(select, upsert) => {
-                select.to_tokens(s)?;
-                if let Some(upsert) = upsert {
-                    upsert.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            InsertBody::DefaultValues => {
-                s.append(TK_DEFAULT, None)?;
-                s.append(TK_VALUES, None)
-            }
-        }
-    }
-}
 
+/// `UPDATE ... SET`
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Set {
+    /// column name(s)
     pub col_names: Vec<Name>,
+    /// expression
     pub expr: Expr,
 }
-impl ToTokens for Set {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if self.col_names.len() == 1 {
-            comma(&self.col_names, s)?;
-        } else {
-            s.append(TK_LP, None)?;
-            comma(&self.col_names, s)?;
-            s.append(TK_RP, None)?;
-        }
-        s.append(TK_EQ, None)?;
-        self.expr.to_tokens(s)
-    }
-}
 
+/// `PRAGMA` body
 // https://sqlite.org/syntax/pragma-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PragmaBody {
+    /// `=`
     Equals(PragmaValue),
+    /// function call
     Call(PragmaValue),
 }
-impl ToTokens for PragmaBody {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            PragmaBody::Equals(value) => {
-                s.append(TK_EQ, None)?;
-                value.to_tokens(s)
-            }
-            PragmaBody::Call(value) => {
-                s.append(TK_LP, None)?;
-                value.to_tokens(s)?;
-                s.append(TK_RP, None)
-            }
-        }
-    }
-}
 
+/// `PRAGMA` value
 // https://sqlite.org/syntax/pragma-value.html
 pub type PragmaValue = Expr; // TODO
 
+/// `CREATE TRIGGER` time
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TriggerTime {
+    /// `BEFORE`
     Before, // default
+    /// `AFTER`
     After,
+    /// `INSTEAD OF`
     InsteadOf,
 }
-impl ToTokens for TriggerTime {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            TriggerTime::Before => s.append(TK_BEFORE, None),
-            TriggerTime::After => s.append(TK_AFTER, None),
-            TriggerTime::InsteadOf => {
-                s.append(TK_INSTEAD, None)?;
-                s.append(TK_OF, None)
-            }
-        }
-    }
-}
 
+/// `CREATE TRIGGER` event
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TriggerEvent {
+    /// `DELETE`
     Delete,
+    /// `INSERT`
     Insert,
+    /// `UPDATE`
     Update,
-    // col names
+    /// `UPDATE OF`: col names
     UpdateOf(Vec<Name>),
 }
-impl ToTokens for TriggerEvent {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            TriggerEvent::Delete => s.append(TK_DELETE, None),
-            TriggerEvent::Insert => s.append(TK_INSERT, None),
-            TriggerEvent::Update => s.append(TK_UPDATE, None),
-            TriggerEvent::UpdateOf(ref col_names) => {
-                s.append(TK_UPDATE, None)?;
-                s.append(TK_OF, None)?;
-                comma(col_names, s)
-            }
-        }
-    }
-}
 
+/// `CREATE TRIGGER` command
 // https://sqlite.org/lang_createtrigger.html
 // https://sqlite.org/syntax/create-trigger-stmt.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TriggerCmd {
+    /// `UPDATE`
     Update {
+        /// `OR`
         or_conflict: Option<ResolveType>,
+        /// table name
         tbl_name: Name,
+        /// `SET` assigments
         sets: Vec<Set>,
+        /// `FROM`
         from: Option<FromClause>,
+        /// `WHERE` clause
         where_clause: Option<Expr>,
     },
+    /// `INSERT`
     Insert {
+        /// `OR`
         or_conflict: Option<ResolveType>,
+        /// table name
         tbl_name: Name,
+        /// `COLUMNS`
         col_names: Option<Vec<Name>>,
+        ///
         select: Select,
+        ///
         upsert: Option<Upsert>,
+        /// `RETURNING`
         returning: Option<Vec<ResultColumn>>,
     },
+    /// `DELETE`
     Delete {
+        /// table name
         tbl_name: Name,
+        /// `WHERE` clause
         where_clause: Option<Expr>,
     },
+    /// `SELECT`
     Select(Select),
 }
-impl ToTokens for TriggerCmd {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            TriggerCmd::Update {
-                or_conflict,
-                tbl_name,
-                sets,
-                from,
-                where_clause,
-            } => {
-                s.append(TK_UPDATE, None)?;
-                if let Some(or_conflict) = or_conflict {
-                    s.append(TK_OR, None)?;
-                    or_conflict.to_tokens(s)?;
-                }
-                tbl_name.to_tokens(s)?;
-                s.append(TK_SET, None)?;
-                comma(sets, s)?;
-                if let Some(from) = from {
-                    s.append(TK_FROM, None)?;
-                    from.to_tokens(s)?;
-                }
-                if let Some(where_clause) = where_clause {
-                    s.append(TK_WHERE, None)?;
-                    where_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            TriggerCmd::Insert {
-                or_conflict,
-                tbl_name,
-                col_names,
-                select,
-                upsert,
-                returning,
-            } => {
-                if let Some(ResolveType::Replace) = or_conflict {
-                    s.append(TK_REPLACE, None)?;
-                } else {
-                    s.append(TK_INSERT, None)?;
-                    if let Some(or_conflict) = or_conflict {
-                        s.append(TK_OR, None)?;
-                        or_conflict.to_tokens(s)?;
-                    }
-                }
-                s.append(TK_INTO, None)?;
-                tbl_name.to_tokens(s)?;
-                if let Some(col_names) = col_names {
-                    s.append(TK_LP, None)?;
-                    comma(col_names, s)?;
-                    s.append(TK_RP, None)?;
-                }
-                select.to_tokens(s)?;
-                if let Some(upsert) = upsert {
-                    upsert.to_tokens(s)?;
-                }
-                if let Some(returning) = returning {
-                    s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
-                }
-                Ok(())
-            }
-            TriggerCmd::Delete {
-                tbl_name,
-                where_clause,
-            } => {
-                s.append(TK_DELETE, None)?;
-                s.append(TK_FROM, None)?;
-                tbl_name.to_tokens(s)?;
-                if let Some(where_clause) = where_clause {
-                    s.append(TK_WHERE, None)?;
-                    where_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            TriggerCmd::Select(select) => select.to_tokens(s),
-        }
-    }
-}
 
+/// Conflict resolution types
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ResolveType {
+    /// `ROLLBACK`
     Rollback,
+    /// `ABORT`
     Abort, // default
+    /// `FAIL`
     Fail,
+    /// `IGNORE`
     Ignore,
+    /// `REPLACE`
     Replace,
 }
-impl ToTokens for ResolveType {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(
-            match self {
-                ResolveType::Rollback => TK_ROLLBACK,
-                ResolveType::Abort => TK_ABORT,
-                ResolveType::Fail => TK_FAIL,
-                ResolveType::Ignore => TK_IGNORE,
-                ResolveType::Replace => TK_REPLACE,
-            },
-            None,
-        )
-    }
-}
 
+/// `WITH` clause
 // https://sqlite.org/lang_with.html
 // https://sqlite.org/syntax/with-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct With {
+    /// `RECURSIVE`
     pub recursive: bool,
+    /// CTEs
     pub ctes: Vec<CommonTableExpr>,
 }
-impl ToTokens for With {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_WITH, None)?;
-        if self.recursive {
-            s.append(TK_RECURSIVE, None)?;
-        }
-        comma(&self.ctes, s)
-    }
-}
 
+/// CTE materialization
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Materialized {
+    ///
     Any,
+    /// `MATERIALIZED`
     Yes,
+    /// `NOT MATERIALIZED`
     No,
 }
 
+/// CTE
 // https://sqlite.org/syntax/common-table-expression.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommonTableExpr {
+    /// table name
     pub tbl_name: Name,
-    pub columns: Option<Vec<IndexedColumn>>,
+    /// table columns
+    pub columns: Option<Vec<IndexedColumn>>, // check no duplicate
+    /// `MATERIALIZED`
     pub materialized: Materialized,
+    /// query
     pub select: Select,
 }
 
-impl ToTokens for CommonTableExpr {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.tbl_name.to_tokens(s)?;
-        if let Some(ref columns) = self.columns {
-            s.append(TK_LP, None)?;
-            comma(columns, s)?;
-            s.append(TK_RP, None)?;
-        }
-        s.append(TK_AS, None)?;
-        match self.materialized {
-            Materialized::Any => {}
-            Materialized::Yes => {
-                s.append(TK_MATERIALIZED, None)?;
-            }
-            Materialized::No => {
-                s.append(TK_NOT, None)?;
-                s.append(TK_MATERIALIZED, None)?;
-            }
-        };
-        s.append(TK_LP, None)?;
-        self.select.to_tokens(s)?;
-        s.append(TK_RP, None)
-    }
-}
-
 impl CommonTableExpr {
+    /// Constructor
     pub fn add_cte(
         ctes: &mut Vec<CommonTableExpr>,
         cte: CommonTableExpr,
@@ -2897,377 +1547,171 @@ impl CommonTableExpr {
             .iter()
             .any(|c| c.tbl_name.0.eq_ignore_ascii_case(&cte.tbl_name.0))
         {
-            return Err(ParserError::Custom(format!(
-                "duplicate WITH table name: {}",
-                cte.tbl_name
-            )));
+            return Err(custom_err!("duplicate WITH table name: {}", cte.tbl_name));
         }
         ctes.push(cte);
         Ok(())
     }
 }
 
+/// Column type
 // https://sqlite.org/syntax/type-name.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Type {
+    /// type name
     pub name: String, // TODO Validate: Ids+
+    /// type size
     pub size: Option<TypeSize>,
 }
-impl ToTokens for Type {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self.size {
-            None => s.append(TK_ID, Some(&self.name)),
-            Some(ref size) => {
-                s.append(TK_ID, Some(&self.name))?; // TODO check there is no forbidden chars
-                s.append(TK_LP, None)?;
-                size.to_tokens(s)?;
-                s.append(TK_RP, None)
-            }
-        }
-    }
-}
 
+/// Column type size limit(s)
 // https://sqlite.org/syntax/type-name.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeSize {
+    /// maximum size
     MaxSize(Box<Expr>),
+    /// precision
     TypeSize(Box<Expr>, Box<Expr>),
 }
 
-impl ToTokens for TypeSize {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            TypeSize::MaxSize(size) => size.to_tokens(s),
-            TypeSize::TypeSize(size1, size2) => {
-                size1.to_tokens(s)?;
-                s.append(TK_COMMA, None)?;
-                size2.to_tokens(s)
-            }
-        }
-    }
-}
-
+/// Transaction types
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TransactionType {
+    /// `DEFERRED`
     Deferred, // default
+    /// `IMMEDIATE`
     Immediate,
+    /// `EXCLUSIVE`
     Exclusive,
 }
-impl ToTokens for TransactionType {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(
-            match self {
-                TransactionType::Deferred => TK_DEFERRED,
-                TransactionType::Immediate => TK_IMMEDIATE,
-                TransactionType::Exclusive => TK_EXCLUSIVE,
-            },
-            None,
-        )
-    }
-}
 
+/// Upsert clause
 // https://sqlite.org/lang_upsert.html
 // https://sqlite.org/syntax/upsert-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Upsert {
+    /// conflict targets
     pub index: Option<UpsertIndex>,
+    /// `DO` clause
     pub do_clause: UpsertDo,
+    /// next upsert
     pub next: Option<Box<Upsert>>,
 }
 
-impl ToTokens for Upsert {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_ON, None)?;
-        s.append(TK_CONFLICT, None)?;
-        if let Some(ref index) = self.index {
-            index.to_tokens(s)?;
-        }
-        self.do_clause.to_tokens(s)?;
-        if let Some(ref next) = self.next {
-            next.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
-
+/// Upsert conflict targets
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertIndex {
+    /// columns
     pub targets: Vec<SortedColumn>,
+    /// `WHERE` clause
     pub where_clause: Option<Expr>,
 }
 
-impl ToTokens for UpsertIndex {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_LP, None)?;
-        comma(&self.targets, s)?;
-        s.append(TK_RP, None)?;
-        if let Some(ref where_clause) = self.where_clause {
-            s.append(TK_WHERE, None)?;
-            where_clause.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
-
+/// Upsert `DO` action
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UpsertDo {
+    /// `SET`
     Set {
+        ///
         sets: Vec<Set>,
+        /// `WHERE` clause
         where_clause: Option<Expr>,
     },
+    /// `NOTHING`
     Nothing,
 }
 
-impl ToTokens for UpsertDo {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            UpsertDo::Set { sets, where_clause } => {
-                s.append(TK_DO, None)?;
-                s.append(TK_UPDATE, None)?;
-                s.append(TK_SET, None)?;
-                comma(sets, s)?;
-                if let Some(where_clause) = where_clause {
-                    s.append(TK_WHERE, None)?;
-                    where_clause.to_tokens(s)?;
-                }
-                Ok(())
-            }
-            UpsertDo::Nothing => {
-                s.append(TK_DO, None)?;
-                s.append(TK_NOTHING, None)
-            }
-        }
-    }
-}
-
+/// Function call tail
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionTail {
+    /// `FILTER` clause
     pub filter_clause: Option<Box<Expr>>,
+    /// `OVER` clause
     pub over_clause: Option<Box<Over>>,
 }
-impl ToTokens for FunctionTail {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if let Some(ref filter_clause) = self.filter_clause {
-            s.append(TK_FILTER, None)?;
-            s.append(TK_LP, None)?;
-            s.append(TK_WHERE, None)?;
-            filter_clause.to_tokens(s)?;
-            s.append(TK_RP, None)?;
-        }
-        if let Some(ref over_clause) = self.over_clause {
-            s.append(TK_OVER, None)?;
-            over_clause.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
 
+/// Function call `OVER` clause
 // https://sqlite.org/syntax/over-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Over {
+    /// Window defintion
     Window(Window),
+    /// Window name
     Name(Name),
 }
 
-impl ToTokens for Over {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            Over::Window(ref window) => window.to_tokens(s),
-            Over::Name(ref name) => name.to_tokens(s),
-        }
-    }
-}
-
+/// `OVER` window definition
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WindowDef {
+    /// window name
     pub name: Name,
+    /// window definition
     pub window: Window,
 }
-impl ToTokens for WindowDef {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.name.to_tokens(s)?;
-        s.append(TK_AS, None)?;
-        self.window.to_tokens(s)
-    }
-}
 
+/// Window definition
 // https://sqlite.org/syntax/window-defn.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Window {
+    /// base window name
     pub base: Option<Name>,
+    /// `PARTITION BY`
     pub partition_by: Option<Vec<Expr>>,
+    /// `ORDER BY`
     pub order_by: Option<Vec<SortedColumn>>,
+    /// frame spec
     pub frame_clause: Option<FrameClause>,
 }
 
-impl ToTokens for Window {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_LP, None)?;
-        if let Some(ref base) = self.base {
-            base.to_tokens(s)?;
-        }
-        if let Some(ref partition_by) = self.partition_by {
-            s.append(TK_PARTITION, None)?;
-            s.append(TK_BY, None)?;
-            comma(partition_by, s)?;
-        }
-        if let Some(ref order_by) = self.order_by {
-            s.append(TK_ORDER, None)?;
-            s.append(TK_BY, None)?;
-            comma(order_by, s)?;
-        }
-        if let Some(ref frame_clause) = self.frame_clause {
-            frame_clause.to_tokens(s)?;
-        }
-        s.append(TK_RP, None)
-    }
-}
-
+/// Frame specification
 // https://sqlite.org/syntax/frame-spec.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FrameClause {
+    ///
     pub mode: FrameMode,
+    ///
     pub start: FrameBound,
+    ///
     pub end: Option<FrameBound>,
+    /// `EXCLUDE`
     pub exclude: Option<FrameExclude>,
 }
 
-impl ToTokens for FrameClause {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.mode.to_tokens(s)?;
-        if let Some(ref end) = self.end {
-            s.append(TK_BETWEEN, None)?;
-            self.start.to_tokens(s)?;
-            s.append(TK_AND, None)?;
-            end.to_tokens(s)?;
-        } else {
-            self.start.to_tokens(s)?;
-        }
-        if let Some(ref exclude) = self.exclude {
-            s.append(TK_EXCLUDE, None)?;
-            exclude.to_tokens(s)?;
-        }
-        Ok(())
-    }
-}
-
+/// Frame modes
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FrameMode {
+    /// `GROUPS`
     Groups,
+    /// `RANGE`
     Range,
+    /// `ROWS`
     Rows,
 }
 
-impl ToTokens for FrameMode {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(
-            match self {
-                FrameMode::Groups => TK_GROUPS,
-                FrameMode::Range => TK_RANGE,
-                FrameMode::Rows => TK_ROWS,
-            },
-            None,
-        )
-    }
-}
-
+/// Frame bounds
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FrameBound {
+    /// `CURRENT ROW`
     CurrentRow,
+    /// `FOLLOWING`
     Following(Expr),
+    /// `PRECEDING`
     Preceding(Expr),
+    /// `UNBOUNDED FOLLOWING`
     UnboundedFollowing,
+    /// `UNBOUNDED PRECEDING`
     UnboundedPreceding,
 }
 
-impl ToTokens for FrameBound {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            FrameBound::CurrentRow => {
-                s.append(TK_CURRENT, None)?;
-                s.append(TK_ROW, None)
-            }
-            FrameBound::Following(value) => {
-                value.to_tokens(s)?;
-                s.append(TK_FOLLOWING, None)
-            }
-            FrameBound::Preceding(value) => {
-                value.to_tokens(s)?;
-                s.append(TK_PRECEDING, None)
-            }
-            FrameBound::UnboundedFollowing => {
-                s.append(TK_UNBOUNDED, None)?;
-                s.append(TK_FOLLOWING, None)
-            }
-            FrameBound::UnboundedPreceding => {
-                s.append(TK_UNBOUNDED, None)?;
-                s.append(TK_PRECEDING, None)
-            }
-        }
-    }
-}
-
+/// Frame exclusions
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FrameExclude {
+    /// `NO OTHERS`
     NoOthers,
+    /// `CURRENT ROW`
     CurrentRow,
+    /// `GROUP`
     Group,
+    /// `TIES`
     Ties,
-}
-
-impl ToTokens for FrameExclude {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        match self {
-            FrameExclude::NoOthers => {
-                s.append(TK_NO, None)?;
-                s.append(TK_OTHERS, None)
-            }
-            FrameExclude::CurrentRow => {
-                s.append(TK_CURRENT, None)?;
-                s.append(TK_ROW, None)
-            }
-            FrameExclude::Group => s.append(TK_GROUP, None),
-            FrameExclude::Ties => s.append(TK_TIES, None),
-        }
-    }
-}
-
-fn comma<I, S: TokenStream>(items: I, s: &mut S) -> Result<(), S::Error>
-where
-    I: IntoIterator,
-    I::Item: ToTokens,
-{
-    let iter = items.into_iter();
-    for (i, item) in iter.enumerate() {
-        if i != 0 {
-            s.append(TK_COMMA, None)?;
-        }
-        item.to_tokens(s)?;
-    }
-    Ok(())
-}
-
-// TK_ID: [...] / `...` / "..." / some keywords / non keywords
-fn double_quote<S: TokenStream>(name: &str, s: &mut S) -> Result<(), S::Error> {
-    if name.is_empty() {
-        return s.append(TK_ID, Some("\"\""));
-    }
-    if is_identifier(name) {
-        // identifier must be quoted when they match a keyword...
-        /*if is_keyword(name) {
-            f.write_char('`')?;
-            f.write_str(name)?;
-            return f.write_char('`');
-        }*/
-        return s.append(TK_ID, Some(name));
-    }
-    /*f.write_char('"')?;
-    for c in name.chars() {
-        if c == '"' {
-            f.write_char(c)?;
-        }
-        f.write_char(c)?;
-    }
-    f.write_char('"')*/
-    s.append(TK_ID, Some(name))
 }
