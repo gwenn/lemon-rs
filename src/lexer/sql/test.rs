@@ -296,6 +296,11 @@ fn missing_join_clause() {
 }
 
 #[test]
+fn cast_without_typename() {
+    parse_cmd(b"SELECT CAST(a AS ) FROM t");
+}
+
+#[test]
 fn unknown_table_option() {
     expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
     expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");

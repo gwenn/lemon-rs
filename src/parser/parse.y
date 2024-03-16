@@ -912,7 +912,7 @@ expr(A) ::= expr(X) COLLATE ids(C). {
 }
 %ifndef SQLITE_OMIT_CAST
 expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
-  A = Expr::cast(E, T.unwrap()); // FIXME mandatory ?
+  A = Expr::cast(E, T);
 }
 %endif  SQLITE_OMIT_CAST
 
