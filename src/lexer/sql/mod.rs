@@ -263,7 +263,7 @@ impl Tokenizer {
 /// use sqlite3_parser::lexer::Scanner;
 ///
 /// let tokenizer = Tokenizer::new();
-/// let input = "PRAGMA parser_trace=ON;".as_bytes();
+/// let input = b"PRAGMA parser_trace=ON;";
 /// let mut s = Scanner::new(tokenizer);
 /// let Ok((_, Some((token1, _)), _)) = s.scan(input) else { panic!() };
 /// s.scan(input).unwrap();
@@ -592,16 +592,16 @@ fn exponential_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize),
     // data[i] == 'e'|'E'
     return if let Some(b) = data.get(i + 1) {
         let i = if *b == b'+' || *b == b'-' { i + 1 } else { i };
-        if let Some((i, b)) = data
+        if let Some((j, b)) = data
             .iter()
             .enumerate()
             .skip(i + 1)
             .find(|&(_, &b)| !b.is_ascii_digit())
         {
-            if is_identifier_start(*b) {
+            if j == i + 1 || is_identifier_start(*b) {
                 return Err(Error::BadNumber(None));
             }
-            Ok((Some((&data[..i], TK_FLOAT)), i))
+            Ok((Some((&data[..j], TK_FLOAT)), j))
         } else {
             if data.len() == i + 1 {
                 return Err(Error::BadNumber(None));
@@ -639,18 +639,39 @@ impl Tokenizer {
 mod tests {
     use super::Tokenizer;
     use crate::dialect::TokenType;
+    use crate::lexer::sql::Error;
     use crate::lexer::Scanner;
 
     #[test]
-    fn fallible_iterator() {
+    fn fallible_iterator() -> Result<(), Error> {
         let tokenizer = Tokenizer::new();
-        let input = "PRAGMA parser_trace=ON;".as_bytes();
+        let input = b"PRAGMA parser_trace=ON;";
         let mut s = Scanner::new(tokenizer);
-        let (token1, token_type1) = s.scan(input).unwrap().1.unwrap();
-        assert!(b"PRAGMA".eq_ignore_ascii_case(token1));
-        assert_eq!(TokenType::TK_PRAGMA, token_type1);
-        let (token2, token_type2) = s.scan(input).unwrap().1.unwrap();
-        assert_eq!("parser_trace".as_bytes(), token2);
-        assert_eq!(TokenType::TK_ID, token_type2);
+        expect_token(&mut s, input, b"PRAGMA", TokenType::TK_PRAGMA)?;
+        expect_token(&mut s, input, b"parser_trace", TokenType::TK_ID)?;
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_number_literal() -> Result<(), Error> {
+        let tokenizer = Tokenizer::new();
+        let input = b"SELECT 1E;";
+        let mut s = Scanner::new(tokenizer);
+        expect_token(&mut s, input, b"SELECT", TokenType::TK_SELECT)?;
+        let err = s.scan(input).unwrap_err();
+        assert!(matches!(err, Error::BadNumber(_)));
+        Ok(())
+    }
+
+    fn expect_token(
+        s: &mut Scanner<Tokenizer>,
+        input: &[u8],
+        token: &[u8],
+        token_type: TokenType,
+    ) -> Result<(), Error> {
+        let (t, tt) = s.scan(input)?.1.unwrap();
+        assert_eq!(token, t);
+        assert_eq!(token_type, tt);
+        Ok(())
     }
 }

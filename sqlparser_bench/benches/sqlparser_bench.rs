@@ -17,15 +17,15 @@ use sqlite3_parser::lexer::sql::Parser;
 fn basic_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("sqlparser-rs parsing benchmark");
 
-    let string = "SELECT * FROM `table` WHERE 1 = 1";
+    let string = b"SELECT * FROM `table` WHERE 1 = 1";
     group.bench_function("sqlparser::select", |b| {
         b.iter(|| {
-            let mut parser = Parser::new(string.as_bytes());
+            let mut parser = Parser::new(string);
             parser.next()
         });
     });
 
-    let with_query = "
+    let with_query = b"
         WITH derived AS (
             SELECT MAX(a) AS max_a,
                    COUNT(b) AS b_num,
@@ -38,7 +38,7 @@ fn basic_queries(c: &mut Criterion) {
     ";
     group.bench_function("sqlparser::with_select", |b| {
         b.iter(|| {
-            let mut parser = Parser::new(with_query.as_bytes());
+            let mut parser = Parser::new(with_query);
             parser.next()
         });
     });
