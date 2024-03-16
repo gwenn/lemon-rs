@@ -61,6 +61,7 @@
 // code file that implements the parser.
 //
 %include {
+use crate::custom_err;
 use crate::parser::ast::*;
 use crate::parser::{Context, ParserError};
 use crate::dialect::{from_token, Token, TokenType};
@@ -140,21 +141,19 @@ table_option_set(A) ::= .    {A = TableOptions::NONE;}
 table_option_set(A) ::= table_option(A).
 table_option_set(A) ::= table_option_set(X) COMMA table_option(Y). {A = X|Y;}
 table_option(A) ::= WITHOUT nm(X). {
-  if "rowid".eq_ignore_ascii_case(&X.0) {
+  let option = X;
+  if "rowid".eq_ignore_ascii_case(&option.0) {
     A = TableOptions::WITHOUT_ROWID;
   }else{
-    A = TableOptions::NONE;
-    let msg = format!("unknown table option: {}", &X);
-    self.ctx.sqlite3_error_msg(&msg);
+    return Err(custom_err!("unknown table option: {}", option));
   }
 }
 table_option(A) ::= nm(X). {
-  if "strict".eq_ignore_ascii_case(&X.0) {
+  let option = X;
+  if "strict".eq_ignore_ascii_case(&option.0) {
     A = TableOptions::STRICT;
   }else{
-    A = TableOptions::NONE;
-    let msg = format!("unknown table option: {}", &X);
-    self.ctx.sqlite3_error_msg(&msg);
+    return Err(custom_err!("unknown table option: {}", option));
   }
 }
 %type columnlist {Vec<ColumnDefinition>}
@@ -1211,9 +1210,8 @@ trigger_cmd_list(A) ::= trigger_cmd(X) SEMI. {
 trnm(A) ::= nm(A).
 trnm(A) ::= nm DOT nm(X). {
   A = X;
-  self.ctx.sqlite3_error_msg(
-        "qualified table names are not allowed on INSERT, UPDATE, and DELETE \
-         statements within triggers");
+  return Err(custom_err!("qualified table names are not allowed on INSERT, UPDATE, and DELETE \
+         statements within triggers"));
 }
 
 // Disallow the INDEX BY and NOT INDEXED clauses on UPDATE and DELETE
@@ -1222,14 +1220,14 @@ trnm(A) ::= nm DOT nm(X). {
 //
 tridxby ::= .
 tridxby ::= INDEXED BY nm. {
-  self.ctx.sqlite3_error_msg(
+  return Err(custom_err!(
         "the INDEXED BY clause is not allowed on UPDATE or DELETE statements \
-         within triggers");
+         within triggers"));
 }
 tridxby ::= NOT INDEXED. {
-  self.ctx.sqlite3_error_msg(
+  return Err(custom_err!(
         "the NOT INDEXED clause is not allowed on UPDATE or DELETE statements \
-         within triggers");
+         within triggers"));
 }
 
 

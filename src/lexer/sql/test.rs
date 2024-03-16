@@ -44,7 +44,7 @@ fn count_named_placeholders() {
 
 #[test]
 fn duplicate_column() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT, x TEXT)",
         "duplicate column name: x",
     );
@@ -52,26 +52,22 @@ fn duplicate_column() {
 
 #[test]
 fn create_table_without_column() {
-    let r = parse(b"CREATE TABLE t ()");
-    let Error::ParserError(
+    expect_parser_err(
+        b"CREATE TABLE t ()",
         ParserError::SyntaxError {
             token_type: "RP",
             found: None,
         },
-        _,
-    ) = r.unwrap_err()
-    else {
-        panic!("unexpected error type")
-    };
+    );
 }
 
 #[test]
 fn vtab_args() -> Result<(), Error> {
-    let sql = r#"CREATE VIRTUAL TABLE mail USING fts3(
+    let sql = b"CREATE VIRTUAL TABLE mail USING fts3(
   subject VARCHAR(256) NOT NULL,
   body TEXT CHECK(length(body)<10240)
-);"#;
-    let r = parse_cmd(sql.as_bytes());
+);";
+    let r = parse_cmd(sql);
     let Cmd::Stmt(Stmt::CreateVirtualTable {
         tbl_name: QualifiedName {
             name: Name(tbl_name),
@@ -147,12 +143,12 @@ fn extra_comments_between_statements() {
 
 #[test]
 fn insert_mismatch_count() {
-    expect_parser_err(b"INSERT INTO t (a, b) VALUES (1)", "1 values for 2 columns");
+    expect_parser_err_msg(b"INSERT INTO t (a, b) VALUES (1)", "1 values for 2 columns");
 }
 
 #[test]
 fn insert_default_values() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"INSERT INTO t (a) DEFAULT VALUES",
         "0 values for 1 columns",
     );
@@ -160,7 +156,7 @@ fn insert_default_values() {
 
 #[test]
 fn create_view_mismatch_count() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"CREATE VIEW v (c1, c2) AS SELECT 1",
         "expected 2 columns for v but got 1",
     );
@@ -168,7 +164,7 @@ fn create_view_mismatch_count() {
 
 #[test]
 fn create_view_duplicate_column_name() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"CREATE VIEW v (c1, c1) AS SELECT 1, 2",
         "duplicate column name: c1",
     );
@@ -176,7 +172,7 @@ fn create_view_duplicate_column_name() {
 
 #[test]
 fn create_table_without_rowid_missing_pk() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"CREATE TABLE t (c1) WITHOUT ROWID",
         "PRIMARY KEY missing on table t",
     );
@@ -184,7 +180,7 @@ fn create_table_without_rowid_missing_pk() {
 
 #[test]
 fn create_temporary_table_with_qualified_name() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"CREATE TEMPORARY TABLE mem.x AS SELECT 1",
         "temporary table name must be unqualified",
     );
@@ -193,7 +189,7 @@ fn create_temporary_table_with_qualified_name() {
 
 #[test]
 fn create_table_with_only_generated_column() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"CREATE TABLE test(data AS (1))",
         "must have at least one non-generated column",
     );
@@ -201,12 +197,12 @@ fn create_table_with_only_generated_column() {
 
 #[test]
 fn create_strict_table_missing_datatype() {
-    expect_parser_err(b"CREATE TABLE t (c1) STRICT", "missing datatype for t.c1");
+    expect_parser_err_msg(b"CREATE TABLE t (c1) STRICT", "missing datatype for t.c1");
 }
 
 #[test]
 fn create_strict_table_unknown_datatype() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"CREATE TABLE t (c1 BOOL) STRICT",
         "unknown datatype for t.c1: \"BOOL\"",
     );
@@ -225,7 +221,7 @@ fn create_strict_table_generated_column() {
 
 #[test]
 fn selects_compound_mismatch_columns_count() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"SELECT 1 UNION SELECT 1, 2",
         "SELECTs to the left and right of UNION do not have the same number of result columns",
     );
@@ -233,7 +229,7 @@ fn selects_compound_mismatch_columns_count() {
 
 #[test]
 fn delete_order_by_without_limit() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"DELETE FROM t ORDER BY x",
         "ORDER BY without LIMIT on DELETE",
     );
@@ -241,7 +237,7 @@ fn delete_order_by_without_limit() {
 
 #[test]
 fn update_order_by_without_limit() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"UPDATE t SET x = 1 ORDER BY x",
         "ORDER BY without LIMIT on UPDATE",
     );
@@ -249,7 +245,7 @@ fn update_order_by_without_limit() {
 
 #[test]
 fn values_mismatch_columns_count() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"INSERT INTO t VALUES (1), (1,2)",
         "all VALUES must have the same number of terms",
     );
@@ -257,7 +253,7 @@ fn values_mismatch_columns_count() {
 
 #[test]
 fn alter_add_column_primary_key() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"ALTER TABLE t ADD COLUMN c PRIMARY KEY",
         "Cannot add a PRIMARY KEY column",
     );
@@ -265,7 +261,7 @@ fn alter_add_column_primary_key() {
 
 #[test]
 fn alter_add_column_unique() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"ALTER TABLE t ADD COLUMN c UNIQUE",
         "Cannot add a UNIQUE column",
     );
@@ -273,7 +269,7 @@ fn alter_add_column_unique() {
 
 #[test]
 fn alter_rename_same() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"ALTER TABLE t RENAME TO t",
         "there is already another table or index with this name: t",
     );
@@ -281,20 +277,58 @@ fn alter_rename_same() {
 
 #[test]
 fn natural_join_on() {
-    expect_parser_err(
+    expect_parser_err_msg(
         b"SELECT x FROM t NATURAL JOIN t USING (x)",
         "a NATURAL join may not have an ON or USING clause",
     );
-    expect_parser_err(
+    expect_parser_err_msg(
         b"SELECT x FROM t NATURAL JOIN t ON t.x = t.x",
         "a NATURAL join may not have an ON or USING clause",
     );
 }
 
-fn expect_parser_err(input: &[u8], error_msg: &str) {
+#[test]
+fn unknown_table_option() {
+    expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
+    expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");
+}
+
+#[test]
+fn qualified_table_name_within_triggers() {
+    expect_parser_err_msg(
+        b"CREATE TRIGGER tr1 AFTER INSERT ON t1 BEGIN
+            DELETE FROM main.t2;
+          END;",
+        "qualified table names are not allowed on INSERT, UPDATE, and DELETE statements \
+          within triggers",
+    );
+}
+
+#[test]
+fn indexed_by_clause_within_triggers() {
+    expect_parser_err_msg(
+        b"CREATE TRIGGER main.t16err5 AFTER INSERT ON tA BEGIN
+            UPDATE t16 INDEXED BY t16a SET rowid=rowid+1 WHERE a=1;
+          END;",
+        "the INDEXED BY clause is not allowed on UPDATE or DELETE statements \
+           within triggers",
+    );
+    expect_parser_err_msg(
+        b"CREATE TRIGGER main.t16err6 AFTER INSERT ON tA BEGIN
+            DELETE FROM t16 NOT INDEXED WHERE a=123;
+          END;",
+        "the NOT INDEXED clause is not allowed on UPDATE or DELETE statements \
+         within triggers",
+    );
+}
+
+fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
+    expect_parser_err(input, ParserError::Custom(error_msg.to_owned()))
+}
+fn expect_parser_err(input: &[u8], err: ParserError) {
     let r = parse(input);
-    if let Error::ParserError(ParserError::Custom(ref msg), _) = r.unwrap_err() {
-        assert_eq!(msg, error_msg);
+    if let Error::ParserError(e, _) = r.unwrap_err() {
+        assert_eq!(e, err);
     } else {
         panic!("unexpected error type")
     };

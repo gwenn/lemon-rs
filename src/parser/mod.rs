@@ -1,5 +1,4 @@
 //! SQLite parser
-use log::error;
 
 pub mod ast;
 pub mod parse {
@@ -19,7 +18,7 @@ use crate::dialect::Token;
 use ast::{Cmd, ExplainKind, Name, Stmt};
 
 /// Parser error
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParserError {
     /// Stack overflow
     StackOverflow,
@@ -132,10 +131,6 @@ impl<'input> Context<'input> {
     fn module_args(&mut self) -> Option<Vec<String>> {
         self.add_module_arg();
         self.module_args.take()
-    }
-
-    fn sqlite3_error_msg(&mut self, msg: &str) {
-        error!("parser error: {}", msg);
     }
 
     /// This routine is called after a single SQL statement has been parsed.
