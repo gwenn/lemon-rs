@@ -63,11 +63,11 @@ fn create_table_without_column() {
 
 #[test]
 fn vtab_args() -> Result<(), Error> {
-    let sql = r#"CREATE VIRTUAL TABLE mail USING fts3(
+    let sql = b"CREATE VIRTUAL TABLE mail USING fts3(
   subject VARCHAR(256) NOT NULL,
   body TEXT CHECK(length(body)<10240)
-);"#;
-    let r = parse_cmd(sql.as_bytes());
+);";
+    let r = parse_cmd(sql);
     let Cmd::Stmt(Stmt::CreateVirtualTable {
         tbl_name: QualifiedName {
             name: Name(tbl_name),
@@ -291,6 +291,35 @@ fn natural_join_on() {
 fn unknown_table_option() {
     expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
     expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");
+}
+
+#[test]
+fn qualified_table_name_within_triggers() {
+    expect_parser_err_msg(
+        b"CREATE TRIGGER tr1 AFTER INSERT ON t1 BEGIN
+            DELETE FROM main.t2;
+          END;",
+        "qualified table names are not allowed on INSERT, UPDATE, and DELETE statements \
+          within triggers",
+    );
+}
+
+#[test]
+fn indexed_by_clause_within_triggers() {
+    expect_parser_err_msg(
+        b"CREATE TRIGGER main.t16err5 AFTER INSERT ON tA BEGIN
+            UPDATE t16 INDEXED BY t16a SET rowid=rowid+1 WHERE a=1;
+          END;",
+        "the INDEXED BY clause is not allowed on UPDATE or DELETE statements \
+           within triggers",
+    );
+    expect_parser_err_msg(
+        b"CREATE TRIGGER main.t16err6 AFTER INSERT ON tA BEGIN
+            DELETE FROM t16 NOT INDEXED WHERE a=123;
+          END;",
+        "the NOT INDEXED clause is not allowed on UPDATE or DELETE statements \
+         within triggers",
+    );
 }
 
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
