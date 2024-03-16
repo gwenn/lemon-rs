@@ -577,7 +577,9 @@ impl ToTokens for Expr {
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
                 s.append(TK_AS, None)?;
-                type_name.to_tokens(s)?;
+                if let Some(ref type_name) = type_name {
+                    type_name.to_tokens(s)?;
+                }
                 s.append(TK_RP, None)
             }
             Expr::Collate(expr, collation) => {

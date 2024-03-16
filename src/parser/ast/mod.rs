@@ -296,7 +296,7 @@ pub enum Expr {
         /// expression
         expr: Box<Expr>,
         /// `AS` type name
-        type_name: Type,
+        type_name: Option<Type>,
     },
     /// `COLLATE`: expression
     Collate(Box<Expr>, String),
@@ -404,7 +404,7 @@ impl Expr {
         Expr::Collate(Box::new(x), from_token(ct, c))
     }
     /// Constructor
-    pub fn cast(x: Expr, type_name: Type) -> Expr {
+    pub fn cast(x: Expr, type_name: Option<Type>) -> Expr {
         Expr::Cast {
             expr: Box::new(x),
             type_name,
