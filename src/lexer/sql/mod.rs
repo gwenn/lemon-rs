@@ -263,7 +263,7 @@ impl Tokenizer {
 /// use sqlite3_parser::lexer::Scanner;
 ///
 /// let tokenizer = Tokenizer::new();
-/// let input = "PRAGMA parser_trace=ON;".as_bytes();
+/// let input = b"PRAGMA parser_trace=ON;";
 /// let mut s = Scanner::new(tokenizer);
 /// let Ok((_, Some((token1, _)), _)) = s.scan(input) else { panic!() };
 /// s.scan(input).unwrap();
@@ -644,13 +644,13 @@ mod tests {
     #[test]
     fn fallible_iterator() {
         let tokenizer = Tokenizer::new();
-        let input = "PRAGMA parser_trace=ON;".as_bytes();
+        let input = b"PRAGMA parser_trace=ON;";
         let mut s = Scanner::new(tokenizer);
         let (token1, token_type1) = s.scan(input).unwrap().1.unwrap();
         assert!(b"PRAGMA".eq_ignore_ascii_case(token1));
         assert_eq!(TokenType::TK_PRAGMA, token_type1);
         let (token2, token_type2) = s.scan(input).unwrap().1.unwrap();
-        assert_eq!("parser_trace".as_bytes(), token2);
+        assert_eq!(b"parser_trace", token2);
         assert_eq!(TokenType::TK_ID, token_type2);
     }
 }

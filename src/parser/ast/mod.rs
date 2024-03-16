@@ -1248,7 +1248,7 @@ pub enum TableConstraint {
     /// `FOREIGN KEY`
     ForeignKey {
         /// columns
-        columns: Vec<IndexedColumn>, // check no duplicate
+        columns: Vec<IndexedColumn>,
         /// `REFERENCES`
         clause: ForeignKeyClause,
         /// `DEFERRABLE`

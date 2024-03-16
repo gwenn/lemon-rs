@@ -22,11 +22,7 @@ impl Cmd {
     }
     /// Like `sqlite3_stmt_isexplain`
     pub fn is_explain(&self) -> bool {
-        match self {
-            Cmd::Explain(_) => true,
-            Cmd::ExplainQueryPlan(_) => true,
-            _ => false,
-        }
+        matches!(self, Cmd::Explain(_) | Cmd::ExplainQueryPlan(_))
     }
     /// Like `sqlite3_stmt_readonly`
     pub fn readonly(&self) -> bool {
