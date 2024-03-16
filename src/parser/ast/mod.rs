@@ -799,7 +799,9 @@ impl FromClause {
                 self.joins = Some(vec![jst]);
             }
         } else {
-            debug_assert!(jc.is_none());
+            if jc.is_some() {
+                return Err(custom_err!("a JOIN clause is required before ON"));
+            }
             debug_assert!(self.select.is_none());
             debug_assert!(self.joins.is_none());
             self.select = Some(Box::new(table));
