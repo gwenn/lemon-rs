@@ -287,6 +287,12 @@ fn natural_join_on() {
     );
 }
 
+#[test]
+fn unknown_table_option() {
+    expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
+    expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");
+}
+
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
     expect_parser_err(input, ParserError::Custom(error_msg.to_owned()))
 }
