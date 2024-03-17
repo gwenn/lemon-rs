@@ -193,7 +193,7 @@ impl CreateTableBody {
         } = self
         {
             let mut generated_count = 0;
-            for c in columns {
+            for c in columns.values() {
                 for cs in c.constraints.iter() {
                     if let ColumnConstraint::Generated { .. } = cs.constraint {
                         generated_count += 1;
@@ -205,7 +205,7 @@ impl CreateTableBody {
             }
 
             if options.contains(TableOptions::STRICT) {
-                for c in columns {
+                for c in columns.values() {
                     match &c.col_type {
                         Some(Type { name, .. }) => {
                             // The datatype must be one of following: INT INTEGER REAL TEXT BLOB ANY
@@ -250,7 +250,7 @@ impl CreateTableBody {
             ..
         } = self
         {
-            for col in columns {
+            for col in columns.values() {
                 for c in col {
                     if let ColumnConstraint::PrimaryKey { .. } = c {
                         return true;
