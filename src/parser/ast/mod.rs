@@ -8,6 +8,7 @@ use std::str::FromStr;
 
 use fmt::{ToTokens, TokenStream};
 use indexmap::IndexSet;
+use uncased::Uncased;
 
 use crate::custom_err;
 use crate::dialect::TokenType::{self, *};
@@ -989,13 +990,13 @@ impl Id {
 // TODO ids (identifier or string)
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Name(pub Uncased<'static>); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 impl Name {
     /// Constructor
     pub fn from_token(ty: YYCODETYPE, token: Token) -> Name {
-        Name(from_token(ty, token))
+        Name(Uncased::from_owned(from_token(ty, token)))
     }
 }
 
@@ -1115,10 +1116,7 @@ impl ColumnDefinition {
         columns: &mut Vec<ColumnDefinition>,
         mut cd: ColumnDefinition,
     ) -> Result<(), ParserError> {
-        if columns
-            .iter()
-            .any(|c| c.col_name.0.eq_ignore_ascii_case(&cd.col_name.0))
-        {
+        if columns.iter().any(|c| c.col_name == cd.col_name) {
             // TODO unquote
             return Err(custom_err!("duplicate column name: {}", cd.col_name));
         }
@@ -1545,10 +1543,7 @@ impl CommonTableExpr {
         ctes: &mut Vec<CommonTableExpr>,
         cte: CommonTableExpr,
     ) -> Result<(), ParserError> {
-        if ctes
-            .iter()
-            .any(|c| c.tbl_name.0.eq_ignore_ascii_case(&cte.tbl_name.0))
-        {
+        if ctes.iter().any(|c| c.tbl_name == cte.tbl_name) {
             return Err(custom_err!("duplicate WITH table name: {}", cte.tbl_name));
         }
         ctes.push(cte);

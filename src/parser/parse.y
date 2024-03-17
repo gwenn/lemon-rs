@@ -66,6 +66,7 @@ use crate::parser::ast::*;
 use crate::parser::{Context, ParserError};
 use crate::dialect::{from_token, Token, TokenType};
 use log::{debug, error, log_enabled};
+use uncased::Uncased;
 
 #[allow(non_camel_case_types)]
 type sqlite3ParserError = crate::parser::ParserError;
@@ -142,7 +143,7 @@ table_option_set(A) ::= table_option(A).
 table_option_set(A) ::= table_option_set(X) COMMA table_option(Y). {A = X|Y;}
 table_option(A) ::= WITHOUT nm(X). {
   let option = X;
-  if "rowid".eq_ignore_ascii_case(&option.0) {
+  if Uncased::from_borrowed("rowid") == option.0 {
     A = TableOptions::WITHOUT_ROWID;
   }else{
     return Err(custom_err!("unknown table option: {}", option));
@@ -150,7 +151,7 @@ table_option(A) ::= WITHOUT nm(X). {
 }
 table_option(A) ::= nm(X). {
   let option = X;
-  if "strict".eq_ignore_ascii_case(&option.0) {
+  if Uncased::from_borrowed("strict") == option.0 {
     A = TableOptions::STRICT;
   }else{
     return Err(custom_err!("unknown table option: {}", option));
