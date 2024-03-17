@@ -7,7 +7,7 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 
 use fmt::{ToTokens, TokenStream};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use uncased::Uncased;
 
 use crate::custom_err;
@@ -1073,7 +1073,7 @@ pub enum CreateTableBody {
     /// columns and constraints
     ColumnsAndConstraints {
         /// table column definitions
-        columns: Vec<ColumnDefinition>,
+        columns: IndexMap<Name, ColumnDefinition>,
         /// table constraints
         constraints: Option<Vec<NamedTableConstraint>>,
         /// table options
@@ -1086,7 +1086,7 @@ pub enum CreateTableBody {
 impl CreateTableBody {
     /// Constructor
     pub fn columns_and_constraints(
-        columns: Vec<ColumnDefinition>,
+        columns: IndexMap<Name, ColumnDefinition>,
         constraints: Option<Vec<NamedTableConstraint>>,
         options: TableOptions,
     ) -> Result<CreateTableBody, ParserError> {
@@ -1113,10 +1113,10 @@ pub struct ColumnDefinition {
 impl ColumnDefinition {
     /// Constructor
     pub fn add_column(
-        columns: &mut Vec<ColumnDefinition>,
+        columns: &mut IndexMap<Name, ColumnDefinition>,
         mut cd: ColumnDefinition,
     ) -> Result<(), ParserError> {
-        if columns.iter().any(|c| c.col_name == cd.col_name) {
+        if columns.contains_key(&cd.col_name) {
             // TODO unquote
             return Err(custom_err!("duplicate column name: {}", cd.col_name));
         }
@@ -1147,7 +1147,7 @@ impl ColumnDefinition {
                 col_type.name = new_type.join(" ");
             }
         }
-        columns.push(cd);
+        columns.insert(cd.col_name.clone(), cd);
         Ok(())
     }
 }

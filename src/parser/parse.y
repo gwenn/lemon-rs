@@ -65,6 +65,7 @@ use crate::custom_err;
 use crate::parser::ast::*;
 use crate::parser::{Context, ParserError};
 use crate::dialect::{from_token, Token, TokenType};
+use indexmap::IndexMap;
 use log::{debug, error, log_enabled};
 use uncased::Uncased;
 
@@ -157,7 +158,7 @@ table_option(A) ::= nm(X). {
     return Err(custom_err!("unknown table option: {}", option));
   }
 }
-%type columnlist {Vec<ColumnDefinition>}
+%type columnlist {IndexMap<Name,ColumnDefinition>}
 columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
   let col = X;
   let cd = ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y };
@@ -165,7 +166,9 @@ columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
 }
 columnlist(A) ::= columnname(X) carglist(Y). {
   let col = X;
-  A = vec![ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y }];
+  let mut map = IndexMap::new();
+  map.insert(col.0.clone(), ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y });
+  A = map;
 }
 %type columnname {(Name, Option<Type>)}
 columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
