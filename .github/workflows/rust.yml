@@ -1,7 +1,10 @@
 name: CI
 
-on: [push, pull_request]
-
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
 permissions:
   contents: read
 
@@ -14,8 +17,8 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build
-    - name: Run tests
-      run: cargo test
+      - uses: actions/checkout@v3
+      - name: Build
+        run: cargo build
+      - name: Run tests
+        run: cargo test
