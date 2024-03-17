@@ -2035,3 +2035,57 @@ fn double_quote<S: TokenStream>(name: &str, s: &mut S) -> Result<(), S::Error> {
     f.write_char('"')*/
     s.append(TK_ID, Some(name))
 }
+
+/// Convert an SQL-style quoted string into a normal string by removing
+/// the quote characters.
+pub fn dequote(n: Name) -> Result<Name, ParserError> {
+    let s = n.0.as_str();
+    if s.is_empty() {
+        return Ok(n);
+    }
+    let mut quote = s.chars().nth(0).unwrap();
+    if quote != '"' && quote != '`' && quote != '\'' && quote != '[' {
+        return Ok(n);
+    } else if quote == '[' {
+        quote = ']';
+    }
+    debug_assert!(s.len() > 1);
+    debug_assert!(s.ends_with(quote));
+    let sub = &s[1..s.len() - 1];
+    let mut z = String::with_capacity(sub.len());
+    let mut escaped = false;
+    for c in sub.chars() {
+        if escaped {
+            if c != quote {
+                return Err(custom_err!("Malformed string literal: {}", s));
+            }
+            escaped = false;
+        } else if c == quote {
+            escaped = true;
+            continue;
+        }
+        z.push(c);
+    }
+    Ok(Name(Uncased::from_owned(z)))
+}
+
+#[cfg(test)]
+mod test {
+    use super::{dequote, Name, ParserError};
+    use uncased::Uncased;
+
+    #[test]
+    fn test_dequote() -> Result<(), ParserError> {
+        assert_eq!(dequote(name("x"))?, name("x"));
+        assert_eq!(dequote(name("`x`"))?, name("x"));
+        assert_eq!(dequote(name("`x``y`"))?, name("x`y"));
+        assert_eq!(dequote(name(r#""x""#))?, name("x"));
+        assert_eq!(dequote(name(r#""x""y""#))?, name("x\"y"));
+        assert_eq!(dequote(name("[x]"))?, name("x"));
+        Ok(())
+    }
+
+    fn name(s: &'static str) -> Name {
+        Name(Uncased::from_borrowed(s))
+    }
+}

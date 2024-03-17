@@ -166,8 +166,9 @@ columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
 }
 columnlist(A) ::= columnname(X) carglist(Y). {
   let col = X;
+  let cd = ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y };
   let mut map = IndexMap::new();
-  map.insert(col.0.clone(), ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y });
+  ColumnDefinition::add_column(&mut map, cd)?;
   A = map;
 }
 %type columnname {(Name, Option<Type>)}

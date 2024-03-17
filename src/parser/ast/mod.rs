@@ -6,7 +6,7 @@ pub mod fmt;
 use std::num::ParseIntError;
 use std::str::FromStr;
 
-use fmt::{ToTokens, TokenStream};
+use fmt::{dequote, ToTokens, TokenStream};
 use indexmap::{IndexMap, IndexSet};
 use uncased::Uncased;
 
@@ -1116,9 +1116,10 @@ impl ColumnDefinition {
         columns: &mut IndexMap<Name, ColumnDefinition>,
         mut cd: ColumnDefinition,
     ) -> Result<(), ParserError> {
-        if columns.contains_key(&cd.col_name) {
+        let col_name = dequote(cd.col_name.clone())?;
+        if columns.contains_key(&col_name) {
             // TODO unquote
-            return Err(custom_err!("duplicate column name: {}", cd.col_name));
+            return Err(custom_err!("duplicate column name: {}", col_name));
         }
         // https://github.com/sqlite/sqlite/blob/e452bf40a14aca57fd9047b330dff282f3e4bbcc/src/build.c#L1511-L1514
         if let Some(ref mut col_type) = cd.col_type {
@@ -1147,7 +1148,7 @@ impl ColumnDefinition {
                 col_type.name = new_type.join(" ");
             }
         }
-        columns.insert(cd.col_name.clone(), cd);
+        columns.insert(col_name, cd);
         Ok(())
     }
 }
