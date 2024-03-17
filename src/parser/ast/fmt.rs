@@ -1129,7 +1129,7 @@ impl ToTokens for Id {
 
 impl ToTokens for Name {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        double_quote(&self.0, s)
+        double_quote(self.0.as_str(), s)
     }
 }
 
