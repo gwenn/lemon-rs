@@ -1148,6 +1148,24 @@ impl ColumnDefinition {
                 col_type.name = new_type.join(" ");
             }
         }
+        for constraint in &cd.constraints {
+            if let ColumnConstraint::ForeignKey {
+                clause:
+                    ForeignKeyClause {
+                        tbl_name, columns, ..
+                    },
+                ..
+            } = &constraint.constraint
+            {
+                if columns.as_ref().map_or(0, |v| v.len()) != 1 {
+                    return Err(custom_err!(
+                        "foreign key on {} should reference only one column of table {}",
+                        col_name,
+                        tbl_name
+                    ));
+                }
+            }
+        }
         columns.insert(col_name, cd);
         Ok(())
     }

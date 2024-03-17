@@ -217,6 +217,14 @@ fn create_strict_table_unknown_datatype() {
 }
 
 #[test]
+fn foreign_key_on_column() {
+    expect_parser_err_msg(
+        b"CREATE TABLE t(a REFERENCES o(a,b))",
+        "foreign key on a should reference only one column of table o",
+    );
+}
+
+#[test]
 fn create_strict_table_generated_column() {
     parse_cmd(
         b"CREATE TABLE IF NOT EXISTS transactions (
