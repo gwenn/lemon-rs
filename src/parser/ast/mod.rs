@@ -1157,7 +1157,8 @@ impl ColumnDefinition {
                 ..
             } = &constraint.constraint
             {
-                if columns.as_ref().map_or(0, |v| v.len()) != 1 {
+                // The child table may reference the primary key of the parent without specifying the primary key column
+                if columns.as_ref().map_or(0, |v| v.len()) > 1 {
                     return Err(custom_err!(
                         "foreign key on {} should reference only one column of table {}",
                         col_name,
