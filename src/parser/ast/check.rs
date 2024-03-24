@@ -188,7 +188,7 @@ impl CreateTableBody {
     pub fn check(&self, tbl_name: &QualifiedName) -> Result<(), ParserError> {
         if let CreateTableBody::ColumnsAndConstraints {
             columns,
-            constraints,
+            constraints: _,
             options,
         } = self
         {
@@ -299,7 +299,7 @@ impl OneSelect {
             }
         }
     }
-    ///
+    /// Check all VALUES have the same number of terms
     pub fn push(values: &mut Vec<Vec<Expr>>, v: Vec<Expr>) -> Result<(), ParserError> {
         if values[0].len() != v.len() {
             return Err(custom_err!("all VALUES must have the same number of terms"));
