@@ -2043,7 +2043,7 @@ pub fn dequote(n: Name) -> Result<Name, ParserError> {
     if s.is_empty() {
         return Ok(n);
     }
-    let mut quote = s.chars().nth(0).unwrap();
+    let mut quote = s.chars().next().unwrap();
     if quote != '"' && quote != '`' && quote != '\'' && quote != '[' {
         return Ok(n);
     } else if quote == '[' {

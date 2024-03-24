@@ -867,7 +867,7 @@ pub enum SelectTable {
     TableCall(QualifiedName, Option<Vec<Expr>>, Option<As>),
     /// `SELECT` subquery
     Select(Select, Option<As>),
-    ///
+    /// subquery
     Sub(FromClause, Option<As>),
 }
 
@@ -1169,7 +1169,7 @@ pub struct NamedColumnConstraint {
 pub enum ColumnConstraint {
     /// `PRIMARY KEY`
     PrimaryKey {
-        ///
+        /// `ASC` / `DESC`
         order: Option<SortOrder>,
         /// `ON CONFLICT` clause
         conflict_clause: Option<ResolveType>,
@@ -1178,7 +1178,7 @@ pub enum ColumnConstraint {
     },
     /// `NULL`
     NotNull {
-        ///
+        /// `NOT`
         nullable: bool,
         /// `ON CONFLICT` clause
         conflict_clause: Option<ResolveType>,
@@ -1294,7 +1294,7 @@ pub struct ForeignKeyClause {
     pub tbl_name: Name,
     /// foreign table columns
     pub columns: Option<Vec<IndexedColumn>>,
-    ///
+    /// referential action(s) / deferrable option(s)
     pub args: Vec<RefArg>,
 }
 
@@ -1469,9 +1469,9 @@ pub enum TriggerCmd {
         tbl_name: Name,
         /// `COLUMNS`
         col_names: Option<Vec<Name>>,
-        ///
+        /// `SELECT` or `VALUES`
         select: Select,
-        ///
+        /// `ON CONLICT` clause
         upsert: Option<Upsert>,
         /// `RETURNING`
         returning: Option<Vec<ResultColumn>>,
@@ -1516,7 +1516,7 @@ pub struct With {
 /// CTE materialization
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Materialized {
-    ///
+    /// No hint
     Any,
     /// `MATERIALIZED`
     Yes,
@@ -1610,7 +1610,7 @@ pub struct UpsertIndex {
 pub enum UpsertDo {
     /// `SET`
     Set {
-        ///
+        /// assignments
         sets: Vec<Set>,
         /// `WHERE` clause
         where_clause: Option<Expr>,
@@ -1665,11 +1665,11 @@ pub struct Window {
 // https://sqlite.org/syntax/frame-spec.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FrameClause {
-    ///
+    /// unit
     pub mode: FrameMode,
-    ///
+    /// start bound
     pub start: FrameBound,
-    ///
+    /// end bound
     pub end: Option<FrameBound>,
     /// `EXCLUDE`
     pub exclude: Option<FrameExclude>,
