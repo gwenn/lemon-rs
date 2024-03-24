@@ -24,9 +24,9 @@ pub enum ParserError {
     StackOverflow,
     /// Syntax error
     SyntaxError {
-        ///
+        /// token type
         token_type: &'static str,
-        ///
+        /// token value
         found: Option<String>,
     },
     /// Unexpected EOF
