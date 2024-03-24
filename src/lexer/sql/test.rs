@@ -268,6 +268,14 @@ fn values_mismatch_columns_count() {
 }
 
 #[test]
+fn column_specified_more_than_once() {
+    expect_parser_err_msg(
+        b"INSERT INTO t (n, n, m) VALUES (1, 0, 2)",
+        "column \"n\" specified more than once",
+    )
+}
+
+#[test]
 fn alter_add_column_primary_key() {
     expect_parser_err_msg(
         b"ALTER TABLE t ADD COLUMN c PRIMARY KEY",

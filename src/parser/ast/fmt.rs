@@ -416,7 +416,7 @@ impl ToTokens for Stmt {
                 tbl_name.to_tokens(s)?;
                 if let Some(columns) = columns {
                     s.append(TK_LP, None)?;
-                    comma(columns, s)?;
+                    comma(columns.deref(), s)?;
                     s.append(TK_RP, None)?;
                 }
                 body.to_tokens(s)?;
@@ -1101,7 +1101,7 @@ impl ToTokens for JoinConstraint {
             JoinConstraint::Using(col_names) => {
                 s.append(TK_USING, None)?;
                 s.append(TK_LP, None)?;
-                comma(col_names, s)?;
+                comma(col_names.deref(), s)?;
                 s.append(TK_RP, None)
             }
         }
@@ -1588,10 +1588,10 @@ impl ToTokens for InsertBody {
 impl ToTokens for Set {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if self.col_names.len() == 1 {
-            comma(&self.col_names, s)?;
+            comma(self.col_names.deref(), s)?;
         } else {
             s.append(TK_LP, None)?;
-            comma(&self.col_names, s)?;
+            comma(self.col_names.deref(), s)?;
             s.append(TK_RP, None)?;
         }
         s.append(TK_EQ, None)?;
@@ -1637,7 +1637,7 @@ impl ToTokens for TriggerEvent {
             TriggerEvent::UpdateOf(ref col_names) => {
                 s.append(TK_UPDATE, None)?;
                 s.append(TK_OF, None)?;
-                comma(col_names, s)
+                comma(col_names.deref(), s)
             }
         }
     }
@@ -1692,7 +1692,7 @@ impl ToTokens for TriggerCmd {
                 tbl_name.to_tokens(s)?;
                 if let Some(col_names) = col_names {
                     s.append(TK_LP, None)?;
-                    comma(col_names, s)?;
+                    comma(col_names.deref(), s)?;
                     s.append(TK_RP, None)?;
                 }
                 select.to_tokens(s)?;

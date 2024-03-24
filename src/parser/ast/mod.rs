@@ -4,6 +4,7 @@ pub mod check;
 pub mod fmt;
 
 use std::num::ParseIntError;
+use std::ops::Deref;
 use std::str::FromStr;
 
 use fmt::{dequote, ToTokens, TokenStream};
@@ -213,7 +214,7 @@ pub enum Stmt {
         /// table name
         tbl_name: QualifiedName,
         /// `COLUMNS`
-        columns: Option<Vec<Name>>,
+        columns: Option<DistinctNames>,
         /// `VALUES` or `SELECT`
         body: InsertBody,
         /// `RETURNING`
@@ -964,7 +965,7 @@ pub enum JoinConstraint {
     /// `ON`
     On(Expr),
     /// `USING`: col names
-    Using(Vec<Name>),
+    Using(DistinctNames),
 }
 
 /// `GROUP BY`
@@ -1043,6 +1044,40 @@ impl QualifiedName {
             name,
             alias: Some(alias),
         }
+    }
+}
+
+/// Ordered set of distinct column names
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DistinctNames(IndexSet<Name>);
+
+impl DistinctNames {
+    /// Initialize
+    pub fn new(name: Name) -> DistinctNames {
+        let mut dn = DistinctNames(IndexSet::new());
+        dn.0.insert(name);
+        dn
+    }
+    /// Single column name
+    pub fn single(name: Name) -> DistinctNames {
+        let mut dn = DistinctNames(IndexSet::with_capacity(1));
+        dn.0.insert(name);
+        dn
+    }
+    /// Push a distinct name or fail
+    pub fn insert(&mut self, name: Name) -> Result<(), ParserError> {
+        if self.0.contains(&name) {
+            return Err(custom_err!("column \"{}\" specified more than once", name));
+        }
+        self.0.insert(name);
+        Ok(())
+    }
+}
+impl Deref for DistinctNames {
+    type Target = IndexSet<Name>;
+
+    fn deref(&self) -> &IndexSet<Name> {
+        &self.0
     }
 }
 
@@ -1419,7 +1454,7 @@ pub enum InsertBody {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Set {
     /// column name(s)
-    pub col_names: Vec<Name>,
+    pub col_names: DistinctNames,
     /// expression
     pub expr: Expr,
 }
@@ -1459,7 +1494,7 @@ pub enum TriggerEvent {
     /// `UPDATE`
     Update,
     /// `UPDATE OF`: col names
-    UpdateOf(Vec<Name>),
+    UpdateOf(DistinctNames),
 }
 
 /// `CREATE TRIGGER` command
@@ -1487,7 +1522,7 @@ pub enum TriggerCmd {
         /// table name
         tbl_name: Name,
         /// `COLUMNS`
-        col_names: Option<Vec<Name>>,
+        col_names: Option<DistinctNames>,
         /// `SELECT` or `VALUES`
         select: Select,
         /// `ON CONLICT` clause
