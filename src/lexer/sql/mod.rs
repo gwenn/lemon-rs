@@ -530,7 +530,7 @@ fn number(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
         .iter()
         .enumerate()
         .skip(1)
-        .find(|&(_, &b)| !b.is_ascii_digit())
+        .find(|&(j, &b)| !(b.is_ascii_digit() || b == b'_' && j > 1))
     {
         if *b == b'.' {
             return fractional_part(data, i);
@@ -552,7 +552,7 @@ fn hex_integer(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
         .iter()
         .enumerate()
         .skip(2)
-        .find(|&(_, &b)| !b.is_ascii_hexdigit())
+        .find(|&(j, &b)| !(b.is_ascii_hexdigit() || b == b'_' && j > 2))
     {
         // Must not be empty (Ox is invalid)
         if i == 2 || is_identifier_start(*b) {
@@ -574,7 +574,7 @@ fn fractional_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize), 
         .iter()
         .enumerate()
         .skip(i + 1)
-        .find(|&(_, &b)| !b.is_ascii_digit())
+        .find(|&(j, &b)| !(b.is_ascii_digit() || b == b'_' && j > i + 1))
     {
         if *b == b'e' || *b == b'E' {
             return exponential_part(data, i);
@@ -596,7 +596,7 @@ fn exponential_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize),
             .iter()
             .enumerate()
             .skip(i + 1)
-            .find(|&(_, &b)| !b.is_ascii_digit())
+            .find(|&(k, &b)| !(b.is_ascii_digit() || b == b'_' && k > i + 1))
         {
             if j == i + 1 || is_identifier_start(*b) {
                 return Err(Error::BadNumber(None));
