@@ -530,7 +530,7 @@ fn number(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
         .iter()
         .enumerate()
         .skip(1)
-        .find(|&(j, &b)| !(b.is_ascii_digit() || b == b'_' && j > 1))
+        .find(|&(_, &b)| !(b.is_ascii_digit() || b == b'_'))
     {
         if *b == b'.' {
             return fractional_part(data, i);
