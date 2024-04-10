@@ -543,7 +543,6 @@ fn number(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
 fn hex_integer(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert_eq!(data[0], b'0');
     debug_assert!(data[1] == b'x' || data[1] == b'X');
-    // FIXME
     return if let Some((i, b)) = find_end_of_number(data, 2, u8::is_ascii_hexdigit)? {
         // Must not be empty (Ox is invalid)
         if i == 2 || is_identifier_start(b) {
