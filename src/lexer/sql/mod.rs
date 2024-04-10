@@ -526,17 +526,12 @@ fn number(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
             return Ok((Some((data, TK_INTEGER)), data.len()));
         }
     }
-    return if let Some((i, b)) = data
-        .iter()
-        .enumerate()
-        .skip(1)
-        .find(|&(_, &b)| !(b.is_ascii_digit() || b == b'_'))
-    {
-        if *b == b'.' {
+    return if let Some((i, b)) = find_end_of_number(data, 1, u8::is_ascii_digit)? {
+        if b == b'.' {
             return fractional_part(data, i);
-        } else if *b == b'e' || *b == b'E' {
+        } else if b == b'e' || b == b'E' {
             return exponential_part(data, i);
-        } else if is_identifier_start(*b) {
+        } else if is_identifier_start(b) {
             return Err(Error::BadNumber(None));
         }
         Ok((Some((&data[..i], TK_INTEGER)), i))
@@ -548,14 +543,10 @@ fn number(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
 fn hex_integer(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert_eq!(data[0], b'0');
     debug_assert!(data[1] == b'x' || data[1] == b'X');
-    return if let Some((i, b)) = data
-        .iter()
-        .enumerate()
-        .skip(2)
-        .find(|&(j, &b)| !(b.is_ascii_hexdigit() || b == b'_' && j > 2))
-    {
+    // FIXME
+    return if let Some((i, b)) = find_end_of_number(data, 2, u8::is_ascii_hexdigit)? {
         // Must not be empty (Ox is invalid)
-        if i == 2 || is_identifier_start(*b) {
+        if i == 2 || is_identifier_start(b) {
             return Err(Error::MalformedHexInteger(None));
         }
         Ok((Some((&data[..i], TK_INTEGER)), i))
@@ -570,15 +561,10 @@ fn hex_integer(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
 
 fn fractional_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert_eq!(data[i], b'.');
-    return if let Some((i, b)) = data
-        .iter()
-        .enumerate()
-        .skip(i + 1)
-        .find(|&(j, &b)| !(b.is_ascii_digit() || b == b'_' && j > i + 1))
-    {
-        if *b == b'e' || *b == b'E' {
+    return if let Some((i, b)) = find_end_of_number(data, i + 1, u8::is_ascii_digit)? {
+        if b == b'e' || b == b'E' {
             return exponential_part(data, i);
-        } else if is_identifier_start(*b) {
+        } else if is_identifier_start(b) {
             return Err(Error::BadNumber(None));
         }
         Ok((Some((&data[..i], TK_FLOAT)), i))
@@ -592,13 +578,8 @@ fn exponential_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize),
     // data[i] == 'e'|'E'
     return if let Some(b) = data.get(i + 1) {
         let i = if *b == b'+' || *b == b'-' { i + 1 } else { i };
-        if let Some((j, b)) = data
-            .iter()
-            .enumerate()
-            .skip(i + 1)
-            .find(|&(k, &b)| !(b.is_ascii_digit() || b == b'_' && k > i + 1))
-        {
-            if j == i + 1 || is_identifier_start(*b) {
+        if let Some((j, b)) = find_end_of_number(data, i + 1, u8::is_ascii_digit)? {
+            if j == i + 1 || is_identifier_start(b) {
                 return Err(Error::BadNumber(None));
             }
             Ok((Some((&data[..j], TK_FLOAT)), j))
@@ -611,6 +592,29 @@ fn exponential_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize),
     } else {
         Err(Error::BadNumber(None))
     };
+}
+
+fn find_end_of_number(
+    data: &[u8],
+    i: usize,
+    test: fn(&u8) -> bool,
+) -> Result<Option<(usize, u8)>, Error> {
+    for (j, &b) in data.iter().enumerate().skip(i) {
+        if test(&b) {
+            continue;
+        } else if b == b'_' {
+            if j >= 1
+                && data.get(j - 1).map_or(false, |p| test(p))
+                && data.get(j + 1).map_or(false, |n| test(n))
+            {
+                continue;
+            }
+            return Err(Error::BadNumber(None));
+        } else {
+            return Ok(Some((j, b)));
+        }
+    }
+    Ok(None)
 }
 
 impl Tokenizer {
