@@ -121,7 +121,7 @@ impl Stmt {
             } => {
                 if *temporary {
                     if let Some(ref db_name) = tbl_name.db_name {
-                        if Uncased::from_borrowed("TEMP") != db_name.0 {
+                        if db_name != "TEMP" {
                             return Err(custom_err!("temporary table name must be unqualified"));
                         }
                     }

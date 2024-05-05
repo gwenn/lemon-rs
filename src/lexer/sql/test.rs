@@ -50,11 +50,11 @@ fn duplicate_column() {
     );
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT, \"x\" TEXT)",
-        "duplicate column name: x",
+        "duplicate column name: \"x\"",
     );
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT, `x` TEXT)",
-        "duplicate column name: x",
+        "duplicate column name: `x`",
     );
 }
 
@@ -217,6 +217,14 @@ fn create_strict_table_unknown_datatype() {
 }
 
 #[test]
+fn foreign_key_on_column() {
+    expect_parser_err_msg(
+        b"CREATE TABLE t(a REFERENCES o(a,b))",
+        "foreign key on a should reference only one column of table o",
+    );
+}
+
+#[test]
 fn create_strict_table_generated_column() {
     parse_cmd(
         b"CREATE TABLE IF NOT EXISTS transactions (
@@ -257,6 +265,14 @@ fn values_mismatch_columns_count() {
         b"INSERT INTO t VALUES (1), (1,2)",
         "all VALUES must have the same number of terms",
     );
+}
+
+#[test]
+fn column_specified_more_than_once() {
+    expect_parser_err_msg(
+        b"INSERT INTO t (n, n, m) VALUES (1, 0, 2)",
+        "column \"n\" specified more than once",
+    )
 }
 
 #[test]

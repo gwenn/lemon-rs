@@ -4,11 +4,11 @@ pub mod check;
 pub mod fmt;
 
 use std::num::ParseIntError;
-use std::str::FromStr;
+use std::ops::Deref;
+use std::str::{Bytes, FromStr};
 
-use fmt::{dequote, ToTokens, TokenStream};
+use fmt::{ToTokens, TokenStream};
 use indexmap::{IndexMap, IndexSet};
-use uncased::Uncased;
 
 use crate::custom_err;
 use crate::dialect::TokenType::{self, *};
@@ -213,7 +213,7 @@ pub enum Stmt {
         /// table name
         tbl_name: QualifiedName,
         /// `COLUMNS`
-        columns: Option<Vec<Name>>,
+        columns: Option<DistinctNames>,
         /// `VALUES` or `SELECT`
         body: InsertBody,
         /// `RETURNING`
@@ -964,7 +964,7 @@ pub enum JoinConstraint {
     /// `ON`
     On(Expr),
     /// `USING`: col names
-    Using(Vec<Name>),
+    Using(DistinctNames),
 }
 
 /// `GROUP BY`
@@ -990,13 +990,101 @@ impl Id {
 // TODO ids (identifier or string)
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Name(pub Uncased<'static>); // TODO distinction between Name and "Name"/[Name]/`Name`
+#[derive(Clone, Debug, Eq)]
+pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 impl Name {
     /// Constructor
     pub fn from_token(ty: YYCODETYPE, token: Token) -> Name {
-        Name(Uncased::from_owned(from_token(ty, token)))
+        Name(from_token(ty, token))
+    }
+
+    fn as_bytes(&self) -> QuotedIterator<'_> {
+        if self.0.is_empty() {
+            return QuotedIterator(self.0.bytes(), 0);
+        }
+        let bytes = self.0.as_bytes();
+        let mut quote = bytes[0];
+        if quote != b'"' && quote != b'`' && quote != b'\'' && quote != b'[' {
+            return QuotedIterator(self.0.bytes(), 0);
+        } else if quote == b'[' {
+            quote = b']';
+        }
+        debug_assert!(bytes.len() > 1);
+        debug_assert_eq!(quote, bytes[bytes.len() - 1]);
+        let sub = &self.0.as_str()[1..bytes.len() - 1];
+        if quote == b']' {
+            return QuotedIterator(sub.bytes(), 0); // no escape
+        }
+        QuotedIterator(sub.bytes(), quote)
+    }
+}
+
+struct QuotedIterator<'s>(Bytes<'s>, u8);
+impl<'s> Iterator for QuotedIterator<'s> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<u8> {
+        match self.0.next() {
+            x @ Some(b) => {
+                if b == self.1 && self.0.next() != Some(self.1) {
+                    panic!("Malformed string literal: {:?}", self.0);
+                }
+                x
+            }
+            x => x,
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.1 == 0 {
+            return self.0.size_hint();
+        }
+        (0, None)
+    }
+}
+
+fn eq_ignore_case_and_quote(mut it: QuotedIterator<'_>, mut other: QuotedIterator<'_>) -> bool {
+    loop {
+        match (it.next(), other.next()) {
+            (Some(b1), Some(b2)) => {
+                if !b1.eq_ignore_ascii_case(&b2) {
+                    return false;
+                }
+            }
+            (None, None) => break,
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// Ignore case and quote
+impl std::hash::Hash for Name {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        self.as_bytes()
+            .for_each(|b| hasher.write_u8(b.to_ascii_lowercase()));
+    }
+}
+/// Ignore case and quote
+impl PartialEq for Name {
+    #[inline(always)]
+    fn eq(&self, other: &Name) -> bool {
+        eq_ignore_case_and_quote(self.as_bytes(), other.as_bytes())
+    }
+}
+/// Ignore case and quote
+impl PartialEq<str> for Name {
+    #[inline(always)]
+    fn eq(&self, other: &str) -> bool {
+        eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
+    }
+}
+/// Ignore case and quote
+impl PartialEq<&str> for Name {
+    #[inline(always)]
+    fn eq(&self, other: &&str) -> bool {
+        eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
     }
 }
 
@@ -1043,6 +1131,40 @@ impl QualifiedName {
             name,
             alias: Some(alias),
         }
+    }
+}
+
+/// Ordered set of distinct column names
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DistinctNames(IndexSet<Name>);
+
+impl DistinctNames {
+    /// Initialize
+    pub fn new(name: Name) -> DistinctNames {
+        let mut dn = DistinctNames(IndexSet::new());
+        dn.0.insert(name);
+        dn
+    }
+    /// Single column name
+    pub fn single(name: Name) -> DistinctNames {
+        let mut dn = DistinctNames(IndexSet::with_capacity(1));
+        dn.0.insert(name);
+        dn
+    }
+    /// Push a distinct name or fail
+    pub fn insert(&mut self, name: Name) -> Result<(), ParserError> {
+        if self.0.contains(&name) {
+            return Err(custom_err!("column \"{}\" specified more than once", name));
+        }
+        self.0.insert(name);
+        Ok(())
+    }
+}
+impl Deref for DistinctNames {
+    type Target = IndexSet<Name>;
+
+    fn deref(&self) -> &IndexSet<Name> {
+        &self.0
     }
 }
 
@@ -1116,8 +1238,8 @@ impl ColumnDefinition {
         columns: &mut IndexMap<Name, ColumnDefinition>,
         mut cd: ColumnDefinition,
     ) -> Result<(), ParserError> {
-        let col_name = dequote(cd.col_name.clone())?;
-        if columns.contains_key(&col_name) {
+        let col_name = &cd.col_name;
+        if columns.contains_key(col_name) {
             // TODO unquote
             return Err(custom_err!("duplicate column name: {}", col_name));
         }
@@ -1148,7 +1270,26 @@ impl ColumnDefinition {
                 col_type.name = new_type.join(" ");
             }
         }
-        columns.insert(col_name, cd);
+        for constraint in &cd.constraints {
+            if let ColumnConstraint::ForeignKey {
+                clause:
+                    ForeignKeyClause {
+                        tbl_name, columns, ..
+                    },
+                ..
+            } = &constraint.constraint
+            {
+                // The child table may reference the primary key of the parent without specifying the primary key column
+                if columns.as_ref().map_or(0, |v| v.len()) > 1 {
+                    return Err(custom_err!(
+                        "foreign key on {} should reference only one column of table {}",
+                        col_name,
+                        tbl_name
+                    ));
+                }
+            }
+        }
+        columns.insert(col_name.clone(), cd);
         Ok(())
     }
 }
@@ -1400,7 +1541,7 @@ pub enum InsertBody {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Set {
     /// column name(s)
-    pub col_names: Vec<Name>,
+    pub col_names: DistinctNames,
     /// expression
     pub expr: Expr,
 }
@@ -1440,7 +1581,7 @@ pub enum TriggerEvent {
     /// `UPDATE`
     Update,
     /// `UPDATE OF`: col names
-    UpdateOf(Vec<Name>),
+    UpdateOf(DistinctNames),
 }
 
 /// `CREATE TRIGGER` command
@@ -1468,7 +1609,7 @@ pub enum TriggerCmd {
         /// table name
         tbl_name: Name,
         /// `COLUMNS`
-        col_names: Option<Vec<Name>>,
+        col_names: Option<DistinctNames>,
         /// `SELECT` or `VALUES`
         select: Select,
         /// `ON CONLICT` clause
@@ -1712,4 +1853,23 @@ pub enum FrameExclude {
     Group,
     /// `TIES`
     Ties,
+}
+
+#[cfg(test)]
+mod test {
+    use super::Name;
+
+    #[test]
+    fn test_dequote() {
+        assert_eq!(name("x"), "x");
+        assert_eq!(name("`x`"), "x");
+        assert_eq!(name("`x``y`"), "x`y");
+        assert_eq!(name(r#""x""#), "x");
+        assert_eq!(name(r#""x""y""#), "x\"y");
+        assert_eq!(name("[x]"), "x");
+    }
+
+    fn name(s: &'static str) -> Name {
+        Name(s.to_owned())
+    }
 }
