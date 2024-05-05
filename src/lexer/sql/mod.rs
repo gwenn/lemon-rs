@@ -543,7 +543,7 @@ fn number(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
 fn hex_integer(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert_eq!(data[0], b'0');
     debug_assert!(data[1] == b'x' || data[1] == b'X');
-    return if let Some((i, b)) = find_end_of_number(data, 2, u8::is_ascii_hexdigit)? {
+    if let Some((i, b)) = find_end_of_number(data, 2, u8::is_ascii_hexdigit)? {
         // Must not be empty (Ox is invalid)
         if i == 2 || is_identifier_start(b) {
             return Err(Error::MalformedHexInteger(None));
@@ -555,7 +555,7 @@ fn hex_integer(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
             return Err(Error::MalformedHexInteger(None));
         }
         Ok((Some((data, TK_INTEGER)), data.len()))
-    };
+    }
 }
 
 fn fractional_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize), Error> {
@@ -602,9 +602,7 @@ fn find_end_of_number(
         if test(&b) {
             continue;
         } else if b == b'_' {
-            if j >= 1
-                && data.get(j - 1).map_or(false, |p| test(p))
-                && data.get(j + 1).map_or(false, |n| test(n))
+            if j >= 1 && data.get(j - 1).map_or(false, test) && data.get(j + 1).map_or(false, test)
             {
                 continue;
             }

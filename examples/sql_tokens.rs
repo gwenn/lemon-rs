@@ -3,7 +3,6 @@ use sqlite3_parser::lexer::Scanner;
 
 use std::env;
 use std::fs::read;
-use std::i64;
 use std::str;
 
 /// Tokenize specified files (and do some checks)
