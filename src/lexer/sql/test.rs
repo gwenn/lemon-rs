@@ -50,11 +50,11 @@ fn duplicate_column() {
     );
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT, \"x\" TEXT)",
-        "duplicate column name: x",
+        "duplicate column name: \"x\"",
     );
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT, `x` TEXT)",
-        "duplicate column name: x",
+        "duplicate column name: `x`",
     );
 }
 

@@ -5,11 +5,10 @@ pub mod fmt;
 
 use std::num::ParseIntError;
 use std::ops::Deref;
-use std::str::FromStr;
+use std::str::{Bytes, FromStr};
 
-use fmt::{dequote, ToTokens, TokenStream};
+use fmt::{ToTokens, TokenStream};
 use indexmap::{IndexMap, IndexSet};
-use uncased::Uncased;
 
 use crate::custom_err;
 use crate::dialect::TokenType::{self, *};
@@ -991,13 +990,101 @@ impl Id {
 // TODO ids (identifier or string)
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Name(pub Uncased<'static>); // TODO distinction between Name and "Name"/[Name]/`Name`
+#[derive(Clone, Debug, Eq)]
+pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 impl Name {
     /// Constructor
     pub fn from_token(ty: YYCODETYPE, token: Token) -> Name {
-        Name(Uncased::from_owned(from_token(ty, token)))
+        Name(from_token(ty, token))
+    }
+
+    fn as_bytes(&self) -> QuotedIterator<'_> {
+        if self.0.is_empty() {
+            return QuotedIterator(self.0.bytes(), 0);
+        }
+        let bytes = self.0.as_bytes();
+        let mut quote = bytes[0];
+        if quote != b'"' && quote != b'`' && quote != b'\'' && quote != b'[' {
+            return QuotedIterator(self.0.bytes(), 0);
+        } else if quote == b'[' {
+            quote = b']';
+        }
+        debug_assert!(bytes.len() > 1);
+        debug_assert_eq!(quote, bytes[bytes.len() - 1]);
+        let sub = &self.0.as_str()[1..bytes.len() - 1];
+        if quote == b']' {
+            return QuotedIterator(sub.bytes(), 0); // no escape
+        }
+        QuotedIterator(sub.bytes(), quote)
+    }
+}
+
+struct QuotedIterator<'s>(Bytes<'s>, u8);
+impl<'s> Iterator for QuotedIterator<'s> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<u8> {
+        match self.0.next() {
+            x @ Some(b) => {
+                if b == self.1 && self.0.next() != Some(self.1) {
+                    panic!("Malformed string literal: {:?}", self.0);
+                }
+                x
+            }
+            x => x,
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.1 == 0 {
+            return self.0.size_hint();
+        }
+        (0, None)
+    }
+}
+
+fn eq_ignore_case_and_quote(mut it: QuotedIterator<'_>, mut other: QuotedIterator<'_>) -> bool {
+    loop {
+        match (it.next(), other.next()) {
+            (Some(b1), Some(b2)) => {
+                if !b1.eq_ignore_ascii_case(&b2) {
+                    return false;
+                }
+            }
+            (None, None) => break,
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// Ignore case and quote
+impl std::hash::Hash for Name {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        self.as_bytes()
+            .for_each(|b| hasher.write_u8(b.to_ascii_lowercase()));
+    }
+}
+/// Ignore case and quote
+impl PartialEq for Name {
+    #[inline(always)]
+    fn eq(&self, other: &Name) -> bool {
+        eq_ignore_case_and_quote(self.as_bytes(), other.as_bytes())
+    }
+}
+/// Ignore case and quote
+impl PartialEq<str> for Name {
+    #[inline(always)]
+    fn eq(&self, other: &str) -> bool {
+        eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
+    }
+}
+/// Ignore case and quote
+impl PartialEq<&str> for Name {
+    #[inline(always)]
+    fn eq(&self, other: &&str) -> bool {
+        eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
     }
 }
 
@@ -1151,8 +1238,8 @@ impl ColumnDefinition {
         columns: &mut IndexMap<Name, ColumnDefinition>,
         mut cd: ColumnDefinition,
     ) -> Result<(), ParserError> {
-        let col_name = dequote(cd.col_name.clone())?;
-        if columns.contains_key(&col_name) {
+        let col_name = &cd.col_name;
+        if columns.contains_key(col_name) {
             // TODO unquote
             return Err(custom_err!("duplicate column name: {}", col_name));
         }
@@ -1202,7 +1289,7 @@ impl ColumnDefinition {
                 }
             }
         }
-        columns.insert(col_name, cd);
+        columns.insert(col_name.clone(), cd);
         Ok(())
     }
 }
@@ -1766,4 +1853,23 @@ pub enum FrameExclude {
     Group,
     /// `TIES`
     Ties,
+}
+
+#[cfg(test)]
+mod test {
+    use super::Name;
+
+    #[test]
+    fn test_dequote() {
+        assert_eq!(name("x"), "x");
+        assert_eq!(name("`x`"), "x");
+        assert_eq!(name("`x``y`"), "x`y");
+        assert_eq!(name(r#""x""#), "x");
+        assert_eq!(name(r#""x""y""#), "x\"y");
+        assert_eq!(name("[x]"), "x");
+    }
+
+    fn name(s: &'static str) -> Name {
+        Name(s.to_owned())
+    }
 }
