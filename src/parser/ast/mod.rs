@@ -920,10 +920,10 @@ impl JoinOperator {
                 || (jt & (JoinType::OUTER | JoinType::LEFT | JoinType::RIGHT)) == JoinType::OUTER
             {
                 return Err(custom_err!(
-                    "unsupported JOIN type: {} {:?} {:?}",
+                    "unknown join type: {} {} {}",
                     t,
-                    n1,
-                    n2
+                    n1.as_ref().map_or("", |n| n.0.as_str()),
+                    n2.as_ref().map_or("", |n| n.0.as_str())
                 ));
             }
             JoinOperator::TypedJoin(Some(jt))
@@ -977,7 +977,7 @@ impl TryFrom<&str> for JoinType {
         } else if "OUTER".eq_ignore_ascii_case(s) {
             Ok(JoinType::OUTER)
         } else {
-            Err(custom_err!("unsupported JOIN type: {}", s))
+            Err(custom_err!("unknown join type: {}", s))
         }
     }
 }

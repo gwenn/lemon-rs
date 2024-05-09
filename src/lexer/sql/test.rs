@@ -346,6 +346,18 @@ fn cte_column_count() {
 }
 
 #[test]
+fn unknown_join_type() {
+    expect_parser_err_msg(
+        b"SELECT * FROM t1 INNER OUTER JOIN t2;",
+        "unknown join type: INNER OUTER ",
+    );
+    expect_parser_err_msg(
+        b"SELECT * FROM t1 LEFT BOGUS JOIN t2;",
+        "unknown join type: BOGUS",
+    )
+}
+
+#[test]
 fn unknown_table_option() {
     expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
     expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");
