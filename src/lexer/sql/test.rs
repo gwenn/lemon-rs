@@ -358,6 +358,14 @@ fn unknown_join_type() {
 }
 
 #[test]
+fn no_tables_specified() {
+    expect_parser_err_msg(b"SELECT *", "no tables specified");
+    expect_parser_err_msg(b"SELECT t.*", "no tables specified");
+    expect_parser_err_msg(b"SELECT count(*), *", "no tables specified");
+    parse_cmd(b"SELECT count(*)");
+}
+
+#[test]
 fn unknown_table_option() {
     expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
     expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");

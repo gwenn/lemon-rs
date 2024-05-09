@@ -782,6 +782,34 @@ pub enum OneSelect {
     Values(Vec<Vec<Expr>>),
 }
 
+impl OneSelect {
+    /// Constructor
+    pub fn new(
+        distinctness: Option<Distinctness>,
+        columns: Vec<ResultColumn>,
+        from: Option<FromClause>,
+        where_clause: Option<Expr>,
+        group_by: Option<GroupBy>,
+        window_clause: Option<Vec<WindowDef>>,
+    ) -> Result<OneSelect, ParserError> {
+        if from.is_none()
+            && columns
+                .iter()
+                .any(|rc| matches!(rc, ResultColumn::Star | ResultColumn::TableStar(_)))
+        {
+            return Err(custom_err!("no tables specified"));
+        }
+        Ok(OneSelect::Select {
+            distinctness,
+            columns,
+            from,
+            where_clause,
+            group_by,
+            window_clause,
+        })
+    }
+}
+
 /// `SELECT` ... `FROM` clause
 // https://sqlite.org/syntax/join-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
