@@ -337,6 +337,15 @@ fn distinct_aggregates() {
 }
 
 #[test]
+fn cte_column_count() {
+    expect_parser_err_msg(
+        b"WITH i(x, y) AS ( VALUES(1) )
+      SELECT * FROM i;",
+        "table i has 1 values for 2 columns",
+    )
+}
+
+#[test]
 fn unknown_table_option() {
     expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
     expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");

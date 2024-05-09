@@ -1705,6 +1705,32 @@ pub struct CommonTableExpr {
 
 impl CommonTableExpr {
     /// Constructor
+    pub fn new(
+        tbl_name: Name,
+        columns: Option<Vec<IndexedColumn>>,
+        materialized: Materialized,
+        select: Select,
+    ) -> Result<CommonTableExpr, ParserError> {
+        if let Some(ref columns) = columns {
+            if let check::ColumnCount::Fixed(cc) = select.column_count() {
+                if cc != columns.len() {
+                    return Err(custom_err!(
+                        "table {} has {} values for {} columns",
+                        tbl_name,
+                        cc,
+                        columns.len()
+                    ));
+                }
+            }
+        }
+        Ok(CommonTableExpr {
+            tbl_name,
+            columns,
+            materialized,
+            select,
+        })
+    }
+    /// Constructor
     pub fn add_cte(
         ctes: &mut Vec<CommonTableExpr>,
         cte: CommonTableExpr,

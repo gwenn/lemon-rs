@@ -1373,7 +1373,7 @@ wqas(A)   ::= AS.                  {A = Materialized::Any;}
 wqas(A)   ::= AS MATERIALIZED.     {A = Materialized::Yes;}
 wqas(A)   ::= AS NOT MATERIALIZED. {A = Materialized::No;}
 wqitem(A) ::= nm(X) eidlist_opt(Y) wqas(M) LP select(Z) RP. {
-  A = CommonTableExpr{ tbl_name: X, columns: Y, materialized: M, select: Z }; /*A-overwrites-X*/
+  A = CommonTableExpr::new(X, Y, M, Z)?; /*A-overwrites-X*/
 }
 wqlist(A) ::= wqitem(X). {
   A = vec![X]; /*A-overwrites-X*/
