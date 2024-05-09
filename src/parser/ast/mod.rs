@@ -266,6 +266,56 @@ pub enum Stmt {
     Vacuum(Option<Name>, Option<Expr>),
 }
 
+impl Stmt {
+    /// constructor
+    pub fn update(
+        with: Option<With>,
+        or_conflict: Option<ResolveType>,
+        tbl_name: QualifiedName,
+        indexed: Option<Indexed>,
+        sets: Vec<Set>, // FIXME unique
+        from: Option<FromClause>,
+        where_clause: Option<Expr>,
+        returning: Option<Vec<ResultColumn>>,
+        order_by: Option<Vec<SortedColumn>>,
+        limit: Option<Limit>,
+    ) -> Result<Stmt, ParserError> {
+        if let Some(FromClause {
+            select: Some(ref select),
+            ref joins,
+            ..
+        }) = from
+        {
+            if matches!(select.as_ref(),
+                SelectTable::Table(qn, _, _) | SelectTable::TableCall(qn, _, _)
+                    if *qn == tbl_name)
+                || joins.as_ref().map_or(false, |js| js.iter().any(|j|
+                    matches!(j.table, SelectTable::Table(ref qn, _, _) | SelectTable::TableCall(ref qn, _, _)
+                    if *qn == tbl_name)))
+            {
+                return Err(custom_err!(
+                    "target object/alias may not appear in FROM clause",
+                ));
+            }
+        }
+        if order_by.is_some() && limit.is_none() {
+            return Err(custom_err!("ORDER BY without LIMIT on UPDATE"));
+        }
+        Ok(Stmt::Update {
+            with,
+            or_conflict,
+            tbl_name,
+            indexed,
+            sets,
+            from,
+            where_clause,
+            returning,
+            order_by,
+            limit,
+        })
+    }
+}
+
 /// SQL expression
 // https://sqlite.org/syntax/expr.html
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -793,15 +793,15 @@ where_opt_ret(A) ::= WHERE expr(X) RETURNING selcollist(Y).
 cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from(F)
         where_opt_ret(W) orderby_opt(O) limit_opt(L).  {
   let (where_clause, returning) = W;
-  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y, from: F,
-                                      where_clause, returning, order_by: O, limit: L });
+  self.ctx.stmt = Some(Stmt::update(C, R, X,  I, Y, F,
+                                      where_clause, returning, O, L)?);
 }
 %else
 cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from(F)
         where_opt_ret(W). {
   let (where_clause, returning) = W;
-  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y, from: F,
-                                      where_clause, returning, order_by: None, limit: None });
+  self.ctx.stmt = Some(Stmt::update(C, R, X, I, Y, F,
+                                      where_clause, returning, None, None)?);
 }
 %endif
 

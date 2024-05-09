@@ -366,6 +366,18 @@ fn no_tables_specified() {
 }
 
 #[test]
+fn update_from_target() {
+    expect_parser_err_msg(
+        b"UPDATE x1 SET a=5 FROM x1",
+        "target object/alias may not appear in FROM clause",
+    );
+    expect_parser_err_msg(
+        b"UPDATE x1 SET a=5 FROM x2, x1",
+        "target object/alias may not appear in FROM clause",
+    );
+}
+
+#[test]
 fn unknown_table_option() {
     expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
     expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");
