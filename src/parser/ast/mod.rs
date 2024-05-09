@@ -487,6 +487,30 @@ impl Expr {
     pub fn sub_query(query: Select) -> Expr {
         Expr::Subquery(Box::new(query))
     }
+    /// Constructor
+    pub fn function_call(
+        xt: YYCODETYPE,
+        x: Token,
+        distinctness: Option<Distinctness>,
+        args: Option<Vec<Expr>>,
+        order_by: Option<Vec<SortedColumn>>,
+        filter_over: Option<FunctionTail>,
+    ) -> Result<Expr, ParserError> {
+        if let Some(Distinctness::Distinct) = distinctness {
+            if args.as_ref().map_or(0, |v| v.len()) != 1 {
+                return Err(custom_err!(
+                    "DISTINCT aggregates must have exactly one argument"
+                ));
+            }
+        }
+        Ok(Expr::FunctionCall {
+            name: Id::from_token(xt, x),
+            distinctness,
+            args,
+            order_by,
+            filter_over,
+        })
+    }
 }
 
 /// SQL literal

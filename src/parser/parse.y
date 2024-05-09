@@ -921,10 +921,10 @@ expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
 %endif  SQLITE_OMIT_CAST
 
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP. {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: None, filter_over: None }; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, None, None)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP. {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(O), filter_over: None }; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(O), None)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP. {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: None }; /*A-overwrites-X*/
@@ -932,10 +932,10 @@ expr(A) ::= idj(X) LP STAR RP. {
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: None, filter_over: Some(Z) }; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, None, Some(Z))?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP filter_over(Z). {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(O), filter_over: Some(Z) }; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(O), Some(Z))?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: Some(Z) }; /*A-overwrites-X*/

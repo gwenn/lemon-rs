@@ -325,6 +325,18 @@ fn cast_without_typename() {
 }
 
 #[test]
+fn distinct_aggregates() {
+    expect_parser_err_msg(
+        b"SELECT count(DISTINCT) FROM t",
+        "DISTINCT aggregates must have exactly one argument",
+    );
+    expect_parser_err_msg(
+        b"SELECT count(DISTINCT a,b) FROM t",
+        "DISTINCT aggregates must have exactly one argument",
+    );
+}
+
+#[test]
 fn unknown_table_option() {
     expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
     expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");
