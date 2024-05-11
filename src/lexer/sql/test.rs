@@ -70,6 +70,15 @@ fn create_table_without_column() {
 }
 
 #[test]
+fn auto_increment() {
+    parse_cmd(b"CREATE TABLE t (x INTEGER PRIMARY KEY AUTOINCREMENT)");
+    expect_parser_err_msg(
+        b"CREATE TABLE t (x TEXT PRIMARY KEY AUTOINCREMENT)",
+        "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY",
+    );
+}
+
+#[test]
 fn vtab_args() -> Result<(), Error> {
     let sql = b"CREATE VIRTUAL TABLE mail USING fts3(
   subject VARCHAR(256) NOT NULL,

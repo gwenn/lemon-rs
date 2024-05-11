@@ -1373,7 +1373,21 @@ impl ColumnDefinition {
             }
         }
         for constraint in &cd.constraints {
-            if let ColumnConstraint::ForeignKey {
+            if let ColumnConstraint::PrimaryKey {
+                auto_increment: true,
+                ..
+            } = &constraint.constraint
+            {
+                if cd
+                    .col_type
+                    .as_ref()
+                    .map_or(true, |t| !t.name.eq_ignore_ascii_case("INTEGER"))
+                {
+                    return Err(custom_err!(
+                        "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY"
+                    ));
+                }
+            } else if let ColumnConstraint::ForeignKey {
                 clause:
                     ForeignKeyClause {
                         tbl_name, columns, ..
