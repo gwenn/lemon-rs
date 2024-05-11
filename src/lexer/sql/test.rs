@@ -433,6 +433,11 @@ fn indexed_by_clause_within_triggers() {
     );
 }
 
+#[test]
+fn returning_within_trigger() {
+    expect_parser_err_msg(b"CREATE TRIGGER t AFTER DELETE ON x BEGIN INSERT INTO x (a) VALUES ('x') RETURNING rowid; END;", "cannot use RETURNING in a trigger");
+}
+
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
     expect_parser_err(input, ParserError::Custom(error_msg.to_owned()))
 }

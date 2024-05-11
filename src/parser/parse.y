@@ -605,8 +605,8 @@ from(A) ::= FROM seltablist(X). {
 // in a SELECT statement.  "stl_prefix" is a prefix of this list.
 //
 stl_prefix(A) ::= seltablist(A) joinop(Y).    {
-   let op = Y;
-   A.push_op(op);
+  let op = Y;
+  A.push_op(op);
 }
 stl_prefix(A) ::= .                           {A = FromClause::empty();}
 seltablist(A) ::= stl_prefix(A) fullname(Y) as(Z) indexed_opt(I)
@@ -650,10 +650,10 @@ xfullname(A) ::= nm(X).
 xfullname(A) ::= nm(X) DOT nm(Y).
    {A = QualifiedName::fullname(X, Y); /*A-overwrites-X*/}
 xfullname(A) ::= nm(X) DOT nm(Y) AS nm(Z).  {
-   A = QualifiedName::xfullname(X, Y, Z); /*A-overwrites-X*/
+  A = QualifiedName::xfullname(X, Y, Z); /*A-overwrites-X*/
 }
 xfullname(A) ::= nm(X) AS nm(Z). {
-   A = QualifiedName::alias(X, Z); /*A-overwrites-X*/
+  A = QualifiedName::alias(X, Z); /*A-overwrites-X*/
 }
 
 %type joinop {JoinOperator}
@@ -1244,7 +1244,10 @@ trigger_cmd(A) ::=
 trigger_cmd(A) ::= insert_cmd(R) INTO
                       trnm(X) idlist_opt(F) select(S) upsert(U). {
   let (upsert, returning) = U;
-   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: S, upsert, returning };/*A-overwrites-R*/
+  if returning.is_some() {
+    return Err(custom_err!("cannot use RETURNING in a trigger"));
+  }
+  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: S, upsert, returning };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
