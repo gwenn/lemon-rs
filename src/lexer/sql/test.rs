@@ -81,8 +81,12 @@ fn auto_increment() {
 #[test]
 fn generated() {
     expect_parser_err_msg(
-        b"CREATE TABLE x(a PRIMARY KEY AS ('id'));",
+        b"CREATE TABLE x(a PRIMARY KEY AS ('id'))",
         "generated columns cannot be part of the PRIMARY KEY",
+    );
+    expect_parser_err_msg(
+        b"CREATE TABLE x(a AS ('id') DEFAULT '')",
+        "cannot use DEFAULT on a generated column",
     )
 }
 

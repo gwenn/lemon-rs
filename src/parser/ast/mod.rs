@@ -1373,7 +1373,7 @@ impl ColumnDefinition {
                 col_type.name = new_type.join(" ");
             }
         }
-        let (mut primary_key, mut generated) = (false, false);
+        let (mut primary_key, mut generated, mut default) = (false, false, false);
         for constraint in &cd.constraints {
             if let ColumnConstraint::PrimaryKey { auto_increment, .. } = &constraint.constraint {
                 if *auto_increment
@@ -1405,12 +1405,16 @@ impl ColumnDefinition {
                 }
             } else if let ColumnConstraint::Generated { .. } = &constraint.constraint {
                 generated = true;
+            } else if let ColumnConstraint::Default(..) = &constraint.constraint {
+                default = true;
             }
         }
         if primary_key && generated {
             return Err(custom_err!(
                 "generated columns cannot be part of the PRIMARY KEY"
             ));
+        } else if default && generated {
+            return Err(custom_err!("cannot use DEFAULT on a generated column"));
         }
         columns.insert(col_name.clone(), cd);
         Ok(())
