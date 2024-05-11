@@ -438,6 +438,26 @@ fn returning_within_trigger() {
     expect_parser_err_msg(b"CREATE TRIGGER t AFTER DELETE ON x BEGIN INSERT INTO x (a) VALUES ('x') RETURNING rowid; END;", "cannot use RETURNING in a trigger");
 }
 
+#[test]
+fn reserved_name() {
+    expect_parser_err_msg(
+        b"CREATE TABLE sqlite_x(a)",
+        "object name reserved for internal use: sqlite_x",
+    );
+    expect_parser_err_msg(
+        b"CREATE VIEW sqlite_x(a) AS SELECT 1",
+        "object name reserved for internal use: sqlite_x",
+    );
+    expect_parser_err_msg(
+        b"CREATE INDEX sqlite_x ON x(a)",
+        "object name reserved for internal use: sqlite_x",
+    );
+    expect_parser_err_msg(
+        b"CREATE TRIGGER sqlite_x AFTER INSERT ON x BEGIN SELECT 1; END;",
+        "object name reserved for internal use: sqlite_x",
+    );
+}
+
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
     expect_parser_err(input, ParserError::Custom(error_msg.to_owned()))
 }

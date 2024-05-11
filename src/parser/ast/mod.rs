@@ -1121,6 +1121,14 @@ impl Name {
         }
         QuotedIterator(sub.bytes(), quote)
     }
+
+    fn is_reserved(&self) -> bool {
+        let bytes = self.as_bytes();
+        let reserved = QuotedIterator("sqlite_".bytes(), 0);
+        bytes
+            .zip(reserved)
+            .all(|(b1, b2)| b1.eq_ignore_ascii_case(&b2))
+    }
 }
 
 struct QuotedIterator<'s>(Bytes<'s>, u8);

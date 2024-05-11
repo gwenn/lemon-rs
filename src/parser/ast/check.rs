@@ -113,12 +113,14 @@ impl Stmt {
                 }
                 Ok(())
             }
+            Stmt::CreateIndex { idx_name, .. } => check_reserved_name(idx_name),
             Stmt::CreateTable {
                 temporary,
                 tbl_name,
                 body,
                 ..
             } => {
+                check_reserved_name(tbl_name)?;
                 if *temporary {
                     if let Some(ref db_name) = tbl_name.db_name {
                         if db_name != "TEMP" {
@@ -128,12 +130,14 @@ impl Stmt {
                 }
                 body.check(tbl_name)
             }
+            Stmt::CreateTrigger { trigger_name, .. } => check_reserved_name(trigger_name),
             Stmt::CreateView {
                 view_name,
                 columns: Some(columns),
                 select,
                 ..
             } => {
+                check_reserved_name(view_name)?;
                 // SQLite3 engine renames duplicates:
                 for (i, c) in columns.iter().enumerate() {
                     for o in &columns[i + 1..] {
@@ -176,6 +180,16 @@ impl Stmt {
             _ => Ok(()),
         }
     }
+}
+
+fn check_reserved_name(name: &QualifiedName) -> Result<(), ParserError> {
+    if name.name.is_reserved() {
+        return Err(custom_err!(
+            "object name reserved for internal use: {}",
+            name.name
+        ));
+    }
+    Ok(())
 }
 
 impl CreateTableBody {
