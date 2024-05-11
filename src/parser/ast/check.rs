@@ -173,11 +173,6 @@ impl Stmt {
                 body: InsertBody::DefaultValues,
                 ..
             } => Err(custom_err!("0 values for {} columns", columns.len())),
-            Stmt::Update {
-                order_by: Some(_),
-                limit: None,
-                ..
-            } => Err(custom_err!("ORDER BY without LIMIT on UPDATE")),
             _ => Ok(()),
         }
     }

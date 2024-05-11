@@ -268,6 +268,7 @@ pub enum Stmt {
 
 impl Stmt {
     /// constructor
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         with: Option<With>,
         or_conflict: Option<ResolveType>,
@@ -1372,21 +1373,20 @@ impl ColumnDefinition {
                 col_type.name = new_type.join(" ");
             }
         }
+        let (mut primary_key, mut generated) = (false, false);
         for constraint in &cd.constraints {
-            if let ColumnConstraint::PrimaryKey {
-                auto_increment: true,
-                ..
-            } = &constraint.constraint
-            {
-                if cd
-                    .col_type
-                    .as_ref()
-                    .map_or(true, |t| !t.name.eq_ignore_ascii_case("INTEGER"))
+            if let ColumnConstraint::PrimaryKey { auto_increment, .. } = &constraint.constraint {
+                if *auto_increment
+                    && cd
+                        .col_type
+                        .as_ref()
+                        .map_or(true, |t| !t.name.eq_ignore_ascii_case("INTEGER"))
                 {
                     return Err(custom_err!(
                         "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY"
                     ));
                 }
+                primary_key = true;
             } else if let ColumnConstraint::ForeignKey {
                 clause:
                     ForeignKeyClause {
@@ -1403,7 +1403,14 @@ impl ColumnDefinition {
                         tbl_name
                     ));
                 }
+            } else if let ColumnConstraint::Generated { .. } = &constraint.constraint {
+                generated = true;
             }
+        }
+        if primary_key && generated {
+            return Err(custom_err!(
+                "generated columns cannot be part of the PRIMARY KEY"
+            ));
         }
         columns.insert(col_name.clone(), cd);
         Ok(())

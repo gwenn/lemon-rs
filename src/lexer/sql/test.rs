@@ -79,6 +79,14 @@ fn auto_increment() {
 }
 
 #[test]
+fn generated() {
+    expect_parser_err_msg(
+        b"CREATE TABLE x(a PRIMARY KEY AS ('id'));",
+        "generated columns cannot be part of the PRIMARY KEY",
+    )
+}
+
+#[test]
 fn vtab_args() -> Result<(), Error> {
     let sql = b"CREATE VIRTUAL TABLE mail USING fts3(
   subject VARCHAR(256) NOT NULL,
