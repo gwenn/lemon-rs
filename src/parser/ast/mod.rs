@@ -1116,7 +1116,7 @@ impl Name {
         debug_assert!(bytes.len() > 1);
         debug_assert_eq!(quote, bytes[bytes.len() - 1]);
         let sub = &self.0.as_str()[1..bytes.len() - 1];
-        if quote == b']' {
+        if quote == b']' || sub.len() < 2 {
             return QuotedIterator(sub.bytes(), 0); // no escape
         }
         QuotedIterator(sub.bytes(), quote)
@@ -1125,9 +1125,9 @@ impl Name {
     fn is_reserved(&self) -> bool {
         let bytes = self.as_bytes();
         let reserved = QuotedIterator("sqlite_".bytes(), 0);
-        bytes
-            .zip(reserved)
-            .all(|(b1, b2)| b1.eq_ignore_ascii_case(&b2))
+        bytes.zip(reserved).fold(0u8, |acc, (b1, b2)| {
+            acc + if b1.eq_ignore_ascii_case(&b2) { 1 } else { 0 }
+        }) == 7u8
     }
 }
 

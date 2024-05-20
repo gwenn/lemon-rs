@@ -456,6 +456,8 @@ fn reserved_name() {
         b"CREATE TRIGGER sqlite_x AFTER INSERT ON x BEGIN SELECT 1; END;",
         "object name reserved for internal use: sqlite_x",
     );
+    parse_cmd(b"CREATE TABLE sqlite(a)");
+    parse_cmd(b"CREATE INDEX \"\" ON t(a)");
 }
 
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
