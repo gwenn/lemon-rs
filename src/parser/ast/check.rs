@@ -104,12 +104,10 @@ impl Stmt {
                 Ok(())
             }
             Stmt::AlterTable(.., AlterTableBody::AddColumn(cd)) => {
-                for c in cd {
-                    if let ColumnConstraint::PrimaryKey { .. } = c {
-                        return Err(custom_err!("Cannot add a PRIMARY KEY column"));
-                    } else if let ColumnConstraint::Unique(..) = c {
-                        return Err(custom_err!("Cannot add a UNIQUE column"));
-                    }
+                if cd.col_flags.contains(ColFlags::PRIMKEY) {
+                    return Err(custom_err!("Cannot add a PRIMARY KEY column"));
+                } else if cd.col_flags.contains(ColFlags::UNIQUE) {
+                    return Err(custom_err!("Cannot add a UNIQUE column"));
                 }
                 Ok(())
             }
@@ -203,10 +201,8 @@ impl CreateTableBody {
         {
             let mut generated_count = 0;
             for c in columns.values() {
-                for cs in c.constraints.iter() {
-                    if let ColumnConstraint::Generated { .. } = cs.constraint {
-                        generated_count += 1;
-                    }
+                if c.col_flags.intersects(ColFlags::GENERATED) {
+                    generated_count += 1;
                 }
             }
             if generated_count == columns.len() {
@@ -260,10 +256,8 @@ impl CreateTableBody {
         } = self
         {
             for col in columns.values() {
-                for c in col {
-                    if let ColumnConstraint::PrimaryKey { .. } = c {
-                        return true;
-                    }
+                if col.col_flags.contains(ColFlags::PRIMKEY) {
+                    return true;
                 }
             }
             if let Some(constraints) = constraints {

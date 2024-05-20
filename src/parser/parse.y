@@ -160,12 +160,12 @@ table_option(A) ::= nm(X). {
 %type columnlist {IndexMap<Name,ColumnDefinition>}
 columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
   let col = X;
-  let cd = ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y };
+  let cd = ColumnDefinition::new(col.0, col.1, Y)?;
   ColumnDefinition::add_column(A, cd)?;
 }
 columnlist(A) ::= columnname(X) carglist(Y). {
   let col = X;
-  let cd = ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y };
+  let cd = ColumnDefinition::new(col.0, col.1, Y)?;
   let mut map = IndexMap::new();
   ColumnDefinition::add_column(&mut map, cd)?;
   A = map;
@@ -1316,7 +1316,7 @@ cmd ::= ALTER TABLE fullname(X) RENAME TO nm(Z). {
 cmd ::= ALTER TABLE fullname(X)
         ADD kwcolumn_opt columnname(Y) carglist(C). {
   let (col_name, col_type) = Y;
-  let cd = ColumnDefinition{ col_name, col_type, constraints: C };
+  let cd = ColumnDefinition::new(col_name, col_type, C)?;
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::AddColumn(cd)));
 }
 cmd ::= ALTER TABLE fullname(X) RENAME kwcolumn_opt nm(Y) TO nm(Z). {

@@ -1331,6 +1331,35 @@ impl CreateTableBody {
     }
 }
 
+bitflags::bitflags! {
+    /// Column definition flags
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct ColFlags: u16 {
+        /// Column is part of the primary key
+        const PRIMKEY = 0x0001;
+        // A hidden column in a virtual table
+        //const HIDDEN = 0x0002;
+        /// Type name follows column name
+        const HASTYPE = 0x0004;
+        /// Column def contains "UNIQUE" or "PK"
+        const UNIQUE = 0x0008;
+        //const SORTERREF =  0x0010;   /* Use sorter-refs with this column */
+        /// GENERATED ALWAYS AS ... VIRTUAL
+        const VIRTUAL = 0x0020;
+        /// GENERATED ALWAYS AS ... STORED
+        const STORED = 0x0040;
+        //const NOTAVAIL = 0x0080;   /* STORED column not yet calculated */
+        //const BUSY = 0x0100; /* Blocks recursion on GENERATED columns */
+        /// Has collating sequence name in zCnName
+        const HASCOLL = 0x0200;
+        //const NOEXPAND = 0x0400;   /* Omit this column when expanding "*" */
+        /// Combo: STORED, VIRTUAL
+        const GENERATED = Self::STORED.bits() | Self::VIRTUAL.bits();
+        // Combo: HIDDEN, STORED, VIRTUAL
+        //const NOINSERT = Self::HIDDEN.bits() | Self::STORED.bits() | Self::VIRTUAL.bits();
+    }
+}
+
 /// Table column definition
 // https://sqlite.org/syntax/column-def.html
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1341,88 +1370,111 @@ pub struct ColumnDefinition {
     pub col_type: Option<Type>,
     /// column constraints
     pub constraints: Vec<NamedColumnConstraint>,
+    /// column flags
+    pub col_flags: ColFlags,
 }
 
 impl ColumnDefinition {
     /// Constructor
-    pub fn add_column(
-        columns: &mut IndexMap<Name, ColumnDefinition>,
-        mut cd: ColumnDefinition,
-    ) -> Result<(), ParserError> {
-        let col_name = &cd.col_name;
-        if columns.contains_key(col_name) {
-            // TODO unquote
-            return Err(custom_err!("duplicate column name: {}", col_name));
-        }
-        // https://github.com/sqlite/sqlite/blob/e452bf40a14aca57fd9047b330dff282f3e4bbcc/src/build.c#L1511-L1514
-        if let Some(ref mut col_type) = cd.col_type {
-            let mut split = col_type.name.split_ascii_whitespace();
-            let truncate = if split
-                .next_back()
-                .map_or(false, |s| s.eq_ignore_ascii_case("ALWAYS"))
-                && split
-                    .next_back()
-                    .map_or(false, |s| s.eq_ignore_ascii_case("GENERATED"))
-            {
-                let mut generated = false;
-                for constraint in &cd.constraints {
-                    if let ColumnConstraint::Generated { .. } = constraint.constraint {
-                        generated = true;
-                        break;
+    pub fn new(
+        col_name: Name,
+        mut col_type: Option<Type>,
+        constraints: Vec<NamedColumnConstraint>,
+    ) -> Result<ColumnDefinition, ParserError> {
+        let mut col_flags = ColFlags::empty();
+        let mut default = false;
+        for constraint in &constraints {
+            match &constraint.constraint {
+                ColumnConstraint::Default(..) => {
+                    default = true;
+                }
+                ColumnConstraint::Collate { .. } => {
+                    col_flags |= ColFlags::HASCOLL;
+                }
+                ColumnConstraint::Generated { typ, .. } => {
+                    col_flags |= ColFlags::VIRTUAL;
+                    if let Some(id) = typ {
+                        if id.0.eq_ignore_ascii_case("STORED") {
+                            col_flags |= ColFlags::STORED;
+                        }
                     }
                 }
-                generated
-            } else {
-                false
-            };
-            if truncate {
-                // str_split_whitespace_remainder
-                let new_type: Vec<&str> = split.collect();
-                col_type.name = new_type.join(" ");
+                ColumnConstraint::ForeignKey {
+                    clause:
+                        ForeignKeyClause {
+                            tbl_name, columns, ..
+                        },
+                    ..
+                } => {
+                    // The child table may reference the primary key of the parent without specifying the primary key column
+                    if columns.as_ref().map_or(0, |v| v.len()) > 1 {
+                        return Err(custom_err!(
+                            "foreign key on {} should reference only one column of table {}",
+                            col_name,
+                            tbl_name
+                        ));
+                    }
+                }
+                ColumnConstraint::PrimaryKey { auto_increment, .. } => {
+                    if *auto_increment
+                        && col_type
+                            .as_ref()
+                            .map_or(true, |t| !t.name.eq_ignore_ascii_case("INTEGER"))
+                    {
+                        return Err(custom_err!(
+                            "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY"
+                        ));
+                    }
+                    col_flags |= ColFlags::PRIMKEY | ColFlags::UNIQUE;
+                }
+                ColumnConstraint::Unique(..) => {
+                    col_flags |= ColFlags::UNIQUE;
+                }
+                _ => {}
             }
         }
-        let (mut primary_key, mut generated, mut default) = (false, false, false);
-        for constraint in &cd.constraints {
-            if let ColumnConstraint::PrimaryKey { auto_increment, .. } = &constraint.constraint {
-                if *auto_increment
-                    && cd
-                        .col_type
-                        .as_ref()
-                        .map_or(true, |t| !t.name.eq_ignore_ascii_case("INTEGER"))
-                {
-                    return Err(custom_err!(
-                        "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY"
-                    ));
-                }
-                primary_key = true;
-            } else if let ColumnConstraint::ForeignKey {
-                clause:
-                    ForeignKeyClause {
-                        tbl_name, columns, ..
-                    },
-                ..
-            } = &constraint.constraint
-            {
-                // The child table may reference the primary key of the parent without specifying the primary key column
-                if columns.as_ref().map_or(0, |v| v.len()) > 1 {
-                    return Err(custom_err!(
-                        "foreign key on {} should reference only one column of table {}",
-                        col_name,
-                        tbl_name
-                    ));
-                }
-            } else if let ColumnConstraint::Generated { .. } = &constraint.constraint {
-                generated = true;
-            } else if let ColumnConstraint::Default(..) = &constraint.constraint {
-                default = true;
-            }
-        }
-        if primary_key && generated {
+        if col_flags.contains(ColFlags::PRIMKEY) && col_flags.intersects(ColFlags::GENERATED) {
             return Err(custom_err!(
                 "generated columns cannot be part of the PRIMARY KEY"
             ));
-        } else if default && generated {
+        } else if default && col_flags.intersects(ColFlags::GENERATED) {
             return Err(custom_err!("cannot use DEFAULT on a generated column"));
+        }
+        if col_flags.intersects(ColFlags::GENERATED) {
+            // https://github.com/sqlite/sqlite/blob/e452bf40a14aca57fd9047b330dff282f3e4bbcc/src/build.c#L1511-L1514
+            if let Some(ref mut col_type) = col_type {
+                let mut split = col_type.name.split_ascii_whitespace();
+                if split
+                    .next_back()
+                    .map_or(false, |s| s.eq_ignore_ascii_case("ALWAYS"))
+                    && split
+                        .next_back()
+                        .map_or(false, |s| s.eq_ignore_ascii_case("GENERATED"))
+                {
+                    // str_split_whitespace_remainder
+                    let new_type: Vec<&str> = split.collect();
+                    col_type.name = new_type.join(" ");
+                }
+            }
+        }
+        if col_type.as_ref().map_or(false, |t| !t.name.is_empty()) {
+            col_flags |= ColFlags::HASTYPE;
+        }
+        Ok(ColumnDefinition {
+            col_name,
+            col_type,
+            constraints,
+            col_flags,
+        })
+    }
+    /// Constructor
+    pub fn add_column(
+        columns: &mut IndexMap<Name, ColumnDefinition>,
+        cd: ColumnDefinition,
+    ) -> Result<(), ParserError> {
+        let col_name = &cd.col_name;
+        if columns.contains_key(col_name) {
+            return Err(custom_err!("duplicate column name: {}", col_name));
         }
         columns.insert(col_name.clone(), cd);
         Ok(())
