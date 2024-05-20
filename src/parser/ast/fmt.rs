@@ -1188,7 +1188,7 @@ impl ToTokens for CreateTableBody {
             CreateTableBody::ColumnsAndConstraints {
                 columns,
                 constraints,
-                options,
+                flags,
             } => {
                 s.append(TK_LP, None)?;
                 comma(columns.values(), s)?;
@@ -1197,11 +1197,11 @@ impl ToTokens for CreateTableBody {
                     comma(constraints, s)?;
                 }
                 s.append(TK_RP, None)?;
-                if options.contains(TableOptions::WITHOUT_ROWID) {
+                if flags.contains(TabFlags::WithoutRowid) {
                     s.append(TK_WITHOUT, None)?;
                     s.append(TK_ID, Some("ROWID"))?;
                 }
-                if options.contains(TableOptions::STRICT) {
+                if flags.contains(TabFlags::Strict) {
                     s.append(TK_ID, Some("STRICT"))?;
                 }
                 Ok(())

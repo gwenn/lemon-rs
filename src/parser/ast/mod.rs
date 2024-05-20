@@ -1298,6 +1298,42 @@ pub enum AlterTableBody {
     DropColumn(Name), // TODO distinction between DROP and DROP COLUMN
 }
 
+bitflags::bitflags! {
+    /// `CREATE TABLE` flags
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct TabFlags: u32 {
+        //const TF_Readonly = 0x00000001; // Read-only system table
+        /// Has one or more hidden columns
+        const HasHidden = 0x00000002;
+        /// Table has a primary key
+        const HasPrimaryKey = 0x00000004;
+        /// Integer primary key is autoincrement
+        const Autoincrement = 0x00000008;
+        //const TF_HasStat1 = 0x00000010; // nRowLogEst set from sqlite_stat1
+        /// Has one or more VIRTUAL columns
+        const HasVirtual = 0x00000020;
+        /// Has one or more STORED columns
+        const HasStored = 0x00000040;
+        /// Combo: HasVirtual + HasStored
+        const HasGenerated = 0x00000060;
+        /// No rowid. PRIMARY KEY is the key
+        const WithoutRowid = 0x00000080;
+        //const TF_MaybeReanalyze = 0x00000100; // Maybe run ANALYZE on this table
+        // No user-visible "rowid" column
+        //const NoVisibleRowid = 0x00000200;
+        // Out-of-Order hidden columns
+        //const OOOHidden = 0x00000400;
+        /// Contains NOT NULL constraints
+        const HasNotNull = 0x00000800;
+        //const Shadow = 0x00001000; // True for a shadow table
+        //const TF_HasStat4 = 0x00002000; // STAT4 info available for this table
+        //const Ephemeral = 0x00004000; // An ephemeral table
+        //const TF_Eponymous = 0x00008000; // An eponymous virtual table
+        /// STRICT mode
+        const Strict = 0x00010000;
+    }
+}
+
 /// `CREATE TABLE` body
 // https://sqlite.org/lang_createtable.html
 // https://sqlite.org/syntax/create-table-stmt.html
@@ -1309,8 +1345,8 @@ pub enum CreateTableBody {
         columns: IndexMap<Name, ColumnDefinition>,
         /// table constraints
         constraints: Option<Vec<NamedTableConstraint>>,
-        /// table options
-        options: TableOptions,
+        /// table flags
+        flags: TabFlags,
     },
     /// `AS` select
     AsSelect(Select),
@@ -1321,12 +1357,17 @@ impl CreateTableBody {
     pub fn columns_and_constraints(
         columns: IndexMap<Name, ColumnDefinition>,
         constraints: Option<Vec<NamedTableConstraint>>,
-        options: TableOptions,
+        mut flags: TabFlags,
     ) -> Result<CreateTableBody, ParserError> {
+        for col in columns.values() {
+            if col.flags.contains(ColFlags::PRIMKEY) {
+                flags |= TabFlags::HasPrimaryKey;
+            }
+        }
         Ok(CreateTableBody::ColumnsAndConstraints {
             columns,
             constraints,
-            options,
+            flags,
         })
     }
 }
@@ -1371,7 +1412,7 @@ pub struct ColumnDefinition {
     /// column constraints
     pub constraints: Vec<NamedColumnConstraint>,
     /// column flags
-    pub col_flags: ColFlags,
+    pub flags: ColFlags,
 }
 
 impl ColumnDefinition {
@@ -1381,7 +1422,7 @@ impl ColumnDefinition {
         mut col_type: Option<Type>,
         constraints: Vec<NamedColumnConstraint>,
     ) -> Result<ColumnDefinition, ParserError> {
-        let mut col_flags = ColFlags::empty();
+        let mut flags = ColFlags::empty();
         let mut default = false;
         for constraint in &constraints {
             match &constraint.constraint {
@@ -1389,13 +1430,13 @@ impl ColumnDefinition {
                     default = true;
                 }
                 ColumnConstraint::Collate { .. } => {
-                    col_flags |= ColFlags::HASCOLL;
+                    flags |= ColFlags::HASCOLL;
                 }
                 ColumnConstraint::Generated { typ, .. } => {
-                    col_flags |= ColFlags::VIRTUAL;
+                    flags |= ColFlags::VIRTUAL;
                     if let Some(id) = typ {
                         if id.0.eq_ignore_ascii_case("STORED") {
-                            col_flags |= ColFlags::STORED;
+                            flags |= ColFlags::STORED;
                         }
                     }
                 }
@@ -1425,22 +1466,22 @@ impl ColumnDefinition {
                             "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY"
                         ));
                     }
-                    col_flags |= ColFlags::PRIMKEY | ColFlags::UNIQUE;
+                    flags |= ColFlags::PRIMKEY | ColFlags::UNIQUE;
                 }
                 ColumnConstraint::Unique(..) => {
-                    col_flags |= ColFlags::UNIQUE;
+                    flags |= ColFlags::UNIQUE;
                 }
                 _ => {}
             }
         }
-        if col_flags.contains(ColFlags::PRIMKEY) && col_flags.intersects(ColFlags::GENERATED) {
+        if flags.contains(ColFlags::PRIMKEY) && flags.intersects(ColFlags::GENERATED) {
             return Err(custom_err!(
                 "generated columns cannot be part of the PRIMARY KEY"
             ));
-        } else if default && col_flags.intersects(ColFlags::GENERATED) {
+        } else if default && flags.intersects(ColFlags::GENERATED) {
             return Err(custom_err!("cannot use DEFAULT on a generated column"));
         }
-        if col_flags.intersects(ColFlags::GENERATED) {
+        if flags.intersects(ColFlags::GENERATED) {
             // https://github.com/sqlite/sqlite/blob/e452bf40a14aca57fd9047b330dff282f3e4bbcc/src/build.c#L1511-L1514
             if let Some(ref mut col_type) = col_type {
                 let mut split = col_type.name.split_ascii_whitespace();
@@ -1458,13 +1499,13 @@ impl ColumnDefinition {
             }
         }
         if col_type.as_ref().map_or(false, |t| !t.name.is_empty()) {
-            col_flags |= ColFlags::HASTYPE;
+            flags |= ColFlags::HASTYPE;
         }
         Ok(ColumnDefinition {
             col_name,
             col_type,
             constraints,
-            col_flags,
+            flags,
         })
     }
     /// Constructor
@@ -1475,6 +1516,12 @@ impl ColumnDefinition {
         let col_name = &cd.col_name;
         if columns.contains_key(col_name) {
             return Err(custom_err!("duplicate column name: {}", col_name));
+        } else if cd.flags.contains(ColFlags::PRIMKEY)
+            && columns
+                .values()
+                .any(|c| c.flags.contains(ColFlags::PRIMKEY))
+        {
+            return Err(custom_err!("table has more than one primary key")); // FIXME table name
         }
         columns.insert(col_name.clone(), cd);
         Ok(())
@@ -1581,19 +1628,6 @@ pub enum TableConstraint {
         /// `DEFERRABLE`
         deref_clause: Option<DeferSubclause>,
     },
-}
-
-bitflags::bitflags! {
-    /// `CREATE TABLE` options
-    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-    pub struct TableOptions: u8 {
-        /// None
-        const NONE = 0;
-        /// `WITHOUT ROWID`
-        const WITHOUT_ROWID = 1;
-        /// `STRICT`
-        const STRICT = 2;
-    }
 }
 
 /// Sort orders

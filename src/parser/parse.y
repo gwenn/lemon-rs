@@ -136,15 +136,15 @@ create_table_args(A) ::= LP columnlist(C) conslist_opt(X) RP table_option_set(F)
 create_table_args(A) ::= AS select(S). {
   A = CreateTableBody::AsSelect(S);
 }
-%type table_option_set {TableOptions}
-%type table_option {TableOptions}
-table_option_set(A) ::= .    {A = TableOptions::NONE;}
+%type table_option_set {TabFlags}
+%type table_option {TabFlags}
+table_option_set(A) ::= .    {A = TabFlags::empty();}
 table_option_set(A) ::= table_option(A).
 table_option_set(A) ::= table_option_set(X) COMMA table_option(Y). {A = X|Y;}
 table_option(A) ::= WITHOUT nm(X). {
   let option = X;
   if option == "rowid" {
-    A = TableOptions::WITHOUT_ROWID;
+    A = TabFlags::WithoutRowid;
   }else{
     return Err(custom_err!("unknown table option: {}", option));
   }
@@ -152,7 +152,7 @@ table_option(A) ::= WITHOUT nm(X). {
 table_option(A) ::= nm(X). {
   let option = X;
   if option == "strict" {
-    A = TableOptions::STRICT;
+    A = TabFlags::Strict;
   }else{
     return Err(custom_err!("unknown table option: {}", option));
   }

@@ -104,9 +104,9 @@ impl Stmt {
                 Ok(())
             }
             Stmt::AlterTable(.., AlterTableBody::AddColumn(cd)) => {
-                if cd.col_flags.contains(ColFlags::PRIMKEY) {
+                if cd.flags.contains(ColFlags::PRIMKEY) {
                     return Err(custom_err!("Cannot add a PRIMARY KEY column"));
-                } else if cd.col_flags.contains(ColFlags::UNIQUE) {
+                } else if cd.flags.contains(ColFlags::UNIQUE) {
                     return Err(custom_err!("Cannot add a UNIQUE column"));
                 }
                 Ok(())
@@ -195,13 +195,13 @@ impl CreateTableBody {
     pub fn check(&self, tbl_name: &QualifiedName) -> Result<(), ParserError> {
         if let CreateTableBody::ColumnsAndConstraints {
             columns,
-            constraints: _,
-            options,
+            constraints,
+            flags,
         } = self
         {
             let mut generated_count = 0;
             for c in columns.values() {
-                if c.col_flags.intersects(ColFlags::GENERATED) {
+                if c.flags.intersects(ColFlags::GENERATED) {
                     generated_count += 1;
                 }
             }
@@ -209,7 +209,7 @@ impl CreateTableBody {
                 return Err(custom_err!("must have at least one non-generated column"));
             }
 
-            if options.contains(TableOptions::STRICT) {
+            if flags.contains(TabFlags::Strict) {
                 for c in columns.values() {
                     match &c.col_type {
                         Some(Type { name, .. }) => {
@@ -240,7 +240,7 @@ impl CreateTableBody {
                     }
                 }
             }
-            if options.contains(TableOptions::WITHOUT_ROWID) && !self.has_primary_key() {
+            if flags.contains(TabFlags::WithoutRowid) && !self.has_primary_key() {
                 return Err(custom_err!("PRIMARY KEY missing on table {}", tbl_name,));
             }
         }
@@ -256,7 +256,7 @@ impl CreateTableBody {
         } = self
         {
             for col in columns.values() {
-                if col.col_flags.contains(ColFlags::PRIMKEY) {
+                if col.flags.contains(ColFlags::PRIMKEY) {
                     return true;
                 }
             }
