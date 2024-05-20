@@ -72,6 +72,7 @@ fn create_table_without_column() {
 #[test]
 fn auto_increment() {
     parse_cmd(b"CREATE TABLE t (x INTEGER PRIMARY KEY AUTOINCREMENT)");
+    parse_cmd(b"CREATE TABLE t (x \"INTEGER\" PRIMARY KEY AUTOINCREMENT)");
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT PRIMARY KEY AUTOINCREMENT)",
         "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY",
@@ -235,6 +236,11 @@ fn create_strict_table_unknown_datatype() {
         b"CREATE TABLE t (c1 BOOL) STRICT",
         "unknown datatype for t.c1: \"BOOL\"",
     );
+    expect_parser_err_msg(
+        b"CREATE TABLE t (c1 INT(10)) STRICT",
+        "unknown datatype for t.c1: \"INT(...)\"",
+    );
+    parse_cmd(b"CREATE TABLE t(c1 \"INT\", c2 [TEXT], c3 `INTEGER`)");
 }
 
 #[test]

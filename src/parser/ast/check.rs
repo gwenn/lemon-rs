@@ -212,7 +212,20 @@ impl CreateTableBody {
             if flags.contains(TabFlags::Strict) {
                 for c in columns.values() {
                     match &c.col_type {
+                        Some(Type {
+                            name,
+                            size: Some(_),
+                        }) => {
+                            return Err(custom_err!(
+                                "unknown datatype for {}.{}: \"{}(...)\"",
+                                tbl_name,
+                                c.col_name,
+                                unquote(name).0,
+                            ));
+                        }
+                        // FIXME unquote
                         Some(Type { name, .. }) => {
+                            let name = unquote(name).0;
                             // The datatype must be one of following: INT INTEGER REAL TEXT BLOB ANY
                             if !(name.eq_ignore_ascii_case("INT")
                                 || name.eq_ignore_ascii_case("INTEGER")

@@ -1096,6 +1096,27 @@ impl Id {
 #[derive(Clone, Debug, Eq)]
 pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
 
+pub(crate) fn unquote(s: &str) -> (&str, u8) {
+    if s.is_empty() {
+        return (s, 0);
+    }
+    let bytes = s.as_bytes();
+    let mut quote = bytes[0];
+    if quote != b'"' && quote != b'`' && quote != b'\'' && quote != b'[' {
+        return (s, 0);
+    } else if quote == b'[' {
+        quote = b']';
+    }
+    debug_assert!(bytes.len() > 1);
+    debug_assert_eq!(quote, bytes[bytes.len() - 1]);
+    let sub = &s[1..bytes.len() - 1];
+    if quote == b']' || sub.len() < 2 {
+        (sub, 0)
+    } else {
+        (sub, quote)
+    }
+}
+
 impl Name {
     /// Constructor
     pub fn from_token(ty: YYCODETYPE, token: Token) -> Name {
@@ -1103,22 +1124,7 @@ impl Name {
     }
 
     fn as_bytes(&self) -> QuotedIterator<'_> {
-        if self.0.is_empty() {
-            return QuotedIterator(self.0.bytes(), 0);
-        }
-        let bytes = self.0.as_bytes();
-        let mut quote = bytes[0];
-        if quote != b'"' && quote != b'`' && quote != b'\'' && quote != b'[' {
-            return QuotedIterator(self.0.bytes(), 0);
-        } else if quote == b'[' {
-            quote = b']';
-        }
-        debug_assert!(bytes.len() > 1);
-        debug_assert_eq!(quote, bytes[bytes.len() - 1]);
-        let sub = &self.0.as_str()[1..bytes.len() - 1];
-        if quote == b']' || sub.len() < 2 {
-            return QuotedIterator(sub.bytes(), 0); // no escape
-        }
+        let (sub, quote) = unquote(self.0.as_str());
         QuotedIterator(sub.bytes(), quote)
     }
 
@@ -1458,9 +1464,9 @@ impl ColumnDefinition {
                 }
                 ColumnConstraint::PrimaryKey { auto_increment, .. } => {
                     if *auto_increment
-                        && col_type
-                            .as_ref()
-                            .map_or(true, |t| !t.name.eq_ignore_ascii_case("INTEGER"))
+                        && col_type.as_ref().map_or(true, |t| {
+                            !unquote(t.name.as_str()).0.eq_ignore_ascii_case("INTEGER")
+                        })
                     {
                         return Err(custom_err!(
                             "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY"
