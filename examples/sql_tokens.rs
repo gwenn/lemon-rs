@@ -50,7 +50,7 @@ fn main() {
                             if res.is_err() {
                                 eprintln!("Err: {} in {}", res.unwrap_err(), arg);
                             }*/
-                            debug_assert!(token.iter().all(|b| b.is_ascii_digit()))
+                            debug_assert!(token.iter().all(|b| b.is_ascii_digit() || *b == b'_'))
                         }
                     }
                     TK_FLOAT => {

@@ -104,21 +104,21 @@ impl Stmt {
                 Ok(())
             }
             Stmt::AlterTable(.., AlterTableBody::AddColumn(cd)) => {
-                for c in cd {
-                    if let ColumnConstraint::PrimaryKey { .. } = c {
-                        return Err(custom_err!("Cannot add a PRIMARY KEY column"));
-                    } else if let ColumnConstraint::Unique(..) = c {
-                        return Err(custom_err!("Cannot add a UNIQUE column"));
-                    }
+                if cd.flags.contains(ColFlags::PRIMKEY) {
+                    return Err(custom_err!("Cannot add a PRIMARY KEY column"));
+                } else if cd.flags.contains(ColFlags::UNIQUE) {
+                    return Err(custom_err!("Cannot add a UNIQUE column"));
                 }
                 Ok(())
             }
+            Stmt::CreateIndex { idx_name, .. } => check_reserved_name(idx_name),
             Stmt::CreateTable {
                 temporary,
                 tbl_name,
                 body,
                 ..
             } => {
+                check_reserved_name(tbl_name)?;
                 if *temporary {
                     if let Some(ref db_name) = tbl_name.db_name {
                         if db_name != "TEMP" {
@@ -128,12 +128,14 @@ impl Stmt {
                 }
                 body.check(tbl_name)
             }
+            Stmt::CreateTrigger { trigger_name, .. } => check_reserved_name(trigger_name),
             Stmt::CreateView {
                 view_name,
                 columns: Some(columns),
                 select,
                 ..
             } => {
+                check_reserved_name(view_name)?;
                 // SQLite3 engine renames duplicates:
                 for (i, c) in columns.iter().enumerate() {
                     for o in &columns[i + 1..] {
@@ -173,14 +175,19 @@ impl Stmt {
                 body: InsertBody::DefaultValues,
                 ..
             } => Err(custom_err!("0 values for {} columns", columns.len())),
-            Stmt::Update {
-                order_by: Some(_),
-                limit: None,
-                ..
-            } => Err(custom_err!("ORDER BY without LIMIT on UPDATE")),
             _ => Ok(()),
         }
     }
+}
+
+fn check_reserved_name(name: &QualifiedName) -> Result<(), ParserError> {
+    if name.name.is_reserved() {
+        return Err(custom_err!(
+            "object name reserved for internal use: {}",
+            name.name
+        ));
+    }
+    Ok(())
 }
 
 impl CreateTableBody {
@@ -188,26 +195,37 @@ impl CreateTableBody {
     pub fn check(&self, tbl_name: &QualifiedName) -> Result<(), ParserError> {
         if let CreateTableBody::ColumnsAndConstraints {
             columns,
-            constraints: _,
-            options,
+            constraints,
+            flags,
         } = self
         {
             let mut generated_count = 0;
             for c in columns.values() {
-                for cs in c.constraints.iter() {
-                    if let ColumnConstraint::Generated { .. } = cs.constraint {
-                        generated_count += 1;
-                    }
+                if c.flags.intersects(ColFlags::GENERATED) {
+                    generated_count += 1;
                 }
             }
             if generated_count == columns.len() {
                 return Err(custom_err!("must have at least one non-generated column"));
             }
 
-            if options.contains(TableOptions::STRICT) {
+            if flags.contains(TabFlags::Strict) {
                 for c in columns.values() {
                     match &c.col_type {
+                        Some(Type {
+                            name,
+                            size: Some(_),
+                        }) => {
+                            return Err(custom_err!(
+                                "unknown datatype for {}.{}: \"{}(...)\"",
+                                tbl_name,
+                                c.col_name,
+                                unquote(name).0,
+                            ));
+                        }
+                        // FIXME unquote
                         Some(Type { name, .. }) => {
+                            let name = unquote(name).0;
                             // The datatype must be one of following: INT INTEGER REAL TEXT BLOB ANY
                             if !(name.eq_ignore_ascii_case("INT")
                                 || name.eq_ignore_ascii_case("INTEGER")
@@ -235,7 +253,7 @@ impl CreateTableBody {
                     }
                 }
             }
-            if options.contains(TableOptions::WITHOUT_ROWID) && !self.has_primary_key() {
+            if flags.contains(TabFlags::WithoutRowid) && !self.has_primary_key() {
                 return Err(custom_err!("PRIMARY KEY missing on table {}", tbl_name,));
             }
         }
@@ -251,10 +269,8 @@ impl CreateTableBody {
         } = self
         {
             for col in columns.values() {
-                for c in col {
-                    if let ColumnConstraint::PrimaryKey { .. } = c {
-                        return true;
-                    }
+                if col.flags.contains(ColFlags::PRIMKEY) {
+                    return true;
                 }
             }
             if let Some(constraints) = constraints {
