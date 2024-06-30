@@ -92,6 +92,27 @@ fn generated() {
 }
 
 #[test]
+fn has_explicit_nulls() {
+    expect_parser_err_msg(
+        b"CREATE TABLE x(a TEXT, PRIMARY KEY (a ASC NULLS FIRST))",
+        "unsupported use of NULLS FIRST",
+    );
+    expect_parser_err_msg(
+        b"CREATE TABLE x(a TEXT, UNIQUE (a ASC NULLS LAST))",
+        "unsupported use of NULLS LAST",
+    );
+    expect_parser_err_msg(
+        b"INSERT INTO x VALUES('v')
+              ON CONFLICT (a DESC NULLS FIRST) DO UPDATE SET a = a+1",
+        "unsupported use of NULLS FIRST",
+    );
+    expect_parser_err_msg(
+        b"CREATE INDEX i ON x(a ASC NULLS LAST)",
+        "unsupported use of NULLS LAST",
+    )
+}
+
+#[test]
 fn vtab_args() -> Result<(), Error> {
     let sql = b"CREATE VIRTUAL TABLE mail USING fts3(
   subject VARCHAR(256) NOT NULL,

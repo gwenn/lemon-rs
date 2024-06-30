@@ -428,12 +428,12 @@ tconscomma ::= .
 tcons ::= CONSTRAINT nm(X).      { self.ctx.constraint_name = Some(X)}
 tcons(A) ::= PRIMARY KEY LP sortlist(X) autoinc(I) RP onconf(R). {
   let name = self.ctx.constraint_name();
-  let constraint = TableConstraint::PrimaryKey{ columns: X, auto_increment: I, conflict_clause: R };
+  let constraint = TableConstraint::primary_key(X, I, R)?;
   A = NamedTableConstraint{ name, constraint };
 }
 tcons(A) ::= UNIQUE LP sortlist(X) RP onconf(R). {
   let name = self.ctx.constraint_name();
-  let constraint = TableConstraint::Unique{ columns: X, conflict_clause: R };
+  let constraint = TableConstraint::unique(X, R)?;
   A = NamedTableConstraint{ name, constraint };
 }
 tcons(A) ::= CHECK LP expr(E) RP onconf. {
@@ -851,12 +851,12 @@ upsert(A) ::= . { A = (None, None); }
 upsert(A) ::= RETURNING selcollist(X).  { A = (None, Some(X)); }
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW)
               DO UPDATE SET setlist(Z) where_opt(W) upsert(N).
-              { let index = UpsertIndex{ targets: T, where_clause: TW };
+              { let index = UpsertIndex::new(T, TW)?;
                 let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
                 let (next, returning) = N;
                 A = (Some(Upsert{ index: Some(index), do_clause, next: next.map(Box::new) }), returning);}
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING upsert(N).
-              { let index = UpsertIndex{ targets: T, where_clause: TW };
+              { let index = UpsertIndex::new(T, TW)?;
                 let (next, returning) = N;
                 A = (Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing, next: next.map(Box::new) }), returning); }
 upsert(A) ::= ON CONFLICT DO NOTHING returning(R).
@@ -1080,8 +1080,7 @@ paren_exprlist(A) ::= LP exprlist(X) RP.  {A = X;}
 //
 cmd ::= createkw uniqueflag(U) INDEX ifnotexists(NE) fullname(X)
         ON nm(Y) LP sortlist(Z) RP where_opt(W). {
-  self.ctx.stmt = Some(Stmt::CreateIndex { unique: U, if_not_exists: NE, idx_name: X,
-                                            tbl_name: Y, columns: Z, where_clause: W });
+  self.ctx.stmt = Some(Stmt::create_index(U, NE, X, Y, Z, W)?);
 }
 
 %type uniqueflag {bool}

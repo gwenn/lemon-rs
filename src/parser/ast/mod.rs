@@ -267,7 +267,26 @@ pub enum Stmt {
 }
 
 impl Stmt {
-    /// constructor
+    /// CREATE INDEX constructor
+    pub fn create_index(
+        unique: bool,
+        if_not_exists: bool,
+        idx_name: QualifiedName,
+        tbl_name: Name,
+        columns: Vec<SortedColumn>,
+        where_clause: Option<Expr>,
+    ) -> Result<Stmt, ParserError> {
+        has_explicit_nulls(&columns)?;
+        Ok(Stmt::CreateIndex {
+            unique,
+            if_not_exists,
+            idx_name,
+            tbl_name,
+            columns,
+            where_clause,
+        })
+    }
+    /// UPDATE constructor
     #[allow(clippy::too_many_arguments)]
     pub fn update(
         with: Option<With>,
@@ -1636,6 +1655,33 @@ pub enum TableConstraint {
     },
 }
 
+impl TableConstraint {
+    /// PK constructor
+    pub fn primary_key(
+        columns: Vec<SortedColumn>,
+        auto_increment: bool,
+        conflict_clause: Option<ResolveType>,
+    ) -> Result<TableConstraint, ParserError> {
+        has_explicit_nulls(&columns)?;
+        Ok(TableConstraint::PrimaryKey {
+            columns,
+            auto_increment,
+            conflict_clause,
+        })
+    }
+    /// UNIQUE constructor
+    pub fn unique(
+        columns: Vec<SortedColumn>,
+        conflict_clause: Option<ResolveType>,
+    ) -> Result<TableConstraint, ParserError> {
+        has_explicit_nulls(&columns)?;
+        Ok(TableConstraint::Unique {
+            columns,
+            conflict_clause,
+        })
+    }
+}
+
 /// Sort orders
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SortOrder {
@@ -1742,6 +1788,22 @@ pub struct SortedColumn {
     pub order: Option<SortOrder>,
     /// `NULLS FIRST` / `NULLS LAST`
     pub nulls: Option<NullsOrder>,
+}
+
+fn has_explicit_nulls(columns: &Vec<SortedColumn>) -> Result<(), ParserError> {
+    for column in columns {
+        if let Some(ref nulls) = column.nulls {
+            return Err(custom_err!(
+                "unsupported use of NULLS {}",
+                if *nulls == NullsOrder::First {
+                    "FIRST"
+                } else {
+                    "LAST"
+                }
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// `LIMIT`
@@ -1997,6 +2059,20 @@ pub struct UpsertIndex {
     pub targets: Vec<SortedColumn>,
     /// `WHERE` clause
     pub where_clause: Option<Expr>,
+}
+
+impl UpsertIndex {
+    /// constructor
+    pub fn new(
+        targets: Vec<SortedColumn>,
+        where_clause: Option<Expr>,
+    ) -> Result<UpsertIndex, ParserError> {
+        has_explicit_nulls(&targets)?;
+        Ok(UpsertIndex {
+            targets,
+            where_clause,
+        })
+    }
 }
 
 /// Upsert `DO` action
