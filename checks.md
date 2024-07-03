@@ -62,15 +62,6 @@ sqlite> CREATE TABLE test (a, b, FOREIGN KEY (b) REFERENCES test(a,b));
 Parse error: number of columns in foreign key does not match the number of columns in the referenced table
 ```
 
-```sql
-sqlite> create table test (a,b, primary key(a), primary key(b));
-Parse error: table "test" has more than one primary key
-sqlite> create table test (a primary key, b primary key);
-Parse error: table "test" has more than one primary key
-sqlite> create table test (a primary key, b, primary key(a));
-Parse error: table "test" has more than one primary key
-```
-
 ### `HAVING`
 
 - [x] HAVING clause on a non-aggregate query (`GroupBy::having`): grammar already prevents this case (grammar differs from SQLite official grammar).

@@ -92,6 +92,22 @@ fn generated() {
 }
 
 #[test]
+fn more_than_one_pk() {
+    expect_parser_err_msg(
+        b"CREATE TABLE test (a,b, PRIMARY KEY(a), PRIMARY KEY(b))",
+        "table has more than one primary key",
+    );
+    expect_parser_err_msg(
+        b"CREATE TABLE test (a PRIMARY KEY, b PRIMARY KEY)",
+        "table has more than one primary key",
+    );
+    expect_parser_err_msg(
+        b"CREATE TABLE test (a PRIMARY KEY, b, PRIMARY KEY(a))",
+        "table has more than one primary key",
+    );
+}
+
+#[test]
 fn has_explicit_nulls() {
     expect_parser_err_msg(
         b"CREATE TABLE x(a TEXT, PRIMARY KEY (a ASC NULLS FIRST))",

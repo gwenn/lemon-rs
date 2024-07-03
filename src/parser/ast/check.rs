@@ -253,35 +253,11 @@ impl CreateTableBody {
                     }
                 }
             }
-            if flags.contains(TabFlags::WithoutRowid) && !self.has_primary_key() {
+            if flags.contains(TabFlags::WithoutRowid) && !flags.contains(TabFlags::HasPrimaryKey) {
                 return Err(custom_err!("PRIMARY KEY missing on table {}", tbl_name,));
             }
         }
         Ok(())
-    }
-
-    /// explicit primary key constraint ?
-    pub fn has_primary_key(&self) -> bool {
-        if let CreateTableBody::ColumnsAndConstraints {
-            columns,
-            constraints,
-            ..
-        } = self
-        {
-            for col in columns.values() {
-                if col.flags.contains(ColFlags::PRIMKEY) {
-                    return true;
-                }
-            }
-            if let Some(constraints) = constraints {
-                for c in constraints {
-                    if let TableConstraint::PrimaryKey { .. } = c.constraint {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
     }
 }
 

@@ -1389,6 +1389,22 @@ impl CreateTableBody {
                 flags |= TabFlags::HasPrimaryKey;
             }
         }
+        if let Some(ref constraints) = constraints {
+            for c in constraints {
+                if let NamedTableConstraint {
+                    constraint: TableConstraint::PrimaryKey { .. },
+                    ..
+                } = c
+                {
+                    if flags.contains(TabFlags::HasPrimaryKey) {
+                        // FIXME table name
+                        return Err(custom_err!("table has more than one primary key"));
+                    } else {
+                        flags |= TabFlags::HasPrimaryKey;
+                    }
+                }
+            }
+        }
         Ok(CreateTableBody::ColumnsAndConstraints {
             columns,
             constraints,
@@ -1533,7 +1549,7 @@ impl ColumnDefinition {
             flags,
         })
     }
-    /// Constructor
+    /// Collector
     pub fn add_column(
         columns: &mut IndexMap<Name, ColumnDefinition>,
         cd: ColumnDefinition,
