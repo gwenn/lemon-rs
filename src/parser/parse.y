@@ -48,10 +48,6 @@
     });
   }
 }
-%stack_overflow {
-  error!(target: TARGET, "parser stack overflow");
-  self.ctx.error = Some(ParserError::StackOverflow);
-}
 
 // The name of the generated procedure that implements the parser
 // is as follows:
@@ -177,11 +173,13 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 // improve performance and reduce the executable size.  The goal here is
 // to get the "jump" operations in ISNULL through ESCAPE to have numeric
 // values that are early enough so that all jump operations are clustered
-// at the beginning.
+// at the beginning.  Also, operators like NE and EQ need to be adjacent,
+// and all of the comparison operators need to be clustered together.
+// Various assert() statements throughout the code enforce these restrictions.
 //
 %token ABORT ACTION AFTER ANALYZE ASC ATTACH BEFORE BEGIN BY CASCADE CAST.
 %token CONFLICT DATABASE DEFERRED DESC DETACH EACH END EXCLUSIVE EXPLAIN FAIL.
-%token OR AND NOT IS MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ.
+%token OR AND NOT IS ISNOT MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ.
 %token GT LE LT GE ESCAPE.
 
 // The following directive causes tokens ABORT, AFTER, ASC, etc. to
@@ -1260,8 +1258,8 @@ trigger_cmd(A) ::= select(X).
 expr(A) ::= RAISE LP IGNORE RP.  {
   A = Expr::Raise(ResolveType::Ignore, None);
 }
-expr(A) ::= RAISE LP raisetype(T) COMMA nm(Z) RP.  {
-  A = Expr::Raise(T, Some(Z));
+expr(A) ::= RAISE LP raisetype(T) COMMA expr(Z) RP.  {
+  A = Expr::Raise(T, Some(Box::new(Z)));
 }
 %endif  !SQLITE_OMIT_TRIGGER
 
