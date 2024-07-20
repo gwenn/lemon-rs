@@ -263,22 +263,9 @@ static yyRuleName: [&str; YYNRULE] = [
 */
 impl yyParser<'_> {
     fn yy_grow_stack_if_needed(&mut self) -> bool {
-        if self.yyidx >= self.yystack.capacity() {
-            if self.yyGrowStack() {
-                self.yyidx = self.yyidx.checked_sub(1).unwrap();
-                self.yyStackOverflow();
-                return true;
-            }
-        }
         false
     }
     fn yy_grow_stack_for_push(&mut self) -> bool {
-        if self.yyidx >= self.yystack.capacity() - 1 {
-            if self.yyGrowStack() {
-                self.yyStackOverflow();
-                return true;
-            }
-        }
         // yystack is not prefilled with zero value like in C.
         if self.yyidx == self.yystack.len() {
             self.yystack.push(yyStackEntry::default());
@@ -286,29 +273,6 @@ impl yyParser<'_> {
             self.yystack.push(yyStackEntry::default());
         }
         false
-    }
-
-    #[allow(non_snake_case)]
-    #[cfg(feature = "YYSTACKDYNAMIC")]
-    fn yyGrowStack(&mut self) -> bool {
-        let capacity = self.yystack.capacity();
-        let additional = capacity + 100;
-        self.yystack.reserve(additional);
-        #[cfg(not(feature = "NDEBUG"))]
-        {
-            debug!(
-                target: TARGET,
-                "Stack grows from {} to {} entries.",
-                capacity,
-                self.yystack.capacity()
-            );
-        }
-        false
-    }
-    #[allow(non_snake_case)]
-    #[cfg(not(feature = "YYSTACKDYNAMIC"))]
-    fn yyGrowStack(&mut self) -> bool {
-        true
     }
 }
 
@@ -515,26 +479,9 @@ fn yy_find_reduce_action(
     yy_action[i as usize]
 }
 
-/*
-** The following routine is called if the stack overflows.
-*/
-impl yyParser<'_> {
-    #[allow(non_snake_case)]
-    fn yyStackOverflow(&mut self) {
-        #[cfg(not(feature = "NDEBUG"))]
-        {
-            error!(target: TARGET, "Stack Overflow!");
-        }
-        while self.yyidx > 0 {
-            self.yy_pop_parser_stack();
-        }
-        /* Here code is inserted which will execute if the parser
-         ** stack every overflows */
-        /******** Begin %stack_overflow code ******************************************/
+        /******** Begin %stack_overflow code ******************************************
 %%
-        /******** End %stack_overflow code ********************************************/
-    }
-}
+        ******** End %stack_overflow code ********************************************/
 
 /*
 ** Print tracing information for a SHIFT action

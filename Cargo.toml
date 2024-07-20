@@ -19,7 +19,6 @@ maintenance = { status = "experimental" }
 # FIXME: specific to one parser, not global
 YYTRACKMAXSTACKDEPTH = []
 YYNOERRORRECOVERY = []
-YYSTACKDYNAMIC = []
 YYCOVERAGE = []
 NDEBUG = []
 default = ["YYNOERRORRECOVERY"]
