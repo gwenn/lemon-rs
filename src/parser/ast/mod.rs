@@ -382,7 +382,7 @@ pub enum Expr {
     /// Qualified name
     Qualified(Name, Name),
     /// `RAISE` function call
-    Raise(ResolveType, Option<Name>),
+    Raise(ResolveType, Option<Box<Expr>>),
     /// Subquery expression
     Subquery(Box<Select>),
     /// Unary expression
