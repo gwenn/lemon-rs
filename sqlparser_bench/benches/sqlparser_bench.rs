@@ -18,10 +18,10 @@ fn basic_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("sqlparser-rs parsing benchmark");
 
     let string = b"SELECT * FROM `table` WHERE 1 = 1";
-    group.bench_function("sqlparser::select", |b| {
+    group.bench_with_input("sqlparser::select", &string, |b, &s| {
         b.iter(|| {
-            let mut parser = Parser::new(string);
-            parser.next()
+            let mut parser = Parser::new(s);
+            assert!(parser.next().unwrap().unwrap().readonly())
         });
     });
 
@@ -36,10 +36,10 @@ fn basic_queries(c: &mut Criterion) {
         SELECT * FROM `table`
         LEFT JOIN derived USING (user_id)
     ";
-    group.bench_function("sqlparser::with_select", |b| {
+    group.bench_with_input("sqlparser::with_select", &with_query, |b, &s| {
         b.iter(|| {
-            let mut parser = Parser::new(with_query);
-            parser.next()
+            let mut parser = Parser::new(s);
+            assert!(parser.next().unwrap().unwrap().readonly())
         });
     });
 }

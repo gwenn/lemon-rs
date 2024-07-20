@@ -20,8 +20,6 @@ use ast::{Cmd, ExplainKind, Name, Stmt};
 /// Parser error
 #[derive(Debug, PartialEq)]
 pub enum ParserError {
-    /// Stack overflow
-    StackOverflow,
     /// Syntax error
     SyntaxError {
         /// token type
@@ -38,7 +36,6 @@ pub enum ParserError {
 impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ParserError::StackOverflow => f.write_str("parser overflowed its stack"),
             ParserError::SyntaxError { token_type, found } => {
                 write!(f, "near {}, \"{:?}\": syntax error", token_type, found)
             }

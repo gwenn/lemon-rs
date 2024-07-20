@@ -48,10 +48,6 @@
     });
   }
 }
-%stack_overflow {
-  error!(target: TARGET, "parser stack overflow");
-  self.ctx.error = Some(ParserError::StackOverflow);
-}
 
 // The name of the generated procedure that implements the parser
 // is as follows:
