@@ -25,11 +25,11 @@ default = ["YYNOERRORRECOVERY"]
 
 [dependencies]
 phf = { version = "0.11", features = ["uncased"] }
-log = "0.4"
+log = "0.4.22"
 memchr = "2.0"
 fallible-iterator = "0.3"
 bitflags = "2.0"
-uncased = "0.9"
+uncased = "0.9.10"
 indexmap = "2.0"
 
 [dev-dependencies]
@@ -39,4 +39,4 @@ env_logger = { version = "0.11", default-features = false }
 cc = "1.0"
 phf_shared = { version = "0.11", features = ["uncased"] }
 phf_codegen = "0.11"
-uncased = "0.9"
+uncased = "0.9.10"
