@@ -62,7 +62,7 @@ use crate::parser::ast::*;
 use crate::parser::{Context, ParserError};
 use crate::dialect::{from_token, Token, TokenType};
 use indexmap::IndexMap;
-use log::{debug, error, log_enabled};
+use log::error;
 
 #[allow(non_camel_case_types)]
 type sqlite3ParserError = crate::parser::ParserError;

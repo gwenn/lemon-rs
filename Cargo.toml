@@ -21,7 +21,7 @@ YYTRACKMAXSTACKDEPTH = []
 YYNOERRORRECOVERY = []
 YYCOVERAGE = []
 NDEBUG = []
-default = ["YYNOERRORRECOVERY"]
+default = ["YYNOERRORRECOVERY", "NDEBUG"]
 
 [dependencies]
 phf = { version = "0.11", features = ["uncased"] }
