@@ -239,13 +239,12 @@ impl IndexMut<i8> for yyParser<'_> {
 }
 
 #[cfg(not(feature = "NDEBUG"))]
-use log::Level::Debug;
-#[cfg(not(feature = "NDEBUG"))]
+use log::{debug, log_enabled, Level::Debug};
 static TARGET: &str = "Parse";
 
 /* For tracing shifts, the names of all terminals and nonterminals
 ** are required.  The following table supplies these names */
-#[cfg(any(feature = "YYCOVERAGE", not(feature = "NDEBUG")))]
+//#[cfg(any(feature = "YYCOVERAGE", not(feature = "NDEBUG")))]
 %%
 
 /* For tracing reduce actions, the names of all rules are required.
@@ -302,14 +301,14 @@ impl yyParser<'_> {
 impl yyParser<'_> {
     fn yy_pop_parser_stack(&mut self) {
         use std::mem::take;
-        let yytos = take(&mut self.yystack[self.yyidx]);
+        let _yytos = take(&mut self.yystack[self.yyidx]);
         self.yyidx = self.yyidx.checked_sub(1).unwrap();
         //assert_eq!(self.yyidx+1, self.yystack.len());
         #[cfg(not(feature = "NDEBUG"))]
         {
             debug!(
                 target: TARGET,
-                "Popping {}", yyTokenName[yytos.major as usize]
+                "Popping {}", yyTokenName[_yytos.major as usize]
             );
         }
     }
@@ -488,24 +487,26 @@ fn yy_find_reduce_action(
 */
 impl yyParser<'_> {
     #[allow(non_snake_case)]
+    #[cfg(feature = "NDEBUG")]
+    fn yyTraceShift(&self, _: YYACTIONTYPE, _: &str) {
+    }
+    #[allow(non_snake_case)]
+    #[cfg(not(feature = "NDEBUG"))]
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE, zTag: &str) {
-        #[cfg(not(feature = "NDEBUG"))]
-        {
-            let yytos = &self[0];
-            if yyNewState < YYNSTATE {
-                debug!(
-                    target: TARGET,
-                    "{} '{}', go to state {}", zTag, yyTokenName[yytos.major as usize], yyNewState
-                );
-            } else {
-                debug!(
-                    target: TARGET,
-                    "{} '{}', pending reduce {:?}",
-                    zTag,
-                    yyTokenName[yytos.major as usize],
-                    yyNewState.checked_sub(YY_MIN_REDUCE)
-                );
-            }
+        let yytos = &self[0];
+        if yyNewState < YYNSTATE {
+            debug!(
+                target: TARGET,
+                "{} '{}', go to state {}", zTag, yyTokenName[yytos.major as usize], yyNewState
+            );
+        } else {
+            debug!(
+                target: TARGET,
+                "{} '{}', pending reduce {:?}",
+                zTag,
+                yyTokenName[yytos.major as usize],
+                yyNewState.checked_sub(YY_MIN_REDUCE)
+            );
         }
     }
 }
