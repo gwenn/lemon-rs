@@ -3,7 +3,9 @@ use std::env;
 use std::fs::read;
 use std::panic;
 
-use sqlite3_parser::lexer::sql::{Error, Parser};
+#[cfg(not(feature = "YYNOERRORRECOVERY"))]
+use sqlite3_parser::lexer::sql::Error;
+use sqlite3_parser::lexer::sql::Parser;
 
 /// Parse specified files and print all commands.
 fn main() {
@@ -19,6 +21,9 @@ fn main() {
                     Ok(None) => break,
                     Err(err) => {
                         eprintln!("Err: {err} in {arg}");
+                        #[cfg(feature = "YYNOERRORRECOVERY")]
+                        break;
+                        #[cfg(not(feature = "YYNOERRORRECOVERY"))]
                         if let Error::ParserError(..) = err {
                         } else {
                             break;
