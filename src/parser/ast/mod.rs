@@ -5,7 +5,7 @@ pub mod fmt;
 
 use std::num::ParseIntError;
 use std::ops::Deref;
-use std::str::{Bytes, FromStr};
+use std::str::{self, Bytes, FromStr};
 
 use fmt::{ToTokens, TokenStream};
 use indexmap::{IndexMap, IndexSet};
@@ -488,10 +488,8 @@ impl Expr {
     /// Constructor
     pub fn ptr(left: Expr, op: Token, right: Expr) -> Expr {
         let mut ptr = Operator::ArrowRight;
-        if let Some(ref op) = op.1 {
-            if op == "->>" {
-                ptr = Operator::ArrowRightShift;
-            }
+        if op.1 == b"->>" {
+            ptr = Operator::ArrowRightShift;
         }
         Expr::Binary(Box::new(left), ptr, Box::new(right))
     }
@@ -609,16 +607,12 @@ pub enum Literal {
 impl Literal {
     /// Constructor
     pub fn from_ctime_kw(token: Token) -> Literal {
-        if let Some(ref token) = token.1 {
-            if "CURRENT_DATE".eq_ignore_ascii_case(token) {
-                Literal::CurrentDate
-            } else if "CURRENT_TIME".eq_ignore_ascii_case(token) {
-                Literal::CurrentTime
-            } else if "CURRENT_TIMESTAMP".eq_ignore_ascii_case(token) {
-                Literal::CurrentTimestamp
-            } else {
-                unreachable!()
-            }
+        if b"CURRENT_DATE".eq_ignore_ascii_case(token.1) {
+            Literal::CurrentDate
+        } else if b"CURRENT_TIME".eq_ignore_ascii_case(token.1) {
+            Literal::CurrentTime
+        } else if b"CURRENT_TIMESTAMP".eq_ignore_ascii_case(token.1) {
+            Literal::CurrentTimestamp
         } else {
             unreachable!()
         }
@@ -644,14 +638,13 @@ impl LikeOperator {
         if token_type == TK_MATCH as YYCODETYPE {
             return LikeOperator::Match;
         } else if token_type == TK_LIKE_KW as YYCODETYPE {
-            if let Some(ref token) = token.1 {
-                if "LIKE".eq_ignore_ascii_case(token) {
-                    return LikeOperator::Like;
-                } else if "GLOB".eq_ignore_ascii_case(token) {
-                    return LikeOperator::Glob;
-                } else if "REGEXP".eq_ignore_ascii_case(token) {
-                    return LikeOperator::Regexp;
-                }
+            let token = token.1;
+            if b"LIKE".eq_ignore_ascii_case(token) {
+                return LikeOperator::Like;
+            } else if b"GLOB".eq_ignore_ascii_case(token) {
+                return LikeOperator::Glob;
+            } else if b"REGEXP".eq_ignore_ascii_case(token) {
+                return LikeOperator::Regexp;
             }
         }
         unreachable!()
@@ -1009,8 +1002,8 @@ impl JoinOperator {
         n1: Option<Name>,
         n2: Option<Name>,
     ) -> Result<JoinOperator, ParserError> {
-        Ok(if let Some(ref t) = token.1 {
-            let mut jt = JoinType::try_from(t.as_ref())?;
+        Ok({
+            let mut jt = JoinType::try_from(token.1)?;
             for n in [&n1, &n2].into_iter().flatten() {
                 jt |= JoinType::try_from(n.0.as_ref())?;
             }
@@ -1019,14 +1012,12 @@ impl JoinOperator {
             {
                 return Err(custom_err!(
                     "unknown join type: {} {} {}",
-                    t,
+                    str::from_utf8(token.1).unwrap_or("invalid utf8"),
                     n1.as_ref().map_or("", |n| n.0.as_str()),
                     n2.as_ref().map_or("", |n| n.0.as_str())
                 ));
             }
             JoinOperator::TypedJoin(Some(jt))
-        } else {
-            unreachable!()
         })
     }
     fn is_natural(&self) -> bool {
@@ -1057,25 +1048,28 @@ bitflags::bitflags! {
     }
 }
 
-impl TryFrom<&str> for JoinType {
+impl TryFrom<&[u8]> for JoinType {
     type Error = ParserError;
-    fn try_from(s: &str) -> Result<JoinType, ParserError> {
-        if "CROSS".eq_ignore_ascii_case(s) {
+    fn try_from(s: &[u8]) -> Result<JoinType, ParserError> {
+        if b"CROSS".eq_ignore_ascii_case(s) {
             Ok(JoinType::INNER | JoinType::CROSS)
-        } else if "FULL".eq_ignore_ascii_case(s) {
+        } else if b"FULL".eq_ignore_ascii_case(s) {
             Ok(JoinType::LEFT | JoinType::RIGHT | JoinType::OUTER)
-        } else if "INNER".eq_ignore_ascii_case(s) {
+        } else if b"INNER".eq_ignore_ascii_case(s) {
             Ok(JoinType::INNER)
-        } else if "LEFT".eq_ignore_ascii_case(s) {
+        } else if b"LEFT".eq_ignore_ascii_case(s) {
             Ok(JoinType::LEFT | JoinType::OUTER)
-        } else if "NATURAL".eq_ignore_ascii_case(s) {
+        } else if b"NATURAL".eq_ignore_ascii_case(s) {
             Ok(JoinType::NATURAL)
-        } else if "RIGHT".eq_ignore_ascii_case(s) {
+        } else if b"RIGHT".eq_ignore_ascii_case(s) {
             Ok(JoinType::RIGHT | JoinType::OUTER)
-        } else if "OUTER".eq_ignore_ascii_case(s) {
+        } else if b"OUTER".eq_ignore_ascii_case(s) {
             Ok(JoinType::OUTER)
         } else {
-            Err(custom_err!("unknown join type: {}", s))
+            Err(custom_err!(
+                "unknown join type: {}",
+                str::from_utf8(s).unwrap_or("invalid utf8")
+            ))
         }
     }
 }

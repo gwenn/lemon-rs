@@ -166,11 +166,11 @@
 */
 #[allow(non_camel_case_types)]
 #[derive(Default)]
-pub struct yyStackEntry {
+pub struct yyStackEntry<'i> {
     stateno: YYACTIONTYPE, /* The state-number, or reduce action in SHIFTREDUCE */
     major: YYCODETYPE,     /* The major token value.  This is the code
                             ** number for the token at this stack level */
-    minor: YYMINORTYPE, /* The user-supplied minor token value.  This
+    minor: YYMINORTYPE<'i>, /* The user-supplied minor token value.  This
                          ** is the value of the token  */
 }
 
@@ -184,12 +184,12 @@ pub struct yyParser<'input> {
     //#[cfg(not(feature = "YYNOERRORRECOVERY"))]
     yyerrcnt: i32, /* Shifts left before out of the error */
 %%                               /* A place to hold %extra_context */
-    yystack: Vec<yyStackEntry>, /* The parser's stack */
+    yystack: Vec<yyStackEntry<'input>>, /* The parser's stack */
 }
 
 use std::cmp::Ordering;
 use std::ops::Neg;
-impl yyParser<'_> {
+impl<'input> yyParser<'input> {
     fn shift(&self, shift: i8) -> usize {
         assert!(shift <= 1);
         match shift.cmp(&0) {
@@ -207,13 +207,13 @@ impl yyParser<'_> {
         }
     }
 
-    fn yy_move(&mut self, shift: i8) -> yyStackEntry {
+    fn yy_move(&mut self, shift: i8) -> yyStackEntry<'input> {
         use std::mem::take;
         let idx = self.shift(shift);
         take(&mut self.yystack[idx])
     }
 
-    fn push(&mut self, entry: yyStackEntry) {
+    fn push(&mut self, entry: yyStackEntry<'input>) {
         if self.yyidx == self.yystack.len() {
             self.yystack.push(entry);
         } else {
@@ -223,24 +223,23 @@ impl yyParser<'_> {
 }
 
 use std::ops::{Index, IndexMut};
-impl Index<i8> for yyParser<'_> {
-    type Output = yyStackEntry;
+impl<'input> Index<i8> for yyParser<'input> {
+    type Output = yyStackEntry<'input>;
 
-    fn index(&self, shift: i8) -> &yyStackEntry {
+    fn index(&self, shift: i8) -> &yyStackEntry<'input> {
         let idx = self.shift(shift);
         &self.yystack[idx]
     }
 }
-impl IndexMut<i8> for yyParser<'_> {
-    fn index_mut(&mut self, shift: i8) -> &mut yyStackEntry {
+impl<'input> IndexMut<i8> for yyParser<'input> {
+    fn index_mut(&mut self, shift: i8) -> &mut yyStackEntry<'input> {
         let idx = self.shift(shift);
         &mut self.yystack[idx]
     }
 }
 
 #[cfg(not(feature = "NDEBUG"))]
-use log::Level::Debug;
-#[cfg(not(feature = "NDEBUG"))]
+use log::{debug, log_enabled, Level::Debug};
 static TARGET: &str = "Parse";
 
 /* For tracing shifts, the names of all terminals and nonterminals
@@ -302,14 +301,14 @@ impl yyParser<'_> {
 impl yyParser<'_> {
     fn yy_pop_parser_stack(&mut self) {
         use std::mem::take;
-        let yytos = take(&mut self.yystack[self.yyidx]);
+        let _yytos = take(&mut self.yystack[self.yyidx]);
         self.yyidx = self.yyidx.checked_sub(1).unwrap();
         //assert_eq!(self.yyidx+1, self.yystack.len());
         #[cfg(not(feature = "NDEBUG"))]
         {
             debug!(
                 target: TARGET,
-                "Popping {}", yyTokenName[yytos.major as usize]
+                "Popping {}", yyTokenName[_yytos.major as usize]
             );
         }
     }
@@ -488,24 +487,26 @@ fn yy_find_reduce_action(
 */
 impl yyParser<'_> {
     #[allow(non_snake_case)]
+    #[cfg(feature = "NDEBUG")]
+    fn yyTraceShift(&self, _: YYACTIONTYPE, _: &str) {
+    }
+    #[allow(non_snake_case)]
+    #[cfg(not(feature = "NDEBUG"))]
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE, zTag: &str) {
-        #[cfg(not(feature = "NDEBUG"))]
-        {
-            let yytos = &self[0];
-            if yyNewState < YYNSTATE {
-                debug!(
-                    target: TARGET,
-                    "{} '{}', go to state {}", zTag, yyTokenName[yytos.major as usize], yyNewState
-                );
-            } else {
-                debug!(
-                    target: TARGET,
-                    "{} '{}', pending reduce {:?}",
-                    zTag,
-                    yyTokenName[yytos.major as usize],
-                    yyNewState.checked_sub(YY_MIN_REDUCE)
-                );
-            }
+        let yytos = &self[0];
+        if yyNewState < YYNSTATE {
+            debug!(
+                target: TARGET,
+                "{} '{}', go to state {}", zTag, yyTokenName[yytos.major as usize], yyNewState
+            );
+        } else {
+            debug!(
+                target: TARGET,
+                "{} '{}', pending reduce {:?}",
+                zTag,
+                yyTokenName[yytos.major as usize],
+                yyNewState.checked_sub(YY_MIN_REDUCE)
+            );
         }
     }
 }
@@ -513,13 +514,13 @@ impl yyParser<'_> {
 /*
 ** Perform a shift action.
 */
-impl yyParser<'_> {
+impl<'input> yyParser<'input> {
     #[allow(non_snake_case)]
     fn yy_shift(
         &mut self,
         mut yyNewState: YYACTIONTYPE,    /* The new state to shift in */
         yyMajor: YYCODETYPE,             /* The major token to shift in */
-        yyMinor: ParseTOKENTYPE, /* The minor token to shift in */
+        yyMinor: ParseTOKENTYPE<'input>, /* The minor token to shift in */
     ) {
         self.yyidx_shift(1);
         self.yyhwm_incr();
@@ -573,7 +574,7 @@ impl yyParser<'_> {
         let _ = yy_look_ahead;
         let _ = yy_lookahead_token;
 
-        let yylhsminor: YYMINORTYPE;
+        let yylhsminor: YYMINORTYPE<'_>;
         match yyruleno {
   /* Beginning here are the reduction cases.  A typical example
   ** follows:
@@ -687,12 +688,12 @@ impl yyParser<'_> {
 ** Outputs:
 ** None.
 */
-impl yyParser<'_> {
+impl<'input> yyParser<'input> {
     #[allow(non_snake_case)]
     pub fn Parse(
         &mut self,
         yymajor: TokenType,                  /* The major token code number */
-        mut yyminor: ParseTOKENTYPE, /* The value for the token */
+        yyminor: ParseTOKENTYPE<'input>, /* The value for the token */
     ) -> Result<(), ParseError> {
         let mut yymajor = yymajor as YYCODETYPE;
         //#[cfg(all(not(feature = "YYERRORSYMBOL"), not(feature = "YYNOERRORRECOVERY")))]
@@ -764,7 +765,7 @@ impl yyParser<'_> {
                 }
                 yyact = self.yy_reduce(yyruleno, yymajor, &yyminor)?;
             } else if yyact <= YY_MAX_SHIFTREDUCE {
-                self.yy_shift(yyact, yymajor, yyminor.take());
+                self.yy_shift(yyact, yymajor, yyminor);
                 if cfg!(not(feature = "YYNOERRORRECOVERY")) {
                     self.yyerrcnt -= 1;
                 }
@@ -827,7 +828,7 @@ impl yyParser<'_> {
                             }
                             yymajor = YYNOCODE;
                         } else if yymx != YYERRORSYMBOL {
-                            self.yy_shift(yyact, YYERRORSYMBOL, yyminor.take());
+                            self.yy_shift(yyact, YYERRORSYMBOL, yyminor);
                         }
                     }
                     self.yyerrcnt = 3;

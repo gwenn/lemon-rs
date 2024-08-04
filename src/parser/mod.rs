@@ -21,12 +21,7 @@ use ast::{Cmd, ExplainKind, Name, Stmt};
 #[derive(Debug, PartialEq)]
 pub enum ParserError {
     /// Syntax error
-    SyntaxError {
-        /// token type
-        token_type: &'static str,
-        /// token value
-        found: Option<String>,
-    },
+    SyntaxError(String),
     /// Unexpected EOF
     UnexpectedEof,
     /// Custom error
@@ -36,8 +31,8 @@ pub enum ParserError {
 impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ParserError::SyntaxError { token_type, found } => {
-                write!(f, "near {}, \"{:?}\": syntax error", token_type, found)
+            ParserError::SyntaxError(s) => {
+                write!(f, "near \"{}\": syntax error", s)
             }
             ParserError::UnexpectedEof => f.write_str("unexpected end of input"),
             ParserError::Custom(s) => f.write_str(s),

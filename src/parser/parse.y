@@ -27,8 +27,8 @@
 // The type of the data attached to each token is Token.  This is also the
 // default type for non-terminals.
 //
-%token_type {Token}
-%default_type {Token}
+%token_type "Token<'i>"
+%default_type "Token<'i>"
 
 // An extra argument to the constructor for the parser, which is available
 // to all actions.
@@ -41,11 +41,8 @@
     error!(target: TARGET, "incomplete input");
     self.ctx.error = Some(ParserError::UnexpectedEof);
   } else {
-    error!(target: TARGET, "near {}, \"{:?}\": syntax error", yyTokenName[yymajor as usize], yyminor);
-    self.ctx.error = Some(ParserError::SyntaxError {
-        token_type: yyTokenName[yymajor as usize],
-        found: yyminor.1.clone(),
-    });
+    error!(target: TARGET, "near \"{:?}\": syntax error", yyminor);
+    self.ctx.error = Some(ParserError::SyntaxError(from_bytes(yyminor.1)));
   }
 }
 
@@ -60,9 +57,9 @@
 use crate::custom_err;
 use crate::parser::ast::*;
 use crate::parser::{Context, ParserError};
-use crate::dialect::{from_token, Token, TokenType};
+use crate::dialect::{from_bytes, from_token, Token, TokenType};
 use indexmap::IndexMap;
-use log::{debug, error, log_enabled};
+use log::error;
 
 #[allow(non_camel_case_types)]
 type sqlite3ParserError = crate::parser::ParserError;
