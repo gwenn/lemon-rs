@@ -4198,12 +4198,12 @@ void print_stack_union(
   name = lemp->name ? lemp->name : "Parse";
   lineno = *plineno;
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
-  fprintf(out,"type %sTOKENTYPE = %s;\n",name,
+  fprintf(out,"type %sTOKENTYPE<'i> = %s;\n",name,
     lemp->tokentype?lemp->tokentype:"()");  lineno++;
   fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
-  fprintf(out,"enum YYMINORTYPE {\n"); lineno++;
+  fprintf(out,"enum YYMINORTYPE<'i> {\n"); lineno++;
   fprintf(out,"    yyinit(),\n"); lineno++;
-  fprintf(out,"    yy0(%sTOKENTYPE),\n",name); lineno++;
+  fprintf(out,"    yy0(%sTOKENTYPE<'i>),\n",name); lineno++;
   for(i=0; i<arraysize; i++){
     if( types[i]==0 ) continue;
     fprintf(out,"    yy%d(%s),\n",i+1,types[i]); lineno++;
@@ -4215,14 +4215,14 @@ void print_stack_union(
   lemon_free(stddt);
   fprintf(out,"}\n"); lineno++;
 
-  fprintf(out,"impl Default for YYMINORTYPE {\n"); lineno++;
-  fprintf(out,"    fn default() -> YYMINORTYPE {\n"); lineno++;
+  fprintf(out,"impl<'i> Default for YYMINORTYPE<'i> {\n"); lineno++;
+  fprintf(out,"    fn default() -> YYMINORTYPE<'i> {\n"); lineno++;
   fprintf(out,"        YYMINORTYPE::yyinit()\n"); lineno++;
   fprintf(out,"    }\n"); lineno++;
   fprintf(out,"}\n"); lineno++;
 
-  fprintf(out,"impl yyStackEntry {\n"); lineno++;
-  fprintf(out,"    fn yy0(self) -> %sTOKENTYPE {\n",name); lineno++;
+  fprintf(out,"impl<'i> yyStackEntry<'i> {\n"); lineno++;
+  fprintf(out,"    fn yy0(self) -> %sTOKENTYPE<'i> {\n",name); lineno++;
   fprintf(out,"        if let YYMINORTYPE::yy0(v) = self.minor {\n"); lineno++;
   fprintf(out,"            v\n"); lineno++;
   fprintf(out,"        } else {\n"); lineno++;

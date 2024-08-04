@@ -62,10 +62,7 @@ fn duplicate_column() {
 fn create_table_without_column() {
     expect_parser_err(
         b"CREATE TABLE t ()",
-        ParserError::SyntaxError {
-            token_type: "RP",
-            found: None,
-        },
+        ParserError::SyntaxError(")".to_owned()),
     );
 }
 
