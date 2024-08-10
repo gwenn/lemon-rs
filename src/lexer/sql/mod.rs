@@ -401,7 +401,7 @@ impl Splitter for Tokenizer {
             b',' => Ok((Some((&data[..1], TK_COMMA)), 1)),
             b'&' => Ok((Some((&data[..1], TK_BITAND)), 1)),
             b'~' => Ok((Some((&data[..1], TK_BITNOT)), 1)),
-            quote @ b'`' | quote @ b'\'' | quote @ b'"' => literal(data, quote),
+            quote @ (b'`' | b'\'' | b'"') => literal(data, quote),
             b'.' => {
                 if let Some(b) = data.get(1) {
                     if b.is_ascii_digit() {
