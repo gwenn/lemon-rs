@@ -1220,7 +1220,7 @@ impl ToTokens for ColumnDefinition {
         if let Some(ref col_type) = self.col_type {
             col_type.to_tokens(s)?;
         }
-        for constraint in self.constraints.iter() {
+        for constraint in &self.constraints {
             constraint.to_tokens(s)?;
         }
         Ok(())
@@ -1432,7 +1432,7 @@ impl ToTokens for ForeignKeyClause {
             comma(columns, s)?;
             s.append(TK_RP, None)?;
         }
-        for arg in self.args.iter() {
+        for arg in &self.args {
             arg.to_tokens(s)?;
         }
         Ok(())

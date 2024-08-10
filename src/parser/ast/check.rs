@@ -194,7 +194,7 @@ impl CreateTableBody {
         {
             let mut generated_count = 0;
             for c in columns.values() {
-                for cs in c.constraints.iter() {
+                for cs in &c.constraints {
                     if let ColumnConstraint::Generated { .. } = cs.constraint {
                         generated_count += 1;
                     }

@@ -96,7 +96,7 @@ fn vtab_args() -> Result<(), Error> {
 #[test]
 fn only_semicolons_no_statements() {
     let sqls = ["", ";", ";;;"];
-    for sql in sqls.iter() {
+    for sql in &sqls {
         let r = parse(sql.as_bytes());
         assert_eq!(r.unwrap(), None);
     }
@@ -110,7 +110,7 @@ fn extra_semicolons_between_statements() {
         "; SELECT 1; SELECT 2",
         ";; SELECT 1;; SELECT 2;;",
     ];
-    for sql in sqls.iter() {
+    for sql in &sqls {
         let mut parser = Parser::new(sql.as_bytes());
         assert!(matches!(
             parser.next().unwrap(),
@@ -132,7 +132,7 @@ fn extra_comments_between_statements() {
         "/* abc */; SELECT 1 /* def */; SELECT 2 /* ghj */",
         "/* abc */;; SELECT 1;/* def */; SELECT 2; /* ghj */; /* klm */",
     ];
-    for sql in sqls.iter() {
+    for sql in &sqls {
         let mut parser = Parser::new(sql.as_bytes());
         assert!(matches!(
             parser.next().unwrap(),
