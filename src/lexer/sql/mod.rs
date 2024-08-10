@@ -33,7 +33,7 @@ pub struct Parser<'input> {
 
 impl<'input> Parser<'input> {
     /// Constructor
-    pub fn new(input: &'input [u8]) -> Parser<'input> {
+    pub fn new(input: &'input [u8]) -> Self {
         let lexer = Tokenizer::new();
         let scanner = Scanner::new(lexer);
         let ctx = Context::new(input);
@@ -253,8 +253,8 @@ pub struct Tokenizer {}
 
 impl Tokenizer {
     /// Constructor
-    pub fn new() -> Tokenizer {
-        Tokenizer {}
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
