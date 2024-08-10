@@ -32,7 +32,7 @@ impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::SyntaxError(s) => {
-                write!(f, "near \"{}\": syntax error", s)
+                write!(f, "near \"{s}\": syntax error")
             }
             Self::UnexpectedEof => f.write_str("unexpected end of input"),
             Self::Custom(s) => f.write_str(s),
