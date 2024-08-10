@@ -1062,21 +1062,18 @@ impl std::hash::Hash for Name {
 }
 /// Ignore case and quote
 impl PartialEq for Name {
-    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         eq_ignore_case_and_quote(self.as_bytes(), other.as_bytes())
     }
 }
 /// Ignore case and quote
 impl PartialEq<str> for Name {
-    #[inline(always)]
     fn eq(&self, other: &str) -> bool {
         eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
     }
 }
 /// Ignore case and quote
 impl PartialEq<&str> for Name {
-    #[inline(always)]
     fn eq(&self, other: &&str) -> bool {
         eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
     }
