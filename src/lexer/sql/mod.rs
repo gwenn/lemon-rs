@@ -417,7 +417,7 @@ impl Splitter for Tokenizer {
             b'[' => {
                 if let Some(i) = memchr(b']', data) {
                     // Keep original quotes / '[' ... ’]'
-                    Ok((Some((&data[0..i + 1], TK_ID)), i + 1))
+                    Ok((Some((&data[0..=i], TK_ID)), i + 1))
                 } else {
                     Err(Error::UnterminatedBracket(None))
                 }
