@@ -31,11 +31,11 @@ pub enum ParserError {
 impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ParserError::SyntaxError(s) => {
-                write!(f, "near \"{}\": syntax error", s)
+            Self::SyntaxError(s) => {
+                write!(f, "near \"{s}\": syntax error")
             }
-            ParserError::UnexpectedEof => f.write_str("unexpected end of input"),
-            ParserError::Custom(s) => f.write_str(s),
+            Self::UnexpectedEof => f.write_str("unexpected end of input"),
+            Self::Custom(s) => f.write_str(s),
         }
     }
 }
@@ -69,7 +69,7 @@ pub struct Context<'input> {
 }
 
 impl<'input> Context<'input> {
-    pub fn new(input: &'input [u8]) -> Context<'input> {
+    pub fn new(input: &'input [u8]) -> Self {
         Context {
             input,
             explain: None,

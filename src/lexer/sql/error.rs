@@ -36,28 +36,28 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Error::Io(ref err) => err.fmt(f),
-            Error::UnrecognizedToken(pos) => write!(f, "unrecognized token at {:?}", pos.unwrap()),
-            Error::UnterminatedLiteral(pos) => {
+            Self::Io(ref err) => err.fmt(f),
+            Self::UnrecognizedToken(pos) => write!(f, "unrecognized token at {:?}", pos.unwrap()),
+            Self::UnterminatedLiteral(pos) => {
                 write!(f, "non-terminated literal at {:?}", pos.unwrap())
             }
-            Error::UnterminatedBracket(pos) => {
+            Self::UnterminatedBracket(pos) => {
                 write!(f, "non-terminated bracket at {:?}", pos.unwrap())
             }
-            Error::UnterminatedBlockComment(pos) => {
+            Self::UnterminatedBlockComment(pos) => {
                 write!(f, "non-terminated block comment at {:?}", pos.unwrap())
             }
-            Error::BadVariableName(pos) => write!(f, "bad variable name at {:?}", pos.unwrap()),
-            Error::BadNumber(pos) => write!(f, "bad number at {:?}", pos.unwrap()),
-            Error::ExpectedEqualsSign(pos) => write!(f, "expected = sign at {:?}", pos.unwrap()),
-            Error::MalformedBlobLiteral(pos) => {
+            Self::BadVariableName(pos) => write!(f, "bad variable name at {:?}", pos.unwrap()),
+            Self::BadNumber(pos) => write!(f, "bad number at {:?}", pos.unwrap()),
+            Self::ExpectedEqualsSign(pos) => write!(f, "expected = sign at {:?}", pos.unwrap()),
+            Self::MalformedBlobLiteral(pos) => {
                 write!(f, "malformed blob literal at {:?}", pos.unwrap())
             }
-            Error::MalformedHexInteger(pos) => {
+            Self::MalformedHexInteger(pos) => {
                 write!(f, "malformed hex integer at {:?}", pos.unwrap())
             }
-            Error::ParserError(ref msg, Some(pos)) => write!(f, "{} at {:?}", msg, pos),
-            Error::ParserError(ref msg, _) => write!(f, "{}", msg),
+            Self::ParserError(ref msg, Some(pos)) => write!(f, "{msg} at {pos:?}"),
+            Self::ParserError(ref msg, _) => write!(f, "{msg}"),
         }
     }
 }
@@ -65,31 +65,31 @@ impl fmt::Display for Error {
 impl error::Error for Error {}
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        Error::Io(err)
+    fn from(err: io::Error) -> Self {
+        Self::Io(err)
     }
 }
 
 impl From<ParserError> for Error {
-    fn from(err: ParserError) -> Error {
-        Error::ParserError(err, None)
+    fn from(err: ParserError) -> Self {
+        Self::ParserError(err, None)
     }
 }
 
 impl ScanError for Error {
     fn position(&mut self, line: u64, column: usize) {
         match *self {
-            Error::Io(_) => {}
-            Error::UnrecognizedToken(ref mut pos) => *pos = Some((line, column)),
-            Error::UnterminatedLiteral(ref mut pos) => *pos = Some((line, column)),
-            Error::UnterminatedBracket(ref mut pos) => *pos = Some((line, column)),
-            Error::UnterminatedBlockComment(ref mut pos) => *pos = Some((line, column)),
-            Error::BadVariableName(ref mut pos) => *pos = Some((line, column)),
-            Error::BadNumber(ref mut pos) => *pos = Some((line, column)),
-            Error::ExpectedEqualsSign(ref mut pos) => *pos = Some((line, column)),
-            Error::MalformedBlobLiteral(ref mut pos) => *pos = Some((line, column)),
-            Error::MalformedHexInteger(ref mut pos) => *pos = Some((line, column)),
-            Error::ParserError(_, ref mut pos) => *pos = Some((line, column)),
+            Self::Io(_) => {}
+            Self::UnrecognizedToken(ref mut pos) => *pos = Some((line, column)),
+            Self::UnterminatedLiteral(ref mut pos) => *pos = Some((line, column)),
+            Self::UnterminatedBracket(ref mut pos) => *pos = Some((line, column)),
+            Self::UnterminatedBlockComment(ref mut pos) => *pos = Some((line, column)),
+            Self::BadVariableName(ref mut pos) => *pos = Some((line, column)),
+            Self::BadNumber(ref mut pos) => *pos = Some((line, column)),
+            Self::ExpectedEqualsSign(ref mut pos) => *pos = Some((line, column)),
+            Self::MalformedBlobLiteral(ref mut pos) => *pos = Some((line, column)),
+            Self::MalformedHexInteger(ref mut pos) => *pos = Some((line, column)),
+            Self::ParserError(_, ref mut pos) => *pos = Some((line, column)),
         }
     }
 }

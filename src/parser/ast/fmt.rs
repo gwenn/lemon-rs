@@ -92,17 +92,17 @@ impl Display for dyn ToTokens {
 impl ToTokens for Cmd {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Cmd::Explain(stmt) => {
+            Self::Explain(stmt) => {
                 s.append(TK_EXPLAIN, None)?;
                 stmt.to_tokens(s)?;
             }
-            Cmd::ExplainQueryPlan(stmt) => {
+            Self::ExplainQueryPlan(stmt) => {
                 s.append(TK_EXPLAIN, None)?;
                 s.append(TK_QUERY, None)?;
                 s.append(TK_PLAN, None)?;
                 stmt.to_tokens(s)?;
             }
-            Cmd::Stmt(stmt) => {
+            Self::Stmt(stmt) => {
                 stmt.to_tokens(s)?;
             }
         }
@@ -119,20 +119,20 @@ impl Display for Cmd {
 impl ToTokens for Stmt {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Stmt::AlterTable(tbl_name, body) => {
+            Self::AlterTable(tbl_name, body) => {
                 s.append(TK_ALTER, None)?;
                 s.append(TK_TABLE, None)?;
                 tbl_name.to_tokens(s)?;
                 body.to_tokens(s)
             }
-            Stmt::Analyze(obj_name) => {
+            Self::Analyze(obj_name) => {
                 s.append(TK_ANALYZE, None)?;
                 if let Some(obj_name) = obj_name {
                     obj_name.to_tokens(s)?;
                 }
                 Ok(())
             }
-            Stmt::Attach { expr, db_name, key } => {
+            Self::Attach { expr, db_name, key } => {
                 s.append(TK_ATTACH, None)?;
                 expr.to_tokens(s)?;
                 s.append(TK_AS, None)?;
@@ -143,7 +143,7 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
-            Stmt::Begin(tx_type, tx_name) => {
+            Self::Begin(tx_type, tx_name) => {
                 s.append(TK_BEGIN, None)?;
                 if let Some(tx_type) = tx_type {
                     tx_type.to_tokens(s)?;
@@ -154,7 +154,7 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
-            Stmt::Commit(tx_name) => {
+            Self::Commit(tx_name) => {
                 s.append(TK_COMMIT, None)?;
                 if let Some(tx_name) = tx_name {
                     s.append(TK_TRANSACTION, None)?;
@@ -162,7 +162,7 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
-            Stmt::CreateIndex {
+            Self::CreateIndex {
                 unique,
                 if_not_exists,
                 idx_name,
@@ -192,7 +192,7 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
-            Stmt::CreateTable {
+            Self::CreateTable {
                 temporary,
                 if_not_exists,
                 tbl_name,
@@ -211,7 +211,7 @@ impl ToTokens for Stmt {
                 tbl_name.to_tokens(s)?;
                 body.to_tokens(s)
             }
-            Stmt::CreateTrigger {
+            Self::CreateTrigger {
                 temporary,
                 if_not_exists,
                 trigger_name,
@@ -255,7 +255,7 @@ impl ToTokens for Stmt {
                 }
                 s.append(TK_END, None)
             }
-            Stmt::CreateView {
+            Self::CreateView {
                 temporary,
                 if_not_exists,
                 view_name,
@@ -281,7 +281,7 @@ impl ToTokens for Stmt {
                 s.append(TK_AS, None)?;
                 select.to_tokens(s)
             }
-            Stmt::CreateVirtualTable {
+            Self::CreateVirtualTable {
                 if_not_exists,
                 tbl_name,
                 module_name,
@@ -304,7 +304,7 @@ impl ToTokens for Stmt {
                 }
                 s.append(TK_RP, None)
             }
-            Stmt::Delete {
+            Self::Delete {
                 with,
                 tbl_name,
                 indexed,
@@ -340,11 +340,11 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
-            Stmt::Detach(expr) => {
+            Self::Detach(expr) => {
                 s.append(TK_DETACH, None)?;
                 expr.to_tokens(s)
             }
-            Stmt::DropIndex {
+            Self::DropIndex {
                 if_exists,
                 idx_name,
             } => {
@@ -356,7 +356,7 @@ impl ToTokens for Stmt {
                 }
                 idx_name.to_tokens(s)
             }
-            Stmt::DropTable {
+            Self::DropTable {
                 if_exists,
                 tbl_name,
             } => {
@@ -368,7 +368,7 @@ impl ToTokens for Stmt {
                 }
                 tbl_name.to_tokens(s)
             }
-            Stmt::DropTrigger {
+            Self::DropTrigger {
                 if_exists,
                 trigger_name,
             } => {
@@ -380,7 +380,7 @@ impl ToTokens for Stmt {
                 }
                 trigger_name.to_tokens(s)
             }
-            Stmt::DropView {
+            Self::DropView {
                 if_exists,
                 view_name,
             } => {
@@ -392,7 +392,7 @@ impl ToTokens for Stmt {
                 }
                 view_name.to_tokens(s)
             }
-            Stmt::Insert {
+            Self::Insert {
                 with,
                 or_conflict,
                 tbl_name,
@@ -426,7 +426,7 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
-            Stmt::Pragma(name, value) => {
+            Self::Pragma(name, value) => {
                 s.append(TK_PRAGMA, None)?;
                 name.to_tokens(s)?;
                 if let Some(value) = value {
@@ -434,18 +434,18 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
-            Stmt::Reindex { obj_name } => {
+            Self::Reindex { obj_name } => {
                 s.append(TK_REINDEX, None)?;
                 if let Some(obj_name) = obj_name {
                     obj_name.to_tokens(s)?;
                 }
                 Ok(())
             }
-            Stmt::Release(name) => {
+            Self::Release(name) => {
                 s.append(TK_RELEASE, None)?;
                 name.to_tokens(s)
             }
-            Stmt::Rollback {
+            Self::Rollback {
                 tx_name,
                 savepoint_name,
             } => {
@@ -460,12 +460,12 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
-            Stmt::Savepoint(name) => {
+            Self::Savepoint(name) => {
                 s.append(TK_SAVEPOINT, None)?;
                 name.to_tokens(s)
             }
-            Stmt::Select(select) => select.to_tokens(s),
-            Stmt::Update {
+            Self::Select(select) => select.to_tokens(s),
+            Self::Update {
                 with,
                 or_conflict,
                 tbl_name,
@@ -513,7 +513,7 @@ impl ToTokens for Stmt {
                 }
                 Ok(())
             }
-            Stmt::Vacuum(name, expr) => {
+            Self::Vacuum(name, expr) => {
                 s.append(TK_VACUUM, None)?;
                 if let Some(ref name) = name {
                     name.to_tokens(s)?;
@@ -531,7 +531,7 @@ impl ToTokens for Stmt {
 impl ToTokens for Expr {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Expr::Between {
+            Self::Between {
                 lhs,
                 not,
                 start,
@@ -546,12 +546,12 @@ impl ToTokens for Expr {
                 s.append(TK_AND, None)?;
                 end.to_tokens(s)
             }
-            Expr::Binary(lhs, op, rhs) => {
+            Self::Binary(lhs, op, rhs) => {
                 lhs.to_tokens(s)?;
                 op.to_tokens(s)?;
                 rhs.to_tokens(s)
             }
-            Expr::Case {
+            Self::Case {
                 base,
                 when_then_pairs,
                 else_expr,
@@ -572,7 +572,7 @@ impl ToTokens for Expr {
                 }
                 s.append(TK_END, None)
             }
-            Expr::Cast { expr, type_name } => {
+            Self::Cast { expr, type_name } => {
                 s.append(TK_CAST, None)?;
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
@@ -582,25 +582,25 @@ impl ToTokens for Expr {
                 }
                 s.append(TK_RP, None)
             }
-            Expr::Collate(expr, collation) => {
+            Self::Collate(expr, collation) => {
                 expr.to_tokens(s)?;
                 s.append(TK_COLLATE, None)?;
                 double_quote(collation, s)
             }
-            Expr::DoublyQualified(db_name, tbl_name, col_name) => {
+            Self::DoublyQualified(db_name, tbl_name, col_name) => {
                 db_name.to_tokens(s)?;
                 s.append(TK_DOT, None)?;
                 tbl_name.to_tokens(s)?;
                 s.append(TK_DOT, None)?;
                 col_name.to_tokens(s)
             }
-            Expr::Exists(subquery) => {
+            Self::Exists(subquery) => {
                 s.append(TK_EXISTS, None)?;
                 s.append(TK_LP, None)?;
                 subquery.to_tokens(s)?;
                 s.append(TK_RP, None)
             }
-            Expr::FunctionCall {
+            Self::FunctionCall {
                 name,
                 distinctness,
                 args,
@@ -626,7 +626,7 @@ impl ToTokens for Expr {
                 }
                 Ok(())
             }
-            Expr::FunctionCallStar { name, filter_over } => {
+            Self::FunctionCallStar { name, filter_over } => {
                 name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
                 s.append(TK_STAR, None)?;
@@ -636,8 +636,8 @@ impl ToTokens for Expr {
                 }
                 Ok(())
             }
-            Expr::Id(id) => id.to_tokens(s),
-            Expr::InList { lhs, not, rhs } => {
+            Self::Id(id) => id.to_tokens(s),
+            Self::InList { lhs, not, rhs } => {
                 lhs.to_tokens(s)?;
                 if *not {
                     s.append(TK_NOT, None)?;
@@ -649,7 +649,7 @@ impl ToTokens for Expr {
                 }
                 s.append(TK_RP, None)
             }
-            Expr::InSelect { lhs, not, rhs } => {
+            Self::InSelect { lhs, not, rhs } => {
                 lhs.to_tokens(s)?;
                 if *not {
                     s.append(TK_NOT, None)?;
@@ -659,7 +659,7 @@ impl ToTokens for Expr {
                 rhs.to_tokens(s)?;
                 s.append(TK_RP, None)
             }
-            Expr::InTable {
+            Self::InTable {
                 lhs,
                 not,
                 rhs,
@@ -678,11 +678,11 @@ impl ToTokens for Expr {
                 }
                 Ok(())
             }
-            Expr::IsNull(sub_expr) => {
+            Self::IsNull(sub_expr) => {
                 sub_expr.to_tokens(s)?;
                 s.append(TK_ISNULL, None)
             }
-            Expr::Like {
+            Self::Like {
                 lhs,
                 not,
                 op,
@@ -701,23 +701,23 @@ impl ToTokens for Expr {
                 }
                 Ok(())
             }
-            Expr::Literal(lit) => lit.to_tokens(s),
-            Expr::Name(name) => name.to_tokens(s),
-            Expr::NotNull(sub_expr) => {
+            Self::Literal(lit) => lit.to_tokens(s),
+            Self::Name(name) => name.to_tokens(s),
+            Self::NotNull(sub_expr) => {
                 sub_expr.to_tokens(s)?;
                 s.append(TK_NOTNULL, None)
             }
-            Expr::Parenthesized(exprs) => {
+            Self::Parenthesized(exprs) => {
                 s.append(TK_LP, None)?;
                 comma(exprs, s)?;
                 s.append(TK_RP, None)
             }
-            Expr::Qualified(qualifier, qualified) => {
+            Self::Qualified(qualifier, qualified) => {
                 qualifier.to_tokens(s)?;
                 s.append(TK_DOT, None)?;
                 qualified.to_tokens(s)
             }
-            Expr::Raise(rt, err) => {
+            Self::Raise(rt, err) => {
                 s.append(TK_RAISE, None)?;
                 s.append(TK_LP, None)?;
                 rt.to_tokens(s)?;
@@ -727,16 +727,16 @@ impl ToTokens for Expr {
                 }
                 s.append(TK_RP, None)
             }
-            Expr::Subquery(query) => {
+            Self::Subquery(query) => {
                 s.append(TK_LP, None)?;
                 query.to_tokens(s)?;
                 s.append(TK_RP, None)
             }
-            Expr::Unary(op, sub_expr) => {
+            Self::Unary(op, sub_expr) => {
                 op.to_tokens(s)?;
                 sub_expr.to_tokens(s)
             }
-            Expr::Variable(var) => match var.chars().next() {
+            Self::Variable(var) => match var.chars().next() {
                 Some(c) if c == '$' || c == '@' || c == '#' || c == ':' => {
                     s.append(TK_VARIABLE, Some(var))
                 }
@@ -756,14 +756,14 @@ impl Display for Expr {
 impl ToTokens for Literal {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Literal::Numeric(ref num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
-            Literal::String(ref str) => s.append(TK_STRING, Some(str)),
-            Literal::Blob(ref blob) => s.append(TK_BLOB, Some(blob)),
-            Literal::Keyword(ref str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
-            Literal::Null => s.append(TK_NULL, None),
-            Literal::CurrentDate => s.append(TK_CTIME_KW, Some("CURRENT_DATE")),
-            Literal::CurrentTime => s.append(TK_CTIME_KW, Some("CURRENT_TIME")),
-            Literal::CurrentTimestamp => s.append(TK_CTIME_KW, Some("CURRENT_TIMESTAMP")),
+            Self::Numeric(ref num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
+            Self::String(ref str) => s.append(TK_STRING, Some(str)),
+            Self::Blob(ref blob) => s.append(TK_BLOB, Some(blob)),
+            Self::Keyword(ref str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
+            Self::Null => s.append(TK_NULL, None),
+            Self::CurrentDate => s.append(TK_CTIME_KW, Some("CURRENT_DATE")),
+            Self::CurrentTime => s.append(TK_CTIME_KW, Some("CURRENT_TIME")),
+            Self::CurrentTimestamp => s.append(TK_CTIME_KW, Some("CURRENT_TIMESTAMP")),
         }
     }
 }
@@ -773,10 +773,10 @@ impl ToTokens for LikeOperator {
         s.append(
             TK_LIKE_KW,
             Some(match self {
-                LikeOperator::Glob => "GLOB",
-                LikeOperator::Like => "LIKE",
-                LikeOperator::Match => "MATCH",
-                LikeOperator::Regexp => "REGEXP",
+                Self::Glob => "GLOB",
+                Self::Like => "LIKE",
+                Self::Match => "MATCH",
+                Self::Regexp => "REGEXP",
             }),
         )
     }
@@ -785,31 +785,31 @@ impl ToTokens for LikeOperator {
 impl ToTokens for Operator {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Operator::Add => s.append(TK_PLUS, None),
-            Operator::And => s.append(TK_AND, None),
-            Operator::ArrowRight => s.append(TK_PTR, Some("->")),
-            Operator::ArrowRightShift => s.append(TK_PTR, Some("->>")),
-            Operator::BitwiseAnd => s.append(TK_BITAND, None),
-            Operator::BitwiseOr => s.append(TK_BITOR, None),
-            Operator::Concat => s.append(TK_CONCAT, None),
-            Operator::Equals => s.append(TK_EQ, None),
-            Operator::Divide => s.append(TK_SLASH, None),
-            Operator::Greater => s.append(TK_GT, None),
-            Operator::GreaterEquals => s.append(TK_GE, None),
-            Operator::Is => s.append(TK_IS, None),
-            Operator::IsNot => {
+            Self::Add => s.append(TK_PLUS, None),
+            Self::And => s.append(TK_AND, None),
+            Self::ArrowRight => s.append(TK_PTR, Some("->")),
+            Self::ArrowRightShift => s.append(TK_PTR, Some("->>")),
+            Self::BitwiseAnd => s.append(TK_BITAND, None),
+            Self::BitwiseOr => s.append(TK_BITOR, None),
+            Self::Concat => s.append(TK_CONCAT, None),
+            Self::Equals => s.append(TK_EQ, None),
+            Self::Divide => s.append(TK_SLASH, None),
+            Self::Greater => s.append(TK_GT, None),
+            Self::GreaterEquals => s.append(TK_GE, None),
+            Self::Is => s.append(TK_IS, None),
+            Self::IsNot => {
                 s.append(TK_IS, None)?;
                 s.append(TK_NOT, None)
             }
-            Operator::LeftShift => s.append(TK_LSHIFT, None),
-            Operator::Less => s.append(TK_LT, None),
-            Operator::LessEquals => s.append(TK_LE, None),
-            Operator::Modulus => s.append(TK_REM, None),
-            Operator::Multiply => s.append(TK_STAR, None),
-            Operator::NotEquals => s.append(TK_NE, None),
-            Operator::Or => s.append(TK_OR, None),
-            Operator::RightShift => s.append(TK_RSHIFT, None),
-            Operator::Substract => s.append(TK_MINUS, None),
+            Self::LeftShift => s.append(TK_LSHIFT, None),
+            Self::Less => s.append(TK_LT, None),
+            Self::LessEquals => s.append(TK_LE, None),
+            Self::Modulus => s.append(TK_REM, None),
+            Self::Multiply => s.append(TK_STAR, None),
+            Self::NotEquals => s.append(TK_NE, None),
+            Self::Or => s.append(TK_OR, None),
+            Self::RightShift => s.append(TK_RSHIFT, None),
+            Self::Substract => s.append(TK_MINUS, None),
         }
     }
 }
@@ -818,10 +818,10 @@ impl ToTokens for UnaryOperator {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(
             match self {
-                UnaryOperator::BitwiseNot => TK_BITNOT,
-                UnaryOperator::Negative => TK_MINUS,
-                UnaryOperator::Not => TK_NOT,
-                UnaryOperator::Positive => TK_PLUS,
+                Self::BitwiseNot => TK_BITNOT,
+                Self::Negative => TK_MINUS,
+                Self::Not => TK_NOT,
+                Self::Positive => TK_PLUS,
             },
             None,
         )
@@ -868,13 +868,13 @@ impl ToTokens for CompoundSelect {
 impl ToTokens for CompoundOperator {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            CompoundOperator::Union => s.append(TK_UNION, None),
-            CompoundOperator::UnionAll => {
+            Self::Union => s.append(TK_UNION, None),
+            Self::UnionAll => {
                 s.append(TK_UNION, None)?;
                 s.append(TK_ALL, None)
             }
-            CompoundOperator::Except => s.append(TK_EXCEPT, None),
-            CompoundOperator::Intersect => s.append(TK_INTERSECT, None),
+            Self::Except => s.append(TK_EXCEPT, None),
+            Self::Intersect => s.append(TK_INTERSECT, None),
         }
     }
 }
@@ -888,7 +888,7 @@ impl Display for CompoundOperator {
 impl ToTokens for OneSelect {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            OneSelect::Select {
+            Self::Select {
                 distinctness,
                 columns,
                 from,
@@ -918,7 +918,7 @@ impl ToTokens for OneSelect {
                 }
                 Ok(())
             }
-            OneSelect::Values(values) => {
+            Self::Values(values) => {
                 for (i, vals) in values.iter().enumerate() {
                     if i == 0 {
                         s.append(TK_VALUES, None)?;
@@ -951,8 +951,8 @@ impl ToTokens for Distinctness {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(
             match self {
-                Distinctness::Distinct => TK_DISTINCT,
-                Distinctness::All => TK_ALL,
+                Self::Distinct => TK_DISTINCT,
+                Self::All => TK_ALL,
             },
             None,
         )
@@ -962,15 +962,15 @@ impl ToTokens for Distinctness {
 impl ToTokens for ResultColumn {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            ResultColumn::Expr(expr, alias) => {
+            Self::Expr(expr, alias) => {
                 expr.to_tokens(s)?;
                 if let Some(alias) = alias {
                     alias.to_tokens(s)?;
                 }
                 Ok(())
             }
-            ResultColumn::Star => s.append(TK_STAR, None),
-            ResultColumn::TableStar(tbl_name) => {
+            Self::Star => s.append(TK_STAR, None),
+            Self::TableStar(tbl_name) => {
                 tbl_name.to_tokens(s)?;
                 s.append(TK_DOT, None)?;
                 s.append(TK_STAR, None)
@@ -982,11 +982,11 @@ impl ToTokens for ResultColumn {
 impl ToTokens for As {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            As::As(ref name) => {
+            Self::As(ref name) => {
                 s.append(TK_AS, None)?;
                 name.to_tokens(s)
             }
-            As::Elided(ref name) => name.to_tokens(s),
+            Self::Elided(ref name) => name.to_tokens(s),
         }
     }
 }
@@ -1005,7 +1005,7 @@ impl ToTokens for JoinedSelectTable {
 impl ToTokens for SelectTable {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            SelectTable::Table(name, alias, indexed) => {
+            Self::Table(name, alias, indexed) => {
                 name.to_tokens(s)?;
                 if let Some(alias) = alias {
                     alias.to_tokens(s)?;
@@ -1015,7 +1015,7 @@ impl ToTokens for SelectTable {
                 }
                 Ok(())
             }
-            SelectTable::TableCall(name, exprs, alias) => {
+            Self::TableCall(name, exprs, alias) => {
                 name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
                 if let Some(exprs) = exprs {
@@ -1027,7 +1027,7 @@ impl ToTokens for SelectTable {
                 }
                 Ok(())
             }
-            SelectTable::Select(select, alias) => {
+            Self::Select(select, alias) => {
                 s.append(TK_LP, None)?;
                 select.to_tokens(s)?;
                 s.append(TK_RP, None)?;
@@ -1036,7 +1036,7 @@ impl ToTokens for SelectTable {
                 }
                 Ok(())
             }
-            SelectTable::Sub(from, alias) => {
+            Self::Sub(from, alias) => {
                 s.append(TK_LP, None)?;
                 from.to_tokens(s)?;
                 s.append(TK_RP, None)?;
@@ -1052,8 +1052,8 @@ impl ToTokens for SelectTable {
 impl ToTokens for JoinOperator {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            JoinOperator::Comma => s.append(TK_COMMA, None),
-            JoinOperator::TypedJoin(join_type) => {
+            Self::Comma => s.append(TK_COMMA, None),
+            Self::TypedJoin(join_type) => {
                 if let Some(ref join_type) = join_type {
                     join_type.to_tokens(s)?;
                 }
@@ -1065,25 +1065,25 @@ impl ToTokens for JoinOperator {
 
 impl ToTokens for JoinType {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if self.contains(JoinType::NATURAL) {
+        if self.contains(Self::NATURAL) {
             s.append(TK_JOIN_KW, Some("NATURAL"))?;
         }
-        if self.contains(JoinType::INNER) {
-            if self.contains(JoinType::CROSS) {
+        if self.contains(Self::INNER) {
+            if self.contains(Self::CROSS) {
                 s.append(TK_JOIN_KW, Some("CROSS"))?;
             }
             s.append(TK_JOIN_KW, Some("INNER"))?;
         } else {
-            if self.contains(JoinType::LEFT) {
-                if self.contains(JoinType::RIGHT) {
+            if self.contains(Self::LEFT) {
+                if self.contains(Self::RIGHT) {
                     s.append(TK_JOIN_KW, Some("FULL"))?;
                 } else {
                     s.append(TK_JOIN_KW, Some("LEFT"))?;
                 }
-            } else if self.contains(JoinType::RIGHT) {
+            } else if self.contains(Self::RIGHT) {
                 s.append(TK_JOIN_KW, Some("RIGHT"))?;
             }
-            if self.contains(JoinType::OUTER) {
+            if self.contains(Self::OUTER) {
                 s.append(TK_JOIN_KW, Some("OUTER"))?;
             }
         }
@@ -1094,11 +1094,11 @@ impl ToTokens for JoinType {
 impl ToTokens for JoinConstraint {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            JoinConstraint::On(expr) => {
+            Self::On(expr) => {
                 s.append(TK_ON, None)?;
                 expr.to_tokens(s)
             }
-            JoinConstraint::Using(col_names) => {
+            Self::Using(col_names) => {
                 s.append(TK_USING, None)?;
                 s.append(TK_LP, None)?;
                 comma(col_names.deref(), s)?;
@@ -1157,23 +1157,23 @@ impl ToTokens for QualifiedName {
 impl ToTokens for AlterTableBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            AlterTableBody::RenameTo(name) => {
+            Self::RenameTo(name) => {
                 s.append(TK_RENAME, None)?;
                 s.append(TK_TO, None)?;
                 name.to_tokens(s)
             }
-            AlterTableBody::AddColumn(def) => {
+            Self::AddColumn(def) => {
                 s.append(TK_ADD, None)?;
                 s.append(TK_COLUMNKW, None)?;
                 def.to_tokens(s)
             }
-            AlterTableBody::RenameColumn { old, new } => {
+            Self::RenameColumn { old, new } => {
                 s.append(TK_RENAME, None)?;
                 old.to_tokens(s)?;
                 s.append(TK_TO, None)?;
                 new.to_tokens(s)
             }
-            AlterTableBody::DropColumn(name) => {
+            Self::DropColumn(name) => {
                 s.append(TK_DROP, None)?;
                 s.append(TK_COLUMNKW, None)?;
                 name.to_tokens(s)
@@ -1185,7 +1185,7 @@ impl ToTokens for AlterTableBody {
 impl ToTokens for CreateTableBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            CreateTableBody::ColumnsAndConstraints {
+            Self::ColumnsAndConstraints {
                 columns,
                 constraints,
                 options,
@@ -1206,7 +1206,7 @@ impl ToTokens for CreateTableBody {
                 }
                 Ok(())
             }
-            CreateTableBody::AsSelect(select) => {
+            Self::AsSelect(select) => {
                 s.append(TK_AS, None)?;
                 select.to_tokens(s)
             }
@@ -1220,7 +1220,7 @@ impl ToTokens for ColumnDefinition {
         if let Some(ref col_type) = self.col_type {
             col_type.to_tokens(s)?;
         }
-        for constraint in self.constraints.iter() {
+        for constraint in &self.constraints {
             constraint.to_tokens(s)?;
         }
         Ok(())
@@ -1240,7 +1240,7 @@ impl ToTokens for NamedColumnConstraint {
 impl ToTokens for ColumnConstraint {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            ColumnConstraint::PrimaryKey {
+            Self::PrimaryKey {
                 order,
                 conflict_clause,
                 auto_increment,
@@ -1260,7 +1260,7 @@ impl ToTokens for ColumnConstraint {
                 }
                 Ok(())
             }
-            ColumnConstraint::NotNull {
+            Self::NotNull {
                 nullable,
                 conflict_clause,
             } => {
@@ -1275,7 +1275,7 @@ impl ToTokens for ColumnConstraint {
                 }
                 Ok(())
             }
-            ColumnConstraint::Unique(conflict_clause) => {
+            Self::Unique(conflict_clause) => {
                 s.append(TK_UNIQUE, None)?;
                 if let Some(conflict_clause) = conflict_clause {
                     s.append(TK_ON, None)?;
@@ -1284,22 +1284,22 @@ impl ToTokens for ColumnConstraint {
                 }
                 Ok(())
             }
-            ColumnConstraint::Check(expr) => {
+            Self::Check(expr) => {
                 s.append(TK_CHECK, None)?;
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
                 s.append(TK_RP, None)
             }
-            ColumnConstraint::Default(expr) => {
+            Self::Default(expr) => {
                 s.append(TK_DEFAULT, None)?;
                 expr.to_tokens(s)
             }
-            ColumnConstraint::Defer(deref_clause) => deref_clause.to_tokens(s),
-            ColumnConstraint::Collate { collation_name } => {
+            Self::Defer(deref_clause) => deref_clause.to_tokens(s),
+            Self::Collate { collation_name } => {
                 s.append(TK_COLLATE, None)?;
                 collation_name.to_tokens(s)
             }
-            ColumnConstraint::ForeignKey {
+            Self::ForeignKey {
                 clause,
                 deref_clause,
             } => {
@@ -1310,7 +1310,7 @@ impl ToTokens for ColumnConstraint {
                 }
                 Ok(())
             }
-            ColumnConstraint::Generated { expr, typ } => {
+            Self::Generated { expr, typ } => {
                 s.append(TK_AS, None)?;
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
@@ -1337,7 +1337,7 @@ impl ToTokens for NamedTableConstraint {
 impl ToTokens for TableConstraint {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            TableConstraint::PrimaryKey {
+            Self::PrimaryKey {
                 columns,
                 auto_increment,
                 conflict_clause,
@@ -1357,7 +1357,7 @@ impl ToTokens for TableConstraint {
                 }
                 Ok(())
             }
-            TableConstraint::Unique {
+            Self::Unique {
                 columns,
                 conflict_clause,
             } => {
@@ -1372,13 +1372,13 @@ impl ToTokens for TableConstraint {
                 }
                 Ok(())
             }
-            TableConstraint::Check(expr) => {
+            Self::Check(expr) => {
                 s.append(TK_CHECK, None)?;
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
                 s.append(TK_RP, None)
             }
-            TableConstraint::ForeignKey {
+            Self::ForeignKey {
                 columns,
                 clause,
                 deref_clause,
@@ -1403,8 +1403,8 @@ impl ToTokens for SortOrder {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(
             match self {
-                SortOrder::Asc => TK_ASC,
-                SortOrder::Desc => TK_DESC,
+                Self::Asc => TK_ASC,
+                Self::Desc => TK_DESC,
             },
             None,
         )
@@ -1416,8 +1416,8 @@ impl ToTokens for NullsOrder {
         s.append(TK_NULLS, None)?;
         s.append(
             match self {
-                NullsOrder::First => TK_FIRST,
-                NullsOrder::Last => TK_LAST,
+                Self::First => TK_FIRST,
+                Self::Last => TK_LAST,
             },
             None,
         )
@@ -1432,7 +1432,7 @@ impl ToTokens for ForeignKeyClause {
             comma(columns, s)?;
             s.append(TK_RP, None)?;
         }
-        for arg in self.args.iter() {
+        for arg in &self.args {
             arg.to_tokens(s)?;
         }
         Ok(())
@@ -1442,22 +1442,22 @@ impl ToTokens for ForeignKeyClause {
 impl ToTokens for RefArg {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            RefArg::OnDelete(ref action) => {
+            Self::OnDelete(ref action) => {
                 s.append(TK_ON, None)?;
                 s.append(TK_DELETE, None)?;
                 action.to_tokens(s)
             }
-            RefArg::OnInsert(ref action) => {
+            Self::OnInsert(ref action) => {
                 s.append(TK_ON, None)?;
                 s.append(TK_INSERT, None)?;
                 action.to_tokens(s)
             }
-            RefArg::OnUpdate(ref action) => {
+            Self::OnUpdate(ref action) => {
                 s.append(TK_ON, None)?;
                 s.append(TK_UPDATE, None)?;
                 action.to_tokens(s)
             }
-            RefArg::Match(ref name) => {
+            Self::Match(ref name) => {
                 s.append(TK_MATCH, None)?;
                 name.to_tokens(s)
             }
@@ -1468,17 +1468,17 @@ impl ToTokens for RefArg {
 impl ToTokens for RefAct {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            RefAct::SetNull => {
+            Self::SetNull => {
                 s.append(TK_SET, None)?;
                 s.append(TK_NULL, None)
             }
-            RefAct::SetDefault => {
+            Self::SetDefault => {
                 s.append(TK_SET, None)?;
                 s.append(TK_DEFAULT, None)
             }
-            RefAct::Cascade => s.append(TK_CASCADE, None),
-            RefAct::Restrict => s.append(TK_RESTRICT, None),
-            RefAct::NoAction => {
+            Self::Cascade => s.append(TK_CASCADE, None),
+            Self::Restrict => s.append(TK_RESTRICT, None),
+            Self::NoAction => {
                 s.append(TK_NO, None)?;
                 s.append(TK_ACTION, None)
             }
@@ -1504,8 +1504,8 @@ impl ToTokens for InitDeferredPred {
         s.append(TK_INITIALLY, None)?;
         s.append(
             match self {
-                InitDeferredPred::InitiallyDeferred => TK_DEFERRED,
-                InitDeferredPred::InitiallyImmediate => TK_IMMEDIATE,
+                Self::InitiallyDeferred => TK_DEFERRED,
+                Self::InitiallyImmediate => TK_IMMEDIATE,
             },
             None,
         )
@@ -1529,12 +1529,12 @@ impl ToTokens for IndexedColumn {
 impl ToTokens for Indexed {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Indexed::IndexedBy(ref name) => {
+            Self::IndexedBy(ref name) => {
                 s.append(TK_INDEXED, None)?;
                 s.append(TK_BY, None)?;
                 name.to_tokens(s)
             }
-            Indexed::NotIndexed => {
+            Self::NotIndexed => {
                 s.append(TK_NOT, None)?;
                 s.append(TK_INDEXED, None)
             }
@@ -1570,14 +1570,14 @@ impl ToTokens for Limit {
 impl ToTokens for InsertBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            InsertBody::Select(select, upsert) => {
+            Self::Select(select, upsert) => {
                 select.to_tokens(s)?;
                 if let Some(upsert) = upsert {
                     upsert.to_tokens(s)?;
                 }
                 Ok(())
             }
-            InsertBody::DefaultValues => {
+            Self::DefaultValues => {
                 s.append(TK_DEFAULT, None)?;
                 s.append(TK_VALUES, None)
             }
@@ -1602,11 +1602,11 @@ impl ToTokens for Set {
 impl ToTokens for PragmaBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            PragmaBody::Equals(value) => {
+            Self::Equals(value) => {
                 s.append(TK_EQ, None)?;
                 value.to_tokens(s)
             }
-            PragmaBody::Call(value) => {
+            Self::Call(value) => {
                 s.append(TK_LP, None)?;
                 value.to_tokens(s)?;
                 s.append(TK_RP, None)
@@ -1618,9 +1618,9 @@ impl ToTokens for PragmaBody {
 impl ToTokens for TriggerTime {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            TriggerTime::Before => s.append(TK_BEFORE, None),
-            TriggerTime::After => s.append(TK_AFTER, None),
-            TriggerTime::InsteadOf => {
+            Self::Before => s.append(TK_BEFORE, None),
+            Self::After => s.append(TK_AFTER, None),
+            Self::InsteadOf => {
                 s.append(TK_INSTEAD, None)?;
                 s.append(TK_OF, None)
             }
@@ -1631,10 +1631,10 @@ impl ToTokens for TriggerTime {
 impl ToTokens for TriggerEvent {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            TriggerEvent::Delete => s.append(TK_DELETE, None),
-            TriggerEvent::Insert => s.append(TK_INSERT, None),
-            TriggerEvent::Update => s.append(TK_UPDATE, None),
-            TriggerEvent::UpdateOf(ref col_names) => {
+            Self::Delete => s.append(TK_DELETE, None),
+            Self::Insert => s.append(TK_INSERT, None),
+            Self::Update => s.append(TK_UPDATE, None),
+            Self::UpdateOf(ref col_names) => {
                 s.append(TK_UPDATE, None)?;
                 s.append(TK_OF, None)?;
                 comma(col_names.deref(), s)
@@ -1646,7 +1646,7 @@ impl ToTokens for TriggerEvent {
 impl ToTokens for TriggerCmd {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            TriggerCmd::Update {
+            Self::Update {
                 or_conflict,
                 tbl_name,
                 sets,
@@ -1671,7 +1671,7 @@ impl ToTokens for TriggerCmd {
                 }
                 Ok(())
             }
-            TriggerCmd::Insert {
+            Self::Insert {
                 or_conflict,
                 tbl_name,
                 col_names,
@@ -1705,7 +1705,7 @@ impl ToTokens for TriggerCmd {
                 }
                 Ok(())
             }
-            TriggerCmd::Delete {
+            Self::Delete {
                 tbl_name,
                 where_clause,
             } => {
@@ -1718,7 +1718,7 @@ impl ToTokens for TriggerCmd {
                 }
                 Ok(())
             }
-            TriggerCmd::Select(select) => select.to_tokens(s),
+            Self::Select(select) => select.to_tokens(s),
         }
     }
 }
@@ -1727,11 +1727,11 @@ impl ToTokens for ResolveType {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(
             match self {
-                ResolveType::Rollback => TK_ROLLBACK,
-                ResolveType::Abort => TK_ABORT,
-                ResolveType::Fail => TK_FAIL,
-                ResolveType::Ignore => TK_IGNORE,
-                ResolveType::Replace => TK_REPLACE,
+                Self::Rollback => TK_ROLLBACK,
+                Self::Abort => TK_ABORT,
+                Self::Fail => TK_FAIL,
+                Self::Ignore => TK_IGNORE,
+                Self::Replace => TK_REPLACE,
             },
             None,
         )
@@ -1790,8 +1790,8 @@ impl ToTokens for Type {
 impl ToTokens for TypeSize {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            TypeSize::MaxSize(size) => size.to_tokens(s),
-            TypeSize::TypeSize(size1, size2) => {
+            Self::MaxSize(size) => size.to_tokens(s),
+            Self::TypeSize(size1, size2) => {
                 size1.to_tokens(s)?;
                 s.append(TK_COMMA, None)?;
                 size2.to_tokens(s)
@@ -1804,9 +1804,9 @@ impl ToTokens for TransactionType {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(
             match self {
-                TransactionType::Deferred => TK_DEFERRED,
-                TransactionType::Immediate => TK_IMMEDIATE,
-                TransactionType::Exclusive => TK_EXCLUSIVE,
+                Self::Deferred => TK_DEFERRED,
+                Self::Immediate => TK_IMMEDIATE,
+                Self::Exclusive => TK_EXCLUSIVE,
             },
             None,
         )
@@ -1844,7 +1844,7 @@ impl ToTokens for UpsertIndex {
 impl ToTokens for UpsertDo {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            UpsertDo::Set { sets, where_clause } => {
+            Self::Set { sets, where_clause } => {
                 s.append(TK_DO, None)?;
                 s.append(TK_UPDATE, None)?;
                 s.append(TK_SET, None)?;
@@ -1855,7 +1855,7 @@ impl ToTokens for UpsertDo {
                 }
                 Ok(())
             }
-            UpsertDo::Nothing => {
+            Self::Nothing => {
                 s.append(TK_DO, None)?;
                 s.append(TK_NOTHING, None)
             }
@@ -1883,8 +1883,8 @@ impl ToTokens for FunctionTail {
 impl ToTokens for Over {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Over::Window(ref window) => window.to_tokens(s),
-            Over::Name(ref name) => name.to_tokens(s),
+            Self::Window(ref window) => window.to_tokens(s),
+            Self::Name(ref name) => name.to_tokens(s),
         }
     }
 }
@@ -1943,9 +1943,9 @@ impl ToTokens for FrameMode {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(
             match self {
-                FrameMode::Groups => TK_GROUPS,
-                FrameMode::Range => TK_RANGE,
-                FrameMode::Rows => TK_ROWS,
+                Self::Groups => TK_GROUPS,
+                Self::Range => TK_RANGE,
+                Self::Rows => TK_ROWS,
             },
             None,
         )
@@ -1955,23 +1955,23 @@ impl ToTokens for FrameMode {
 impl ToTokens for FrameBound {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            FrameBound::CurrentRow => {
+            Self::CurrentRow => {
                 s.append(TK_CURRENT, None)?;
                 s.append(TK_ROW, None)
             }
-            FrameBound::Following(value) => {
+            Self::Following(value) => {
                 value.to_tokens(s)?;
                 s.append(TK_FOLLOWING, None)
             }
-            FrameBound::Preceding(value) => {
+            Self::Preceding(value) => {
                 value.to_tokens(s)?;
                 s.append(TK_PRECEDING, None)
             }
-            FrameBound::UnboundedFollowing => {
+            Self::UnboundedFollowing => {
                 s.append(TK_UNBOUNDED, None)?;
                 s.append(TK_FOLLOWING, None)
             }
-            FrameBound::UnboundedPreceding => {
+            Self::UnboundedPreceding => {
                 s.append(TK_UNBOUNDED, None)?;
                 s.append(TK_PRECEDING, None)
             }
@@ -1982,16 +1982,16 @@ impl ToTokens for FrameBound {
 impl ToTokens for FrameExclude {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            FrameExclude::NoOthers => {
+            Self::NoOthers => {
                 s.append(TK_NO, None)?;
                 s.append(TK_OTHERS, None)
             }
-            FrameExclude::CurrentRow => {
+            Self::CurrentRow => {
                 s.append(TK_CURRENT, None)?;
                 s.append(TK_ROW, None)
             }
-            FrameExclude::Group => s.append(TK_GROUP, None),
-            FrameExclude::Ties => s.append(TK_TIES, None),
+            Self::Group => s.append(TK_GROUP, None),
+            Self::Ties => s.append(TK_TIES, None),
         }
     }
 }

@@ -33,7 +33,7 @@ pub struct Parser<'input> {
 
 impl<'input> Parser<'input> {
     /// Constructor
-    pub fn new(input: &'input [u8]) -> Parser<'input> {
+    pub fn new(input: &'input [u8]) -> Self {
         let lexer = Tokenizer::new();
         let scanner = Scanner::new(lexer);
         let ctx = Context::new(input);
@@ -253,8 +253,8 @@ pub struct Tokenizer {}
 
 impl Tokenizer {
     /// Constructor
-    pub fn new() -> Tokenizer {
-        Tokenizer {}
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -401,7 +401,7 @@ impl Splitter for Tokenizer {
             b',' => Ok((Some((&data[..1], TK_COMMA)), 1)),
             b'&' => Ok((Some((&data[..1], TK_BITAND)), 1)),
             b'~' => Ok((Some((&data[..1], TK_BITNOT)), 1)),
-            quote @ b'`' | quote @ b'\'' | quote @ b'"' => literal(data, quote),
+            quote @ (b'`' | b'\'' | b'"') => literal(data, quote),
             b'.' => {
                 if let Some(b) = data.get(1) {
                     if b.is_ascii_digit() {
@@ -417,7 +417,7 @@ impl Splitter for Tokenizer {
             b'[' => {
                 if let Some(i) = memchr(b']', data) {
                     // Keep original quotes / '[' ... ’]'
-                    Ok((Some((&data[0..i + 1], TK_ID)), i + 1))
+                    Ok((Some((&data[0..=i], TK_ID)), i + 1))
                 } else {
                     Err(Error::UnterminatedBracket(None))
                 }

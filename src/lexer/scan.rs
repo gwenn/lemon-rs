@@ -60,8 +60,8 @@ pub struct Scanner<S: Splitter> {
 
 impl<S: Splitter> Scanner<S> {
     /// Constructor
-    pub fn new(splitter: S) -> Scanner<S> {
-        Scanner {
+    pub fn new(splitter: S) -> Self {
+        Self {
             offset: 0,
             mark: (0, 0, 0),
             splitter,
