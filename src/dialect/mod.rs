@@ -48,7 +48,7 @@ pub(crate) const MAX_KEYWORD_LEN: usize = 17;
 pub fn keyword_token(word: &[u8]) -> Option<TokenType> {
     KEYWORDS
         .get(UncasedStr::new(unsafe { str::from_utf8_unchecked(word) }))
-        .cloned()
+        .copied()
 }
 
 pub(crate) fn is_identifier(name: &str) -> bool {
