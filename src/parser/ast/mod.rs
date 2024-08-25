@@ -249,7 +249,7 @@ pub enum Stmt {
         tbl_name: QualifiedName,
         /// `INDEXED`
         indexed: Option<Indexed>,
-        /// `SET` assigments
+        /// `SET` assignments
         sets: Vec<Set>,
         /// `FROM`
         from: Option<FromClause>,
@@ -603,7 +603,7 @@ pub enum Operator {
     /// `>>`
     RightShift,
     /// `-`
-    Substract,
+    Subtract,
 }
 
 impl From<YYCODETYPE> for Operator {
@@ -622,7 +622,7 @@ impl From<YYCODETYPE> for Operator {
             x if x == TK_LSHIFT as YYCODETYPE => Self::LeftShift,
             x if x == TK_RSHIFT as YYCODETYPE => Self::RightShift,
             x if x == TK_PLUS as YYCODETYPE => Self::Add,
-            x if x == TK_MINUS as YYCODETYPE => Self::Substract,
+            x if x == TK_MINUS as YYCODETYPE => Self::Subtract,
             x if x == TK_STAR as YYCODETYPE => Self::Multiply,
             x if x == TK_SLASH as YYCODETYPE => Self::Divide,
             x if x == TK_REM as YYCODETYPE => Self::Modulus,
@@ -1583,7 +1583,7 @@ pub enum TriggerCmd {
         or_conflict: Option<ResolveType>,
         /// table name
         tbl_name: Name,
-        /// `SET` assigments
+        /// `SET` assignments
         sets: Vec<Set>,
         /// `FROM`
         from: Option<FromClause>,
@@ -1758,7 +1758,7 @@ pub struct FunctionTail {
 // https://sqlite.org/syntax/over-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Over {
-    /// Window defintion
+    /// Window definition
     Window(Window),
     /// Window name
     Name(Name),

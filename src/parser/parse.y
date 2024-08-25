@@ -236,7 +236,7 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 //
 %token_class id  ID|INDEXED.
 
-// And "ids" is an identifer-or-string.
+// And "ids" is an identifier-or-string.
 //
 %token_class ids  ID|STRING.
 
@@ -663,7 +663,7 @@ joinop(X) ::= JOIN_KW(A) nm(B) JOIN.
 joinop(X) ::= JOIN_KW(A) nm(B) nm(C) JOIN.
                   {X = JoinOperator::from(A, Some(B), Some(C))?;/*X-overwrites-A*/}
 
-// There is a parsing abiguity in an upsert statement that uses a
+// There is a parsing ambiguity in an upsert statement that uses a
 // SELECT on the RHS of a the INSERT:
 //
 //      INSERT INTO tab SELECT * FROM aaa JOIN bbb ON CONFLICT ...
