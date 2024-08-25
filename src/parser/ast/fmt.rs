@@ -809,7 +809,7 @@ impl ToTokens for Operator {
             Self::NotEquals => s.append(TK_NE, None),
             Self::Or => s.append(TK_OR, None),
             Self::RightShift => s.append(TK_RSHIFT, None),
-            Self::Substract => s.append(TK_MINUS, None),
+            Self::Subtract => s.append(TK_MINUS, None),
         }
     }
 }

@@ -18,7 +18,7 @@ pub struct Context {
 #[derive(Debug)]
 pub enum Operator {
     Add,
-    Substract,
+    Subtract,
     Multiply,
     Divide,
 }
@@ -115,7 +115,7 @@ fn init_logger() -> Result<(), SetLoggerError> {
 program ::= expr(A). { self.ctx.expr = Some(A); }
 
 %type expr { Expr }
-expr(A) ::= expr(B) MINUS expr(C). { A = Expr::binary(Operator::Substract, B, C); }
+expr(A) ::= expr(B) MINUS expr(C). { A = Expr::binary(Operator::Subtract, B, C); }
 expr(A) ::= expr(B) PLUS expr(C). { A = Expr::binary(Operator::Add, B, C); }
 expr(A) ::= expr(B) TIMES expr(C). { A = Expr::binary(Operator::Multiply, B, C); }
 expr(A) ::= expr(B) DIVIDE expr(C). { A = Expr::binary(Operator::Divide, B, C); }
