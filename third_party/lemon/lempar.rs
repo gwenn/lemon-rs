@@ -164,7 +164,7 @@
 ** actually contains the reduce action for the second half of the
 ** SHIFTREDUCE.
 */
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[derive(Default)]
 pub struct yyStackEntry<'i> {
     stateno: YYACTIONTYPE, /* The state-number, or reduce action in SHIFTREDUCE */
@@ -176,7 +176,7 @@ pub struct yyStackEntry<'i> {
 
 /* The state of the parser is completely contained in an instance of
 ** the following structure */
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 pub struct yyParser<'input> {
     yyidx: usize, /* Index to top element of the stack */
     #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
@@ -251,7 +251,7 @@ static TARGET: &str = "Parse";
 */
 #[cfg(not(feature = "NDEBUG"))]
 #[rustfmt::skip]
-#[allow(non_upper_case_globals)]
+#[expect(non_upper_case_globals)]
 static yyRuleName: [&str; YYNRULE] = [
 %%
 ];
@@ -318,7 +318,7 @@ impl yyParser<'_> {
 ** Clear all secondary memory allocations from the parser
 */
 impl yyParser<'_> {
-    #[allow(non_snake_case)]
+    #[expect(non_snake_case)]
     pub fn ParseFinalize(&mut self) {
         while self.yyidx > 0 {
             self.yy_pop_parser_stack();
@@ -332,7 +332,7 @@ impl yyParser<'_> {
 */
 #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
 impl yyParser<'_> {
-    #[allow(non_snake_case)]
+    #[expect(non_snake_case)]
     pub fn ParseStackPeak(&self) -> usize {
         self.yyhwm
     }
@@ -388,7 +388,7 @@ fn ParseCoverage(/*FILE *out*/) -> i32 {
 ** Find the appropriate action for a parser given the terminal
 ** look-ahead token iLookAhead.
 */
-#[allow(non_snake_case)]
+#[expect(non_snake_case)]
 fn yy_find_shift_action(
     mut iLookAhead: YYCODETYPE, /* The look-ahead token */
     stateno: YYACTIONTYPE,      /* Current state number */
@@ -452,7 +452,7 @@ fn yy_find_shift_action(
 ** Find the appropriate action for a parser given the non-terminal
 ** look-ahead token iLookAhead.
 */
-#[allow(non_snake_case)]
+#[expect(non_snake_case)]
 fn yy_find_reduce_action(
     stateno: YYACTIONTYPE,  /* Current state number */
     iLookAhead: YYCODETYPE, /* The look-ahead token */
@@ -486,11 +486,11 @@ fn yy_find_reduce_action(
 ** Print tracing information for a SHIFT action
 */
 impl yyParser<'_> {
-    #[allow(non_snake_case)]
+    #[expect(non_snake_case)]
     #[cfg(feature = "NDEBUG")]
     fn yyTraceShift(&self, _: YYACTIONTYPE, _: &str) {
     }
-    #[allow(non_snake_case)]
+    #[expect(non_snake_case)]
     #[cfg(not(feature = "NDEBUG"))]
     fn yyTraceShift(&self, yyNewState: YYACTIONTYPE, zTag: &str) {
         let yytos = &self[0];
@@ -515,7 +515,7 @@ impl yyParser<'_> {
 ** Perform a shift action.
 */
 impl<'input> yyParser<'input> {
-    #[allow(non_snake_case)]
+    #[expect(non_snake_case)]
     fn yy_shift(
         &mut self,
         mut yyNewState: YYACTIONTYPE,    /* The new state to shift in */
@@ -542,14 +542,14 @@ impl<'input> yyParser<'input> {
 
 /* For rule J, yyRuleInfoLhs[J] contains the symbol on the left-hand side
 ** of that rule */
-#[allow(non_upper_case_globals)]
+#[expect(non_upper_case_globals)]
 static yyRuleInfoLhs: [YYCODETYPE; YYNRULE] = [
 %%
 ];
 
 /* For rule J, yyRuleInfoNRhs[J] contains the negative of the number
 ** of symbols on the right-hand side of that rule. */
-#[allow(non_upper_case_globals)]
+#[expect(non_upper_case_globals)]
 static yyRuleInfoNRhs: [i8; YYNRULE] = [
 %%
 ];
@@ -689,7 +689,7 @@ impl yyParser<'_> {
 ** None.
 */
 impl<'input> yyParser<'input> {
-    #[allow(non_snake_case)]
+    #[expect(non_snake_case)]
     pub fn Parse(
         &mut self,
         yymajor: TokenType,                  /* The major token code number */
