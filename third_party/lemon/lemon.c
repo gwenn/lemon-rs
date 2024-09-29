@@ -4197,10 +4197,10 @@ void print_stack_union(
   /* Print out the definition of YYTOKENTYPE and YYMINORTYPE */
   name = lemp->name ? lemp->name : "Parse";
   lineno = *plineno;
-  fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
+  fprintf(out,"#[expect(non_camel_case_types)]\n"); lineno++;
   fprintf(out,"type %sTOKENTYPE<'i> = %s;\n",name,
     lemp->tokentype?lemp->tokentype:"()");  lineno++;
-  fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
+  fprintf(out,"#[expect(non_camel_case_types)]\n"); lineno++;
   fprintf(out,"enum YYMINORTYPE<'i> {\n"); lineno++;
   fprintf(out,"    yyinit(),\n"); lineno++;
   fprintf(out,"    yy0(%sTOKENTYPE<'i>),\n",name); lineno++;
@@ -4489,7 +4489,7 @@ void ReportTable(
   if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
   else                    prefix = "";
   if( mhflag ){
-    fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
+    fprintf(out,"#[expect(non_camel_case_types)]\n"); lineno++;
     fprintf(out,"#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]\n"); lineno++;
     fprintf(out,"#[repr(%s)]\n",
       minimum_size_type(0, lemp->nsymbol+1, 0)); lineno++;
@@ -4504,11 +4504,9 @@ void ReportTable(
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate the defines */
-  fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
   fprintf(out,"pub type YYCODETYPE = %s; // unsigned\n",
     minimum_size_type(0, lemp->nsymbol+1, &szCodeType)); lineno++;
   fprintf(out,"const YYNOCODE: YYCODETYPE = %d;\n",lemp->nsymbol);  lineno++;
-  fprintf(out,"#[allow(non_camel_case_types)]\n"); lineno++;
   fprintf(out,"type YYACTIONTYPE = %s; // unsigned\n",
     minimum_size_type(0,lemp->maxAction,&szActionType)); lineno++;
   if( lemp->wildcard ){
@@ -4648,7 +4646,7 @@ void ReportTable(
   lemp->tablesize += n*szActionType;
   fprintf(out,"macro_rules! YY_ACTTAB_COUNT {() => {%d}}\n", n); lineno++;
   fprintf(out,"#[rustfmt::skip]\n"); lineno++;
-  fprintf(out,"#[allow(non_upper_case_globals)]\n"); lineno++;
+  fprintf(out,"#[expect(non_upper_case_globals)]\n"); lineno++;
   fprintf(out,"static yy_action: [YYACTIONTYPE; %d] = [\n", n); lineno++;
   for(i=j=0; i<n; i++){
     int action = acttab_yyaction(pActtab, i);
@@ -4668,7 +4666,7 @@ void ReportTable(
   lemp->nlookaheadtab = n = acttab_lookahead_size(pActtab);
   lemp->tablesize += n*szCodeType;
   fprintf(out,"#[rustfmt::skip]\n"); lineno++;
-  fprintf(out,"#[allow(non_upper_case_globals)]\n"); lineno++;
+  fprintf(out,"#[expect(non_upper_case_globals)]\n"); lineno++;
   nLookAhead = lemp->nterminal + lemp->nactiontab;
   fprintf(out,"static yy_lookahead: [YYCODETYPE; %d] = [\n", nLookAhead); lineno++;
   for(i=j=0; i<n; i++){
@@ -4703,14 +4701,14 @@ void ReportTable(
   /* Output the yy_shift_ofst[] table */
   n = lemp->nxstate;
   while( n>0 && lemp->sorted[n-1]->iTknOfst==NO_OFFSET ) n--;
-  fprintf(out, "#[allow(non_camel_case_types)]\n"); lineno++;
+  fprintf(out, "#[expect(non_camel_case_types)]\n"); lineno++;
   fprintf(out, "type YY_SHIFT_TYPE = %s;\n",
        minimum_size_type(mnTknOfst, lemp->nterminal+lemp->nactiontab, &sz)); lineno++;
   fprintf(out, "const YY_SHIFT_COUNT: YYACTIONTYPE =    %d;\n", n-1); lineno++;
   fprintf(out, "//const YY_SHIFT_MIN: YY_SHIFT_TYPE =      %d;\n", mnTknOfst); lineno++;
   fprintf(out, "//const YY_SHIFT_MAX: YY_SHIFT_TYPE =      %d;\n", mxTknOfst); lineno++;
   fprintf(out, "#[rustfmt::skip]\n"); lineno++;
-  fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
+  fprintf(out, "#[expect(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yy_shift_ofst: [YY_SHIFT_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
@@ -4730,7 +4728,7 @@ void ReportTable(
   fprintf(out, "];\n"); lineno++;
 
   /* Output the yy_reduce_ofst[] table */
-  fprintf(out, "#[allow(non_camel_case_types)]\n"); lineno++;
+  fprintf(out, "#[expect(non_camel_case_types)]\n"); lineno++;
   fprintf(out, "type YY_REDUCE_TYPE = %s;\n",
        minimum_size_type(mnNtOfst-1, mxNtOfst, &sz)); lineno++;
   n = lemp->nxstate;
@@ -4739,7 +4737,7 @@ void ReportTable(
   fprintf(out, "//const YY_REDUCE_MIN: YY_REDUCE_TYPE =   %d;\n", mnNtOfst); lineno++;
   fprintf(out, "//const YY_REDUCE_MAX: YY_REDUCE_TYPE =   %d;\n", mxNtOfst); lineno++;
   fprintf(out, "#[rustfmt::skip]\n"); lineno++;
-  fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
+  fprintf(out, "#[expect(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yy_reduce_ofst: [YY_REDUCE_TYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*sz;
   for(i=j=0; i<n; i++){
@@ -4761,7 +4759,7 @@ void ReportTable(
   /* Output the default action table */
   n = lemp->nxstate;
   fprintf(out, "#[rustfmt::skip]\n"); lineno++;
-  fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
+  fprintf(out, "#[expect(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yy_default: [YYACTIONTYPE; %d] = [\n", n); lineno++;
   lemp->tablesize += n*szActionType;
   for(i=j=0; i<n; i++){
@@ -4784,7 +4782,7 @@ void ReportTable(
 
   /* Generate the table of fallback tokens.
   */
-  fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
+  fprintf(out, "#[expect(non_upper_case_globals)]\n"); lineno++;
   if( lemp->has_fallback ){
     int mx = lemp->nterminal - 1;
     /* 2019-08-28:  Generate fallback entries for every token to avoid
@@ -4818,7 +4816,7 @@ void ReportTable(
   /* Generate a table containing the symbolic name of every symbol
   */
   fprintf(out, "#[rustfmt::skip]\n"); lineno++;
-  fprintf(out, "#[allow(non_upper_case_globals)]\n"); lineno++;
+  fprintf(out, "#[expect(non_upper_case_globals)]\n"); lineno++;
   fprintf(out, "static yyTokenName: [&str; %d] = [\n", lemp->nsymbol); lineno++;
   for(i=0; i<lemp->nsymbol; i++){
     fprintf(out,"  /* %4d */ \"%s\",\n",i, lemp->symbols[i]->name); lineno++;
@@ -4966,7 +4964,7 @@ void ReportHeader(struct lemon *lemp)
   out = file_open(lemp,".h","wb");
   if( out ){
     fprintf(out,"#[non_exhaustive]\n");
-    fprintf(out,"#[allow(non_camel_case_types)]\n");
+    fprintf(out,"#[expect(non_camel_case_types)]\n");
     fprintf(out,"#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]\n");
     fprintf(out,"#[repr(%s)]\n",
             minimum_size_type(0, lemp->nsymbol+1, 0));

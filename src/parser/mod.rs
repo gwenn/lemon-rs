@@ -2,14 +2,12 @@
 
 pub mod ast;
 pub mod parse {
-    #![allow(unused_braces)]
-    #![allow(unused_comparisons)] // FIXME
-    #![allow(clippy::collapsible_if)]
-    #![allow(clippy::if_same_then_else)]
-    #![allow(clippy::absurd_extreme_comparisons)] // FIXME
-    #![allow(clippy::needless_return)]
-    #![allow(clippy::upper_case_acronyms)]
-    #![allow(clippy::manual_range_patterns)]
+    #![expect(unused_braces)]
+    #![expect(clippy::if_same_then_else)]
+    #![expect(clippy::absurd_extreme_comparisons)] // FIXME
+    #![expect(clippy::needless_return)]
+    #![expect(clippy::upper_case_acronyms)]
+    #![expect(clippy::manual_range_patterns)]
 
     include!(concat!(env!("OUT_DIR"), "/parse.rs"));
 }

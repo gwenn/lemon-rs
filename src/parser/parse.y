@@ -61,7 +61,7 @@ use crate::dialect::{from_bytes, from_token, Token, TokenType};
 use indexmap::IndexMap;
 use log::error;
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 type sqlite3ParserError = crate::parser::ParserError;
 } // end %include
 
