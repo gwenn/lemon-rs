@@ -287,7 +287,7 @@ impl Splitter for Tokenizer {
                 },
             ));
         }
-        return match data[0] {
+        match data[0] {
             b'-' => {
                 if let Some(b) = data.get(1) {
                     if *b == b'-' {
@@ -462,7 +462,7 @@ impl Splitter for Tokenizer {
                 }
             }
             _ => Err(Error::UnrecognizedToken(None)),
-        };
+        }
     }
 }
 
@@ -500,7 +500,7 @@ fn literal(data: &[u8], quote: u8) -> Result<(Option<Token<'_>>, usize), Error> 
 fn blob_literal(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert!(data[0] == b'x' || data[0] == b'X');
     debug_assert_eq!(data[1], b'\'');
-    return if let Some((i, b)) = data
+    if let Some((i, b)) = data
         .iter()
         .enumerate()
         .skip(2)
@@ -512,7 +512,7 @@ fn blob_literal(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
         Ok((Some((&data[2..i], TK_BLOB)), i + 1))
     } else {
         Err(Error::MalformedBlobLiteral(None))
-    };
+    }
 }
 
 fn number(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
@@ -526,7 +526,7 @@ fn number(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
             return Ok((Some((data, TK_INTEGER)), data.len()));
         }
     }
-    return if let Some((i, b)) = find_end_of_number(data, 1, u8::is_ascii_digit)? {
+    if let Some((i, b)) = find_end_of_number(data, 1, u8::is_ascii_digit)? {
         if b == b'.' {
             return fractional_part(data, i);
         } else if b == b'e' || b == b'E' {
@@ -537,7 +537,7 @@ fn number(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
         Ok((Some((&data[..i], TK_INTEGER)), i))
     } else {
         Ok((Some((data, TK_INTEGER)), data.len()))
-    };
+    }
 }
 
 fn hex_integer(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
@@ -560,7 +560,7 @@ fn hex_integer(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
 
 fn fractional_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert_eq!(data[i], b'.');
-    return if let Some((i, b)) = find_end_of_number(data, i + 1, u8::is_ascii_digit)? {
+    if let Some((i, b)) = find_end_of_number(data, i + 1, u8::is_ascii_digit)? {
         if b == b'e' || b == b'E' {
             return exponential_part(data, i);
         } else if is_identifier_start(b) {
@@ -569,13 +569,13 @@ fn fractional_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize), 
         Ok((Some((&data[..i], TK_FLOAT)), i))
     } else {
         Ok((Some((data, TK_FLOAT)), data.len()))
-    };
+    }
 }
 
 fn exponential_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize), Error> {
     debug_assert!(data[i] == b'e' || data[i] == b'E');
     // data[i] == 'e'|'E'
-    return if let Some(b) = data.get(i + 1) {
+    if let Some(b) = data.get(i + 1) {
         let i = if *b == b'+' || *b == b'-' { i + 1 } else { i };
         if let Some((j, b)) = find_end_of_number(data, i + 1, u8::is_ascii_digit)? {
             if j == i + 1 || is_identifier_start(b) {
@@ -590,7 +590,7 @@ fn exponential_part(data: &[u8], i: usize) -> Result<(Option<Token<'_>>, usize),
         }
     } else {
         Err(Error::BadNumber(None))
-    };
+    }
 }
 
 fn find_end_of_number(
