@@ -2,14 +2,12 @@
 
 pub mod ast;
 pub mod parse {
-    #![allow(unused_braces)]
-    #![allow(unused_comparisons)] // FIXME
-    #![allow(clippy::collapsible_if)]
-    #![allow(clippy::if_same_then_else)]
-    #![allow(clippy::absurd_extreme_comparisons)] // FIXME
-    #![allow(clippy::needless_return)]
-    #![allow(clippy::upper_case_acronyms)]
-    #![allow(clippy::manual_range_patterns)]
+    #![expect(unused_braces)]
+    #![expect(clippy::if_same_then_else)]
+    #![expect(clippy::absurd_extreme_comparisons)] // FIXME
+    #![expect(clippy::needless_return)]
+    #![expect(clippy::upper_case_acronyms)]
+    #![expect(clippy::manual_range_patterns)]
 
     include!(concat!(env!("OUT_DIR"), "/parse.rs"));
 }
@@ -31,11 +29,11 @@ pub enum ParserError {
 impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ParserError::SyntaxError(s) => {
-                write!(f, "near \"{}\": syntax error", s)
+            Self::SyntaxError(s) => {
+                write!(f, "near \"{s}\": syntax error")
             }
-            ParserError::UnexpectedEof => f.write_str("unexpected end of input"),
-            ParserError::Custom(s) => f.write_str(s),
+            Self::UnexpectedEof => f.write_str("unexpected end of input"),
+            Self::Custom(s) => f.write_str(s),
         }
     }
 }
@@ -69,7 +67,7 @@ pub struct Context<'input> {
 }
 
 impl<'input> Context<'input> {
-    pub fn new(input: &'input [u8]) -> Context<'input> {
+    pub fn new(input: &'input [u8]) -> Self {
         Context {
             input,
             explain: None,

@@ -7,22 +7,22 @@ impl Cmd {
     /// Statement accessor
     pub fn stmt(&self) -> &Stmt {
         match self {
-            Cmd::Explain(stmt) => stmt,
-            Cmd::ExplainQueryPlan(stmt) => stmt,
-            Cmd::Stmt(stmt) => stmt,
+            Self::Explain(stmt) => stmt,
+            Self::ExplainQueryPlan(stmt) => stmt,
+            Self::Stmt(stmt) => stmt,
         }
     }
     /// Like `sqlite3_column_count` but more limited
     pub fn column_count(&self) -> ColumnCount {
         match self {
-            Cmd::Explain(_) => ColumnCount::Fixed(8),
-            Cmd::ExplainQueryPlan(_) => ColumnCount::Fixed(4),
-            Cmd::Stmt(stmt) => stmt.column_count(),
+            Self::Explain(_) => ColumnCount::Fixed(8),
+            Self::ExplainQueryPlan(_) => ColumnCount::Fixed(4),
+            Self::Stmt(stmt) => stmt.column_count(),
         }
     }
     /// Like `sqlite3_stmt_isexplain`
     pub fn is_explain(&self) -> bool {
-        matches!(self, Cmd::Explain(_) | Cmd::ExplainQueryPlan(_))
+        matches!(self, Self::Explain(_) | Self::ExplainQueryPlan(_))
     }
     /// Like `sqlite3_stmt_readonly`
     pub fn readonly(&self) -> bool {
@@ -46,7 +46,7 @@ pub enum ColumnCount {
 
 impl ColumnCount {
     fn incr(&mut self) {
-        if let ColumnCount::Fixed(n) = self {
+        if let Self::Fixed(n) = self {
             *n += 1;
         }
     }
@@ -56,17 +56,17 @@ impl Stmt {
     /// Like `sqlite3_column_count` but more limited
     pub fn column_count(&self) -> ColumnCount {
         match self {
-            Stmt::Delete {
+            Self::Delete {
                 returning: Some(returning),
                 ..
             } => column_count(returning),
-            Stmt::Insert {
+            Self::Insert {
                 returning: Some(returning),
                 ..
             } => column_count(returning),
-            Stmt::Pragma(..) => ColumnCount::Dynamic,
-            Stmt::Select(s) => s.column_count(),
-            Stmt::Update {
+            Self::Pragma(..) => ColumnCount::Dynamic,
+            Self::Select(s) => s.column_count(),
+            Self::Update {
                 returning: Some(returning),
                 ..
             } => column_count(returning),
@@ -77,16 +77,16 @@ impl Stmt {
     /// Like `sqlite3_stmt_readonly`
     pub fn readonly(&self) -> bool {
         match self {
-            Stmt::Attach { .. } => true,
-            Stmt::Begin(..) => true,
-            Stmt::Commit(..) => true,
-            Stmt::Detach(..) => true,
-            Stmt::Pragma(..) => true, // TODO check all
-            Stmt::Reindex { .. } => true,
-            Stmt::Release(..) => true,
-            Stmt::Rollback { .. } => true,
-            Stmt::Savepoint(..) => true,
-            Stmt::Select(..) => true,
+            Self::Attach { .. } => true,
+            Self::Begin(..) => true,
+            Self::Commit(..) => true,
+            Self::Detach(..) => true,
+            Self::Pragma(..) => true, // TODO check all
+            Self::Reindex { .. } => true,
+            Self::Release(..) => true,
+            Self::Rollback { .. } => true,
+            Self::Savepoint(..) => true,
+            Self::Select(..) => true,
             _ => false,
         }
     }
@@ -94,7 +94,7 @@ impl Stmt {
     /// check for extra rules
     pub fn check(&self) -> Result<(), ParserError> {
         match self {
-            Stmt::AlterTable(old_name, AlterTableBody::RenameTo(new_name)) => {
+            Self::AlterTable(old_name, AlterTableBody::RenameTo(new_name)) => {
                 if *new_name == old_name.name {
                     return Err(custom_err!(
                         "there is already another table or index with this name: {}",
@@ -103,7 +103,7 @@ impl Stmt {
                 }
                 Ok(())
             }
-            Stmt::AlterTable(.., AlterTableBody::AddColumn(cd)) => {
+            Self::AlterTable(.., AlterTableBody::AddColumn(cd)) => {
                 if cd.flags.contains(ColFlags::PRIMKEY) {
                     return Err(custom_err!("Cannot add a PRIMARY KEY column"));
                 } else if cd.flags.contains(ColFlags::UNIQUE) {
@@ -111,8 +111,8 @@ impl Stmt {
                 }
                 Ok(())
             }
-            Stmt::CreateIndex { idx_name, .. } => check_reserved_name(idx_name),
-            Stmt::CreateTable {
+            Self::CreateIndex { idx_name, .. } => check_reserved_name(idx_name),
+            Self::CreateTable {
                 temporary,
                 tbl_name,
                 body,
@@ -128,8 +128,8 @@ impl Stmt {
                 }
                 body.check(tbl_name)
             }
-            Stmt::CreateTrigger { trigger_name, .. } => check_reserved_name(trigger_name),
-            Stmt::CreateView {
+            Self::CreateTrigger { trigger_name, .. } => check_reserved_name(trigger_name),
+            Self::CreateView {
                 view_name,
                 columns: Some(columns),
                 select,
@@ -155,12 +155,12 @@ impl Stmt {
                     _ => Ok(()),
                 }
             }
-            Stmt::Delete {
+            Self::Delete {
                 order_by: Some(_),
                 limit: None,
                 ..
             } => Err(custom_err!("ORDER BY without LIMIT on DELETE")),
-            Stmt::Insert {
+            Self::Insert {
                 columns: Some(columns),
                 body: InsertBody::Select(select, ..),
                 ..
@@ -170,7 +170,7 @@ impl Stmt {
                 }
                 _ => Ok(()),
             },
-            Stmt::Insert {
+            Self::Insert {
                 columns: Some(columns),
                 body: InsertBody::DefaultValues,
                 ..
@@ -193,7 +193,7 @@ fn check_reserved_name(name: &QualifiedName) -> Result<(), ParserError> {
 impl CreateTableBody {
     /// check for extra rules
     pub fn check(&self, tbl_name: &QualifiedName) -> Result<(), ParserError> {
-        if let CreateTableBody::ColumnsAndConstraints {
+        if let Self::ColumnsAndConstraints {
             columns,
             constraints,
             flags,
@@ -284,8 +284,8 @@ impl OneSelect {
     /// Like `sqlite3_column_count` but more limited
     pub fn column_count(&self) -> ColumnCount {
         match self {
-            OneSelect::Select { columns, .. } => column_count(columns),
-            OneSelect::Values(values) => {
+            Self::Select { columns, .. } => column_count(columns),
+            Self::Values(values) => {
                 assert!(!values.is_empty()); // TODO Validate
                 ColumnCount::Fixed(values[0].len())
             }
@@ -310,7 +310,7 @@ impl Display for QualifiedName {
 impl ResultColumn {
     fn column_count(&self) -> ColumnCount {
         match self {
-            ResultColumn::Expr(..) => ColumnCount::Fixed(1),
+            Self::Expr(..) => ColumnCount::Fixed(1),
             _ => ColumnCount::Dynamic,
         }
     }

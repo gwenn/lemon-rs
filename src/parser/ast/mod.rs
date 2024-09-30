@@ -249,7 +249,7 @@ pub enum Stmt {
         tbl_name: QualifiedName,
         /// `INDEXED`
         indexed: Option<Indexed>,
-        /// `SET` assigments
+        /// `SET` assignments
         sets: Vec<Set>,
         /// `FROM`
         from: Option<FromClause>,
@@ -463,39 +463,39 @@ pub enum Expr {
 
 impl Expr {
     /// Constructor
-    pub fn parenthesized(x: Expr) -> Expr {
-        Expr::Parenthesized(vec![x])
+    pub fn parenthesized(x: Self) -> Self {
+        Self::Parenthesized(vec![x])
     }
     /// Constructor
-    pub fn id(xt: YYCODETYPE, x: Token) -> Expr {
-        Expr::Id(Id::from_token(xt, x))
+    pub fn id(xt: YYCODETYPE, x: Token) -> Self {
+        Self::Id(Id::from_token(xt, x))
     }
     /// Constructor
-    pub fn collate(x: Expr, ct: YYCODETYPE, c: Token) -> Expr {
-        Expr::Collate(Box::new(x), from_token(ct, c))
+    pub fn collate(x: Self, ct: YYCODETYPE, c: Token) -> Self {
+        Self::Collate(Box::new(x), from_token(ct, c))
     }
     /// Constructor
-    pub fn cast(x: Expr, type_name: Option<Type>) -> Expr {
-        Expr::Cast {
+    pub fn cast(x: Self, type_name: Option<Type>) -> Self {
+        Self::Cast {
             expr: Box::new(x),
             type_name,
         }
     }
     /// Constructor
-    pub fn binary(left: Expr, op: YYCODETYPE, right: Expr) -> Expr {
-        Expr::Binary(Box::new(left), Operator::from(op), Box::new(right))
+    pub fn binary(left: Self, op: YYCODETYPE, right: Self) -> Self {
+        Self::Binary(Box::new(left), Operator::from(op), Box::new(right))
     }
     /// Constructor
-    pub fn ptr(left: Expr, op: Token, right: Expr) -> Expr {
+    pub fn ptr(left: Self, op: Token, right: Self) -> Self {
         let mut ptr = Operator::ArrowRight;
         if op.1 == b"->>" {
             ptr = Operator::ArrowRightShift;
         }
-        Expr::Binary(Box::new(left), ptr, Box::new(right))
+        Self::Binary(Box::new(left), ptr, Box::new(right))
     }
     /// Constructor
-    pub fn like(lhs: Expr, not: bool, op: LikeOperator, rhs: Expr, escape: Option<Expr>) -> Expr {
-        Expr::Like {
+    pub fn like(lhs: Self, not: bool, op: LikeOperator, rhs: Self, escape: Option<Self>) -> Self {
+        Self::Like {
             lhs: Box::new(lhs),
             not,
             op,
@@ -504,22 +504,22 @@ impl Expr {
         }
     }
     /// Constructor
-    pub fn not_null(x: Expr, op: YYCODETYPE) -> Expr {
+    pub fn not_null(x: Self, op: YYCODETYPE) -> Self {
         if op == TK_ISNULL as YYCODETYPE {
-            Expr::IsNull(Box::new(x))
+            Self::IsNull(Box::new(x))
         } else if op == TK_NOTNULL as YYCODETYPE {
-            Expr::NotNull(Box::new(x))
+            Self::NotNull(Box::new(x))
         } else {
             unreachable!()
         }
     }
     /// Constructor
-    pub fn unary(op: UnaryOperator, x: Expr) -> Expr {
-        Expr::Unary(op, Box::new(x))
+    pub fn unary(op: UnaryOperator, x: Self) -> Self {
+        Self::Unary(op, Box::new(x))
     }
     /// Constructor
-    pub fn between(lhs: Expr, not: bool, start: Expr, end: Expr) -> Expr {
-        Expr::Between {
+    pub fn between(lhs: Self, not: bool, start: Self, end: Self) -> Self {
+        Self::Between {
             lhs: Box::new(lhs),
             not,
             start: Box::new(start),
@@ -527,24 +527,24 @@ impl Expr {
         }
     }
     /// Constructor
-    pub fn in_list(lhs: Expr, not: bool, rhs: Option<Vec<Expr>>) -> Expr {
-        Expr::InList {
+    pub fn in_list(lhs: Self, not: bool, rhs: Option<Vec<Self>>) -> Self {
+        Self::InList {
             lhs: Box::new(lhs),
             not,
             rhs,
         }
     }
     /// Constructor
-    pub fn in_select(lhs: Expr, not: bool, rhs: Select) -> Expr {
-        Expr::InSelect {
+    pub fn in_select(lhs: Self, not: bool, rhs: Select) -> Self {
+        Self::InSelect {
             lhs: Box::new(lhs),
             not,
             rhs: Box::new(rhs),
         }
     }
     /// Constructor
-    pub fn in_table(lhs: Expr, not: bool, rhs: QualifiedName, args: Option<Vec<Expr>>) -> Expr {
-        Expr::InTable {
+    pub fn in_table(lhs: Self, not: bool, rhs: QualifiedName, args: Option<Vec<Self>>) -> Self {
+        Self::InTable {
             lhs: Box::new(lhs),
             not,
             rhs,
@@ -552,8 +552,8 @@ impl Expr {
         }
     }
     /// Constructor
-    pub fn sub_query(query: Select) -> Expr {
-        Expr::Subquery(Box::new(query))
+    pub fn sub_query(query: Select) -> Self {
+        Self::Subquery(Box::new(query))
     }
     /// Constructor
     pub fn function_call(
@@ -606,13 +606,13 @@ pub enum Literal {
 
 impl Literal {
     /// Constructor
-    pub fn from_ctime_kw(token: Token) -> Literal {
+    pub fn from_ctime_kw(token: Token) -> Self {
         if b"CURRENT_DATE".eq_ignore_ascii_case(token.1) {
-            Literal::CurrentDate
+            Self::CurrentDate
         } else if b"CURRENT_TIME".eq_ignore_ascii_case(token.1) {
-            Literal::CurrentTime
+            Self::CurrentTime
         } else if b"CURRENT_TIMESTAMP".eq_ignore_ascii_case(token.1) {
-            Literal::CurrentTimestamp
+            Self::CurrentTimestamp
         } else {
             unreachable!()
         }
@@ -634,17 +634,17 @@ pub enum LikeOperator {
 
 impl LikeOperator {
     /// Constructor
-    pub fn from_token(token_type: YYCODETYPE, token: Token) -> LikeOperator {
+    pub fn from_token(token_type: YYCODETYPE, token: Token) -> Self {
         if token_type == TK_MATCH as YYCODETYPE {
-            return LikeOperator::Match;
+            return Self::Match;
         } else if token_type == TK_LIKE_KW as YYCODETYPE {
             let token = token.1;
             if b"LIKE".eq_ignore_ascii_case(token) {
-                return LikeOperator::Like;
+                return Self::Like;
             } else if b"GLOB".eq_ignore_ascii_case(token) {
-                return LikeOperator::Glob;
+                return Self::Glob;
             } else if b"REGEXP".eq_ignore_ascii_case(token) {
-                return LikeOperator::Regexp;
+                return Self::Regexp;
             }
         }
         unreachable!()
@@ -697,32 +697,32 @@ pub enum Operator {
     /// `>>`
     RightShift,
     /// `-`
-    Substract,
+    Subtract,
 }
 
 impl From<YYCODETYPE> for Operator {
-    fn from(token_type: YYCODETYPE) -> Operator {
+    fn from(token_type: YYCODETYPE) -> Self {
         match token_type {
-            x if x == TK_AND as YYCODETYPE => Operator::And,
-            x if x == TK_OR as YYCODETYPE => Operator::Or,
-            x if x == TK_LT as YYCODETYPE => Operator::Less,
-            x if x == TK_GT as YYCODETYPE => Operator::Greater,
-            x if x == TK_GE as YYCODETYPE => Operator::GreaterEquals,
-            x if x == TK_LE as YYCODETYPE => Operator::LessEquals,
-            x if x == TK_EQ as YYCODETYPE => Operator::Equals,
-            x if x == TK_NE as YYCODETYPE => Operator::NotEquals,
-            x if x == TK_BITAND as YYCODETYPE => Operator::BitwiseAnd,
-            x if x == TK_BITOR as YYCODETYPE => Operator::BitwiseOr,
-            x if x == TK_LSHIFT as YYCODETYPE => Operator::LeftShift,
-            x if x == TK_RSHIFT as YYCODETYPE => Operator::RightShift,
-            x if x == TK_PLUS as YYCODETYPE => Operator::Add,
-            x if x == TK_MINUS as YYCODETYPE => Operator::Substract,
-            x if x == TK_STAR as YYCODETYPE => Operator::Multiply,
-            x if x == TK_SLASH as YYCODETYPE => Operator::Divide,
-            x if x == TK_REM as YYCODETYPE => Operator::Modulus,
-            x if x == TK_CONCAT as YYCODETYPE => Operator::Concat,
-            x if x == TK_IS as YYCODETYPE => Operator::Is,
-            x if x == TK_NOT as YYCODETYPE => Operator::IsNot,
+            x if x == TK_AND as YYCODETYPE => Self::And,
+            x if x == TK_OR as YYCODETYPE => Self::Or,
+            x if x == TK_LT as YYCODETYPE => Self::Less,
+            x if x == TK_GT as YYCODETYPE => Self::Greater,
+            x if x == TK_GE as YYCODETYPE => Self::GreaterEquals,
+            x if x == TK_LE as YYCODETYPE => Self::LessEquals,
+            x if x == TK_EQ as YYCODETYPE => Self::Equals,
+            x if x == TK_NE as YYCODETYPE => Self::NotEquals,
+            x if x == TK_BITAND as YYCODETYPE => Self::BitwiseAnd,
+            x if x == TK_BITOR as YYCODETYPE => Self::BitwiseOr,
+            x if x == TK_LSHIFT as YYCODETYPE => Self::LeftShift,
+            x if x == TK_RSHIFT as YYCODETYPE => Self::RightShift,
+            x if x == TK_PLUS as YYCODETYPE => Self::Add,
+            x if x == TK_MINUS as YYCODETYPE => Self::Subtract,
+            x if x == TK_STAR as YYCODETYPE => Self::Multiply,
+            x if x == TK_SLASH as YYCODETYPE => Self::Divide,
+            x if x == TK_REM as YYCODETYPE => Self::Modulus,
+            x if x == TK_CONCAT as YYCODETYPE => Self::Concat,
+            x if x == TK_IS as YYCODETYPE => Self::Is,
+            x if x == TK_NOT as YYCODETYPE => Self::IsNot,
             _ => unreachable!(),
         }
     }
@@ -742,12 +742,12 @@ pub enum UnaryOperator {
 }
 
 impl From<YYCODETYPE> for UnaryOperator {
-    fn from(token_type: YYCODETYPE) -> UnaryOperator {
+    fn from(token_type: YYCODETYPE) -> Self {
         match token_type {
-            x if x == TK_BITNOT as YYCODETYPE => UnaryOperator::BitwiseNot,
-            x if x == TK_MINUS as YYCODETYPE => UnaryOperator::Negative,
-            x if x == TK_NOT as YYCODETYPE => UnaryOperator::Not,
-            x if x == TK_PLUS as YYCODETYPE => UnaryOperator::Positive,
+            x if x == TK_BITNOT as YYCODETYPE => Self::BitwiseNot,
+            x if x == TK_MINUS as YYCODETYPE => Self::Negative,
+            x if x == TK_NOT as YYCODETYPE => Self::Not,
+            x if x == TK_PLUS as YYCODETYPE => Self::Positive,
             _ => unreachable!(),
         }
     }
@@ -884,8 +884,8 @@ pub struct FromClause {
     op: Option<JoinOperator>, // FIXME transient
 }
 impl FromClause {
-    pub(crate) fn empty() -> FromClause {
-        FromClause {
+    pub(crate) fn empty() -> Self {
+        Self {
             select: None,
             joins: None,
             op: None,
@@ -1001,7 +1001,7 @@ impl JoinOperator {
         token: Token,
         n1: Option<Name>,
         n2: Option<Name>,
-    ) -> Result<JoinOperator, ParserError> {
+    ) -> Result<Self, ParserError> {
         Ok({
             let mut jt = JoinType::try_from(token.1)?;
             for n in [&n1, &n2].into_iter().flatten() {
@@ -1017,12 +1017,12 @@ impl JoinOperator {
                     n2.as_ref().map_or("", |n| n.0.as_str())
                 ));
             }
-            JoinOperator::TypedJoin(Some(jt))
+            Self::TypedJoin(Some(jt))
         })
     }
     fn is_natural(&self) -> bool {
         match self {
-            JoinOperator::TypedJoin(Some(jt)) => jt.contains(JoinType::NATURAL),
+            Self::TypedJoin(Some(jt)) => jt.contains(JoinType::NATURAL),
             _ => false,
         }
     }
@@ -1050,21 +1050,21 @@ bitflags::bitflags! {
 
 impl TryFrom<&[u8]> for JoinType {
     type Error = ParserError;
-    fn try_from(s: &[u8]) -> Result<JoinType, ParserError> {
+    fn try_from(s: &[u8]) -> Result<Self, ParserError> {
         if b"CROSS".eq_ignore_ascii_case(s) {
-            Ok(JoinType::INNER | JoinType::CROSS)
+            Ok(Self::INNER | Self::CROSS)
         } else if b"FULL".eq_ignore_ascii_case(s) {
-            Ok(JoinType::LEFT | JoinType::RIGHT | JoinType::OUTER)
+            Ok(Self::LEFT | Self::RIGHT | Self::OUTER)
         } else if b"INNER".eq_ignore_ascii_case(s) {
-            Ok(JoinType::INNER)
+            Ok(Self::INNER)
         } else if b"LEFT".eq_ignore_ascii_case(s) {
-            Ok(JoinType::LEFT | JoinType::OUTER)
+            Ok(Self::LEFT | Self::OUTER)
         } else if b"NATURAL".eq_ignore_ascii_case(s) {
-            Ok(JoinType::NATURAL)
+            Ok(Self::NATURAL)
         } else if b"RIGHT".eq_ignore_ascii_case(s) {
-            Ok(JoinType::RIGHT | JoinType::OUTER)
+            Ok(Self::RIGHT | Self::OUTER)
         } else if b"OUTER".eq_ignore_ascii_case(s) {
-            Ok(JoinType::OUTER)
+            Ok(Self::OUTER)
         } else {
             Err(custom_err!(
                 "unknown join type: {}",
@@ -1098,8 +1098,8 @@ pub struct Id(pub String);
 
 impl Id {
     /// Constructor
-    pub fn from_token(ty: YYCODETYPE, token: Token) -> Id {
-        Id(from_token(ty, token))
+    pub fn from_token(ty: YYCODETYPE, token: Token) -> Self {
+        Self(from_token(ty, token))
     }
 }
 
@@ -1132,8 +1132,8 @@ pub(crate) fn unquote(s: &str) -> (&str, u8) {
 
 impl Name {
     /// Constructor
-    pub fn from_token(ty: YYCODETYPE, token: Token) -> Name {
-        Name(from_token(ty, token))
+    pub fn from_token(ty: YYCODETYPE, token: Token) -> Self {
+        Self(from_token(ty, token))
     }
 
     fn as_bytes(&self) -> QuotedIterator<'_> {
@@ -1198,21 +1198,18 @@ impl std::hash::Hash for Name {
 }
 /// Ignore case and quote
 impl PartialEq for Name {
-    #[inline(always)]
-    fn eq(&self, other: &Name) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         eq_ignore_case_and_quote(self.as_bytes(), other.as_bytes())
     }
 }
 /// Ignore case and quote
 impl PartialEq<str> for Name {
-    #[inline(always)]
     fn eq(&self, other: &str) -> bool {
         eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
     }
 }
 /// Ignore case and quote
 impl PartialEq<&str> for Name {
-    #[inline(always)]
     fn eq(&self, other: &&str) -> bool {
         eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
     }
@@ -1232,7 +1229,7 @@ pub struct QualifiedName {
 impl QualifiedName {
     /// Constructor
     pub fn single(name: Name) -> Self {
-        QualifiedName {
+        Self {
             db_name: None,
             name,
             alias: None,
@@ -1240,7 +1237,7 @@ impl QualifiedName {
     }
     /// Constructor
     pub fn fullname(db_name: Name, name: Name) -> Self {
-        QualifiedName {
+        Self {
             db_name: Some(db_name),
             name,
             alias: None,
@@ -1248,7 +1245,7 @@ impl QualifiedName {
     }
     /// Constructor
     pub fn xfullname(db_name: Name, name: Name, alias: Name) -> Self {
-        QualifiedName {
+        Self {
             db_name: Some(db_name),
             name,
             alias: Some(alias),
@@ -1256,7 +1253,7 @@ impl QualifiedName {
     }
     /// Constructor
     pub fn alias(name: Name, alias: Name) -> Self {
-        QualifiedName {
+        Self {
             db_name: None,
             name,
             alias: Some(alias),
@@ -1270,14 +1267,14 @@ pub struct DistinctNames(IndexSet<Name>);
 
 impl DistinctNames {
     /// Initialize
-    pub fn new(name: Name) -> DistinctNames {
-        let mut dn = DistinctNames(IndexSet::new());
+    pub fn new(name: Name) -> Self {
+        let mut dn = Self(IndexSet::new());
         dn.0.insert(name);
         dn
     }
     /// Single column name
-    pub fn single(name: Name) -> DistinctNames {
-        let mut dn = DistinctNames(IndexSet::with_capacity(1));
+    pub fn single(name: Name) -> Self {
+        let mut dn = Self(IndexSet::with_capacity(1));
         dn.0.insert(name);
         dn
     }
@@ -1377,7 +1374,7 @@ impl CreateTableBody {
         columns: IndexMap<Name, ColumnDefinition>,
         constraints: Option<Vec<NamedTableConstraint>>,
         mut flags: TabFlags,
-    ) -> Result<CreateTableBody, ParserError> {
+    ) -> Result<Self, ParserError> {
         for col in columns.values() {
             if col.flags.contains(ColFlags::PRIMKEY) {
                 flags |= TabFlags::HasPrimaryKey;
@@ -1399,7 +1396,7 @@ impl CreateTableBody {
                 }
             }
         }
-        Ok(CreateTableBody::ColumnsAndConstraints {
+        Ok(Self::ColumnsAndConstraints {
             columns,
             constraints,
             flags,
@@ -1456,7 +1453,7 @@ impl ColumnDefinition {
         col_name: Name,
         mut col_type: Option<Type>,
         constraints: Vec<NamedColumnConstraint>,
-    ) -> Result<ColumnDefinition, ParserError> {
+    ) -> Result<Self, ParserError> {
         let mut flags = ColFlags::empty();
         let mut default = false;
         for constraint in &constraints {
@@ -1545,8 +1542,8 @@ impl ColumnDefinition {
     }
     /// Collector
     pub fn add_column(
-        columns: &mut IndexMap<Name, ColumnDefinition>,
-        cd: ColumnDefinition,
+        columns: &mut IndexMap<Name, Self>,
+        cd: Self,
     ) -> Result<(), ParserError> {
         let col_name = &cd.col_name;
         if columns.contains_key(col_name) {
@@ -1894,7 +1891,7 @@ pub enum TriggerCmd {
         or_conflict: Option<ResolveType>,
         /// table name
         tbl_name: Name,
-        /// `SET` assigments
+        /// `SET` assignments
         sets: Vec<Set>,
         /// `FROM`
         from: Option<FromClause>,
@@ -1985,7 +1982,7 @@ impl CommonTableExpr {
         columns: Option<Vec<IndexedColumn>>,
         materialized: Materialized,
         select: Select,
-    ) -> Result<CommonTableExpr, ParserError> {
+    ) -> Result<Self, ParserError> {
         if let Some(ref columns) = columns {
             if let check::ColumnCount::Fixed(cc) = select.column_count() {
                 if cc != columns.len() {
@@ -1998,7 +1995,7 @@ impl CommonTableExpr {
                 }
             }
         }
-        Ok(CommonTableExpr {
+        Ok(Self {
             tbl_name,
             columns,
             materialized,
@@ -2007,8 +2004,8 @@ impl CommonTableExpr {
     }
     /// Constructor
     pub fn add_cte(
-        ctes: &mut Vec<CommonTableExpr>,
-        cte: CommonTableExpr,
+        ctes: &mut Vec<Self>,
+        cte: Self,
     ) -> Result<(), ParserError> {
         if ctes.iter().any(|c| c.tbl_name == cte.tbl_name) {
             return Err(custom_err!("duplicate WITH table name: {}", cte.tbl_name));
@@ -2112,7 +2109,7 @@ pub struct FunctionTail {
 // https://sqlite.org/syntax/over-clause.html
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Over {
-    /// Window defintion
+    /// Window definition
     Window(Window),
     /// Window name
     Name(Name),
