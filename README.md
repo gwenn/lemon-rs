@@ -72,3 +72,8 @@ as a stack because items may be access randomly and the `top+1` item can be used
 alternative but it does not support fallback/streaming
 (see [this](https://github.com/nikomatsakis/lalrpop/issues/156) issue)
 and compilation/generation is slow.
+
+## Minimum supported Rust version (MSRV)
+
+Latest stable Rust version at the time of release. It might compile with older versions.
+
