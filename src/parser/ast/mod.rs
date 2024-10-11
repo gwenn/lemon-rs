@@ -1015,7 +1015,7 @@ impl Name {
 }
 
 struct QuotedIterator<'s>(Bytes<'s>, u8);
-impl<'s> Iterator for QuotedIterator<'s> {
+impl Iterator for QuotedIterator<'_> {
     type Item = u8;
 
     fn next(&mut self) -> Option<u8> {

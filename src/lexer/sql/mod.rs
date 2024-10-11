@@ -165,7 +165,7 @@ macro_rules! try_with_position {
     };
 }
 
-impl<'input> FallibleIterator for Parser<'input> {
+impl FallibleIterator for Parser<'_> {
     type Item = Cmd;
     type Error = Error;
 

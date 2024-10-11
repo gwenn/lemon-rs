@@ -9,7 +9,7 @@ struct FmtTokenStream<'a, 'b> {
     spaced: bool,
 }
 
-impl<'a, 'b> TokenStream for FmtTokenStream<'a, 'b> {
+impl TokenStream for FmtTokenStream<'_, '_> {
     type Error = fmt::Error;
 
     fn append(&mut self, ty: TokenType, value: Option<&str>) -> fmt::Result {
