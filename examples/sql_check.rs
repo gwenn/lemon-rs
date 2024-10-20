@@ -29,14 +29,14 @@ fn main() {
                                 eprintln!(
                                     "Check Err in {}:{}, {} in\n{}\n{:?}",
                                     arg,
-                                    parser.line(),
+                                    parser.position(),
                                     err,
                                     input,
                                     cmd
                                 );
                             }
                             Ok(None) => {
-                                eprintln!("Check Err in {}:{}, {:?}", arg, parser.line(), cmd);
+                                eprintln!("Check Err in {}:{}, {:?}", arg, parser.position(), cmd);
                             }
                             Ok(Some(check)) => {
                                 if cmd != check {
