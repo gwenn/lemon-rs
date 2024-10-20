@@ -15,8 +15,7 @@ mod error;
 #[cfg(test)]
 mod test;
 
-use crate::lexer::scan::ScanError;
-use crate::lexer::scan::Splitter;
+use crate::lexer::scan::{Pos, ScanError, Splitter};
 use crate::lexer::Scanner;
 pub use crate::parser::ParserError;
 pub use error::Error;
