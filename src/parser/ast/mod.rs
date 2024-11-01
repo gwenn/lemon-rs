@@ -1151,7 +1151,7 @@ impl Name {
 }
 
 struct QuotedIterator<'s>(Bytes<'s>, u8);
-impl<'s> Iterator for QuotedIterator<'s> {
+impl Iterator for QuotedIterator<'_> {
     type Item = u8;
 
     fn next(&mut self) -> Option<u8> {
@@ -1541,10 +1541,7 @@ impl ColumnDefinition {
         })
     }
     /// Collector
-    pub fn add_column(
-        columns: &mut IndexMap<Name, Self>,
-        cd: Self,
-    ) -> Result<(), ParserError> {
+    pub fn add_column(columns: &mut IndexMap<Name, Self>, cd: Self) -> Result<(), ParserError> {
         let col_name = &cd.col_name;
         if columns.contains_key(col_name) {
             return Err(custom_err!("duplicate column name: {}", col_name));
@@ -2003,10 +2000,7 @@ impl CommonTableExpr {
         })
     }
     /// Constructor
-    pub fn add_cte(
-        ctes: &mut Vec<Self>,
-        cte: Self,
-    ) -> Result<(), ParserError> {
+    pub fn add_cte(ctes: &mut Vec<Self>, cte: Self) -> Result<(), ParserError> {
         if ctes.iter().any(|c| c.tbl_name == cte.tbl_name) {
             return Err(custom_err!("duplicate WITH table name: {}", cte.tbl_name));
         }
