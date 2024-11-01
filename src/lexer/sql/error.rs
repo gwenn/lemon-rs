@@ -37,24 +37,24 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(ref err) => err.fmt(f),
-            Self::UnrecognizedToken(pos) => write!(f, "unrecognized token at {:?}", pos),
+            Self::UnrecognizedToken(pos) => write!(f, "unrecognized token at {pos:?}"),
             Self::UnterminatedLiteral(pos) => {
-                write!(f, "non-terminated literal at {:?}", pos)
+                write!(f, "non-terminated literal at {pos:?}")
             }
             Self::UnterminatedBracket(pos) => {
-                write!(f, "non-terminated bracket at {:?}", pos)
+                write!(f, "non-terminated bracket at {pos:?}")
             }
             Self::UnterminatedBlockComment(pos) => {
-                write!(f, "non-terminated block comment at {:?}", pos)
+                write!(f, "non-terminated block comment at {pos:?}")
             }
-            Self::BadVariableName(pos) => write!(f, "bad variable name at {:?}", pos),
-            Self::BadNumber(pos) => write!(f, "bad number at {:?}", pos),
-            Self::ExpectedEqualsSign(pos) => write!(f, "expected = sign at {:?}", pos),
+            Self::BadVariableName(pos) => write!(f, "bad variable name at {pos:?}"),
+            Self::BadNumber(pos) => write!(f, "bad number at {pos:?}"),
+            Self::ExpectedEqualsSign(pos) => write!(f, "expected = sign at {pos:?}"),
             Self::MalformedBlobLiteral(pos) => {
-                write!(f, "malformed blob literal at {:?}", pos)
+                write!(f, "malformed blob literal at {pos:?}")
             }
             Self::MalformedHexInteger(pos) => {
-                write!(f, "malformed hex integer at {:?}", pos)
+                write!(f, "malformed hex integer at {pos:?}")
             }
             Self::ParserError(ref msg, Some(pos)) => write!(f, "{msg} at {pos:?}"),
             Self::ParserError(ref msg, _) => write!(f, "{msg}"),

@@ -275,9 +275,9 @@ impl Stmt {
         tbl_name: Name,
         columns: Vec<SortedColumn>,
         where_clause: Option<Expr>,
-    ) -> Result<Stmt, ParserError> {
+    ) -> Result<Self, ParserError> {
         has_explicit_nulls(&columns)?;
-        Ok(Stmt::CreateIndex {
+        Ok(Self::CreateIndex {
             unique,
             if_not_exists,
             idx_name,
@@ -299,7 +299,7 @@ impl Stmt {
         returning: Option<Vec<ResultColumn>>,
         order_by: Option<Vec<SortedColumn>>,
         limit: Option<Limit>,
-    ) -> Result<Stmt, ParserError> {
+    ) -> Result<Self, ParserError> {
         if let Some(FromClause {
             select: Some(ref select),
             ref joins,
@@ -321,7 +321,7 @@ impl Stmt {
         if order_by.is_some() && limit.is_none() {
             return Err(custom_err!("ORDER BY without LIMIT on UPDATE"));
         }
-        Ok(Stmt::Update {
+        Ok(Self::Update {
             with,
             or_conflict,
             tbl_name,
@@ -560,18 +560,18 @@ impl Expr {
         xt: YYCODETYPE,
         x: Token,
         distinctness: Option<Distinctness>,
-        args: Option<Vec<Expr>>,
+        args: Option<Vec<Self>>,
         order_by: Option<Vec<SortedColumn>>,
         filter_over: Option<FunctionTail>,
-    ) -> Result<Expr, ParserError> {
+    ) -> Result<Self, ParserError> {
         if let Some(Distinctness::Distinct) = distinctness {
-            if args.as_ref().map_or(0, |v| v.len()) != 1 {
+            if args.as_ref().map_or(0, Vec::len) != 1 {
                 return Err(custom_err!(
                     "DISTINCT aggregates must have exactly one argument"
                 ));
             }
         }
-        Ok(Expr::FunctionCall {
+        Ok(Self::FunctionCall {
             name: Id::from_token(xt, x),
             distinctness,
             args,
@@ -854,7 +854,7 @@ impl OneSelect {
         where_clause: Option<Expr>,
         group_by: Option<GroupBy>,
         window_clause: Option<Vec<WindowDef>>,
-    ) -> Result<OneSelect, ParserError> {
+    ) -> Result<Self, ParserError> {
         if from.is_none()
             && columns
                 .iter()
@@ -862,7 +862,7 @@ impl OneSelect {
         {
             return Err(custom_err!("no tables specified"));
         }
-        Ok(OneSelect::Select {
+        Ok(Self::Select {
             distinctness,
             columns,
             from,
@@ -1480,7 +1480,7 @@ impl ColumnDefinition {
                     ..
                 } => {
                     // The child table may reference the primary key of the parent without specifying the primary key column
-                    if columns.as_ref().map_or(0, |v| v.len()) > 1 {
+                    if columns.as_ref().map_or(0, Vec::len) > 1 {
                         return Err(custom_err!(
                             "foreign key on {} should reference only one column of table {}",
                             col_name,
@@ -1533,7 +1533,7 @@ impl ColumnDefinition {
         if col_type.as_ref().map_or(false, |t| !t.name.is_empty()) {
             flags |= ColFlags::HASTYPE;
         }
-        Ok(ColumnDefinition {
+        Ok(Self {
             col_name,
             col_type,
             constraints,
@@ -1665,9 +1665,9 @@ impl TableConstraint {
         columns: Vec<SortedColumn>,
         auto_increment: bool,
         conflict_clause: Option<ResolveType>,
-    ) -> Result<TableConstraint, ParserError> {
+    ) -> Result<Self, ParserError> {
         has_explicit_nulls(&columns)?;
-        Ok(TableConstraint::PrimaryKey {
+        Ok(Self::PrimaryKey {
             columns,
             auto_increment,
             conflict_clause,
@@ -1677,9 +1677,9 @@ impl TableConstraint {
     pub fn unique(
         columns: Vec<SortedColumn>,
         conflict_clause: Option<ResolveType>,
-    ) -> Result<TableConstraint, ParserError> {
+    ) -> Result<Self, ParserError> {
         has_explicit_nulls(&columns)?;
-        Ok(TableConstraint::Unique {
+        Ok(Self::Unique {
             columns,
             conflict_clause,
         })
@@ -2067,9 +2067,9 @@ impl UpsertIndex {
     pub fn new(
         targets: Vec<SortedColumn>,
         where_clause: Option<Expr>,
-    ) -> Result<UpsertIndex, ParserError> {
+    ) -> Result<Self, ParserError> {
         has_explicit_nulls(&targets)?;
-        Ok(UpsertIndex {
+        Ok(Self {
             targets,
             where_clause,
         })
