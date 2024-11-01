@@ -7,6 +7,7 @@ use std::num::ParseIntError;
 use std::ops::Deref;
 use std::str::{self, Bytes, FromStr};
 
+use check::ColumnCount;
 use fmt::{ToTokens, TokenStream};
 use indexmap::{IndexMap, IndexSet};
 
@@ -579,6 +580,30 @@ impl Expr {
             filter_over,
         })
     }
+
+    /// Check if an expression is an integer
+    pub fn is_integer(&self) -> Option<usize> {
+        if let Self::Literal(Literal::Numeric(ref s)) = self {
+            if let Ok(n) = usize::from_str(s) {
+                Some(n)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+    fn check_range(&self, mx: usize) -> Result<(), ParserError> {
+        if let Some(i) = self.is_integer() {
+            if i < 1 || i > mx {
+                return Err(custom_err!(
+                    "GROUP BY term out of range - should be between 1 and {}",
+                    mx
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// SQL literal
@@ -862,14 +887,26 @@ impl OneSelect {
         {
             return Err(custom_err!("no tables specified"));
         }
-        Ok(Self::Select {
+        let select = Self::Select {
             distinctness,
             columns,
             from,
             where_clause,
             group_by,
             window_clause,
-        })
+        };
+        if let Self::Select {
+            group_by: Some(ref gb),
+            ..
+        } = select
+        {
+            if let ColumnCount::Fixed(n) = select.column_count() {
+                for expr in &gb.exprs {
+                    expr.check_range(n)?;
+                }
+            }
+        }
+        Ok(select)
     }
 }
 

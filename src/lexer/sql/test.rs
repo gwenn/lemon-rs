@@ -427,6 +427,18 @@ fn no_tables_specified() {
 }
 
 #[test]
+fn group_by_out_of_range() {
+    expect_parser_err_msg(
+        b"SELECT a, b FROM x GROUP BY 0",
+        "GROUP BY term out of range - should be between 1 and 2",
+    );
+    expect_parser_err_msg(
+        b"SELECT a, b FROM x GROUP BY 3",
+        "GROUP BY term out of range - should be between 1 and 2",
+    );
+}
+
+#[test]
 fn update_from_target() {
     expect_parser_err_msg(
         b"UPDATE x1 SET a=5 FROM x1",

@@ -46,11 +46,11 @@ Parse error: must have at least one non-generated column
 
 ```sql
 sqlite> CREATE TABLE t(a REFERENCES o(a,b));
-Parse error: foreign key on a should reference only one column of table o
+Parse error: foreign key on a should reference only one column of table o -- done
   CREATE TABLE t(a REFERENCES o(a,b));
                 error here ---^
 sqlite> CREATE TABLE t(a PRIMARY KEY AUTOINCREMENT) WITHOUT ROWID;
-Parse error: AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY
+Parse error: AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY -- done
 sqlite> CREATE TABLE t(a INTEGER PRIMARY KEY AUTOINCREMENT) WITHOUT ROWID;
 Parse error: AUTOINCREMENT not allowed on WITHOUT ROWID tables
 ```
@@ -106,7 +106,7 @@ Parse error: no such column: j
 
 ```sql
 sqlite> CREATE TABLE test (n, m);
-sqlite> INSERT INTO test (n, n, m) VALUES (1, 0, 1); -- pgsql KO
+sqlite> INSERT INTO test (n, n, m) VALUES (1, 0, 1); -- pgsql KO, done
 sqlite> SELECT * FROM test;
 1|1
 sqlite> UPDATE test SET n = 1, n = 0; -- pgsql KO
