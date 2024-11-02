@@ -67,6 +67,65 @@ fn create_table_without_column() {
 }
 
 #[test]
+fn auto_increment() {
+    parse_cmd(b"CREATE TABLE t (x INTEGER PRIMARY KEY AUTOINCREMENT)");
+    parse_cmd(b"CREATE TABLE t (x \"INTEGER\" PRIMARY KEY AUTOINCREMENT)");
+    expect_parser_err_msg(
+        b"CREATE TABLE t (x TEXT PRIMARY KEY AUTOINCREMENT)",
+        "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY",
+    );
+}
+
+#[test]
+fn generated() {
+    expect_parser_err_msg(
+        b"CREATE TABLE x(a PRIMARY KEY AS ('id'))",
+        "generated columns cannot be part of the PRIMARY KEY",
+    );
+    expect_parser_err_msg(
+        b"CREATE TABLE x(a AS ('id') DEFAULT '')",
+        "cannot use DEFAULT on a generated column",
+    )
+}
+
+#[test]
+fn more_than_one_pk() {
+    expect_parser_err_msg(
+        b"CREATE TABLE test (a,b, PRIMARY KEY(a), PRIMARY KEY(b))",
+        "table has more than one primary key",
+    );
+    expect_parser_err_msg(
+        b"CREATE TABLE test (a PRIMARY KEY, b PRIMARY KEY)",
+        "table has more than one primary key",
+    );
+    expect_parser_err_msg(
+        b"CREATE TABLE test (a PRIMARY KEY, b, PRIMARY KEY(a))",
+        "table has more than one primary key",
+    );
+}
+
+#[test]
+fn has_explicit_nulls() {
+    expect_parser_err_msg(
+        b"CREATE TABLE x(a TEXT, PRIMARY KEY (a ASC NULLS FIRST))",
+        "unsupported use of NULLS FIRST",
+    );
+    expect_parser_err_msg(
+        b"CREATE TABLE x(a TEXT, UNIQUE (a ASC NULLS LAST))",
+        "unsupported use of NULLS LAST",
+    );
+    expect_parser_err_msg(
+        b"INSERT INTO x VALUES('v')
+              ON CONFLICT (a DESC NULLS FIRST) DO UPDATE SET a = a+1",
+        "unsupported use of NULLS FIRST",
+    );
+    expect_parser_err_msg(
+        b"CREATE INDEX i ON x(a ASC NULLS LAST)",
+        "unsupported use of NULLS LAST",
+    )
+}
+
+#[test]
 fn vtab_args() -> Result<(), Error> {
     let sql = b"CREATE VIRTUAL TABLE mail USING fts3(
   subject VARCHAR(256) NOT NULL,
@@ -211,6 +270,11 @@ fn create_strict_table_unknown_datatype() {
         b"CREATE TABLE t (c1 BOOL) STRICT",
         "unknown datatype for t.c1: \"BOOL\"",
     );
+    expect_parser_err_msg(
+        b"CREATE TABLE t (c1 INT(10)) STRICT",
+        "unknown datatype for t.c1: \"INT(...)\"",
+    );
+    parse_cmd(b"CREATE TABLE t(c1 \"INT\", c2 [TEXT], c3 `INTEGER`)");
 }
 
 #[test]
@@ -322,6 +386,87 @@ fn cast_without_typename() {
 }
 
 #[test]
+fn distinct_aggregates() {
+    expect_parser_err_msg(
+        b"SELECT count(DISTINCT) FROM t",
+        "DISTINCT aggregates must have exactly one argument",
+    );
+    expect_parser_err_msg(
+        b"SELECT count(DISTINCT a,b) FROM t",
+        "DISTINCT aggregates must have exactly one argument",
+    );
+}
+
+#[test]
+fn cte_column_count() {
+    expect_parser_err_msg(
+        b"WITH i(x, y) AS ( VALUES(1) )
+      SELECT * FROM i;",
+        "table i has 1 values for 2 columns",
+    )
+}
+
+#[test]
+fn unknown_join_type() {
+    expect_parser_err_msg(
+        b"SELECT * FROM t1 INNER OUTER JOIN t2;",
+        "unknown join type: INNER OUTER ",
+    );
+    expect_parser_err_msg(
+        b"SELECT * FROM t1 LEFT BOGUS JOIN t2;",
+        "unknown join type: BOGUS",
+    )
+}
+
+#[test]
+fn no_tables_specified() {
+    expect_parser_err_msg(b"SELECT *", "no tables specified");
+    expect_parser_err_msg(b"SELECT t.*", "no tables specified");
+    expect_parser_err_msg(b"SELECT count(*), *", "no tables specified");
+    parse_cmd(b"SELECT count(*)");
+}
+
+#[test]
+fn group_by_out_of_range() {
+    expect_parser_err_msg(
+        b"SELECT a, b FROM x GROUP BY 0",
+        "GROUP BY term out of range - should be between 1 and 2",
+    );
+    expect_parser_err_msg(
+        b"SELECT a, b FROM x GROUP BY 3",
+        "GROUP BY term out of range - should be between 1 and 2",
+    );
+}
+
+#[test]
+fn order_by_out_of_range() {
+    expect_parser_err_msg(
+        b"SELECT a, b FROM x ORDER BY -1",
+        "ORDER BY term out of range - should be between 1 and 2",
+    );
+    expect_parser_err_msg(
+        b"SELECT a, b FROM x ORDER BY 0",
+        "ORDER BY term out of range - should be between 1 and 2",
+    );
+    expect_parser_err_msg(
+        b"SELECT a, b FROM x ORDER BY 3",
+        "ORDER BY term out of range - should be between 1 and 2",
+    );
+}
+
+#[test]
+fn update_from_target() {
+    expect_parser_err_msg(
+        b"UPDATE x1 SET a=5 FROM x1",
+        "target object/alias may not appear in FROM clause",
+    );
+    expect_parser_err_msg(
+        b"UPDATE x1 SET a=5 FROM x2, x1",
+        "target object/alias may not appear in FROM clause",
+    );
+}
+
+#[test]
 fn unknown_table_option() {
     expect_parser_err_msg(b"CREATE TABLE t(x)o", "unknown table option: o");
     expect_parser_err_msg(b"CREATE TABLE t(x) WITHOUT o", "unknown table option: o");
@@ -354,6 +499,33 @@ fn indexed_by_clause_within_triggers() {
         "the NOT INDEXED clause is not allowed on UPDATE or DELETE statements \
          within triggers",
     );
+}
+
+#[test]
+fn returning_within_trigger() {
+    expect_parser_err_msg(b"CREATE TRIGGER t AFTER DELETE ON x BEGIN INSERT INTO x (a) VALUES ('x') RETURNING rowid; END;", "cannot use RETURNING in a trigger");
+}
+
+#[test]
+fn reserved_name() {
+    expect_parser_err_msg(
+        b"CREATE TABLE sqlite_x(a)",
+        "object name reserved for internal use: sqlite_x",
+    );
+    expect_parser_err_msg(
+        b"CREATE VIEW sqlite_x(a) AS SELECT 1",
+        "object name reserved for internal use: sqlite_x",
+    );
+    expect_parser_err_msg(
+        b"CREATE INDEX sqlite_x ON x(a)",
+        "object name reserved for internal use: sqlite_x",
+    );
+    expect_parser_err_msg(
+        b"CREATE TRIGGER sqlite_x AFTER INSERT ON x BEGIN SELECT 1; END;",
+        "object name reserved for internal use: sqlite_x",
+    );
+    parse_cmd(b"CREATE TABLE sqlite(a)");
+    parse_cmd(b"CREATE INDEX \"\" ON t(a)");
 }
 
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
