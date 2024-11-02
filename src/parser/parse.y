@@ -498,14 +498,14 @@ cmd ::= select(X).  {
 
 %ifndef SQLITE_OMIT_CTE
 select(A) ::= WITH wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select{ with: Some(With { recursive: false, ctes: W }), body: X, order_by: Z, limit: L };
+  A = Select::new(Some(With { recursive: false, ctes: W }), X, Z, L)?;
 }
 select(A) ::= WITH RECURSIVE wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select{ with: Some(With { recursive: true, ctes: W }), body: X, order_by: Z, limit: L };
+  A = Select::new(Some(With { recursive: true, ctes: W }), X, Z, L)?;
 }
 %endif /* SQLITE_OMIT_CTE */
 select(A) ::= selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select{ with: None, body: X, order_by: Z, limit: L }; /*A-overwrites-X*/
+  A = Select::new(None, X, Z, L)?; /*A-overwrites-X*/
 }
 
 selectnowith(A) ::= oneselect(X). {

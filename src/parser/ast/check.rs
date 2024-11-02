@@ -39,7 +39,8 @@ pub enum ColumnCount {
     /// With `SELECT *` / PRAGMA
     Dynamic,
     /// Constant count
-    Fixed(usize),
+    // The default setting for SQLITE_MAX_COLUMN is 2000. You can change it at compile time to values as large as 32767.
+    Fixed(u16),
     /// No column
     None,
 }
@@ -146,7 +147,7 @@ impl Stmt {
                 }
                 // SQLite3 engine raises this error later (not while parsing):
                 match select.column_count() {
-                    ColumnCount::Fixed(n) if n != columns.len() => Err(custom_err!(
+                    ColumnCount::Fixed(n) if n as usize != columns.len() => Err(custom_err!(
                         "expected {} columns for {} but got {}",
                         columns.len(),
                         view_name,
@@ -165,7 +166,7 @@ impl Stmt {
                 body: InsertBody::Select(select, ..),
                 ..
             } => match select.body.select.column_count() {
-                ColumnCount::Fixed(n) if n != columns.len() => {
+                ColumnCount::Fixed(n) if n as usize != columns.len() => {
                     Err(custom_err!("{} values for {} columns", n, columns.len()))
                 }
                 _ => Ok(()),
@@ -287,7 +288,7 @@ impl OneSelect {
             Self::Select { columns, .. } => column_count(columns),
             Self::Values(values) => {
                 assert!(!values.is_empty()); // TODO Validate
-                ColumnCount::Fixed(values[0].len())
+                ColumnCount::Fixed(u16::try_from(values[0].len()).unwrap())
             }
         }
     }

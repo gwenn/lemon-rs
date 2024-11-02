@@ -20,7 +20,7 @@ use crate::parser::{parse::YYCODETYPE, ParserError};
 #[derive(Default)]
 pub struct ParameterInfo {
     /// Number of SQL parameters in a prepared statement, like `sqlite3_bind_parameter_count`
-    pub count: u32,
+    pub count: u16,
     /// Parameter name(s) if any
     pub names: IndexSet<String>,
 }
@@ -35,7 +35,7 @@ impl TokenStream for ParameterInfo {
                 if variable == "?" {
                     self.count = self.count.saturating_add(1);
                 } else if variable.as_bytes()[0] == b'?' {
-                    let n = u32::from_str(&variable[1..])?;
+                    let n = u16::from_str(&variable[1..])?;
                     if n > self.count {
                         self.count = n;
                     }
@@ -582,22 +582,27 @@ impl Expr {
     }
 
     /// Check if an expression is an integer
-    pub fn is_integer(&self) -> Option<usize> {
-        if let Self::Literal(Literal::Numeric(ref s)) = self {
-            if let Ok(n) = usize::from_str(s) {
+    pub fn is_integer(&self) -> Option<i64> {
+        if let Self::Literal(Literal::Numeric(s)) = self {
+            if let Ok(n) = i64::from_str(s) {
                 Some(n)
             } else {
                 None
             }
+        } else if let Self::Unary(UnaryOperator::Positive, e) = self {
+            e.is_integer()
+        } else if let Self::Unary(UnaryOperator::Negative, e) = self {
+            e.is_integer().map(i64::saturating_neg)
         } else {
             None
         }
     }
-    fn check_range(&self, mx: usize) -> Result<(), ParserError> {
+    fn check_range(&self, term: &str, mx: u16) -> Result<(), ParserError> {
         if let Some(i) = self.is_integer() {
-            if i < 1 || i > mx {
+            if i < 1 || i > mx as i64 {
                 return Err(custom_err!(
-                    "GROUP BY term out of range - should be between 1 and {}",
+                    "{} BY term out of range - should be between 1 and {}",
+                    term,
                     mx
                 ));
             }
@@ -784,13 +789,42 @@ impl From<YYCODETYPE> for UnaryOperator {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Select {
     /// CTE
-    pub with: Option<With>,
+    pub with: Option<With>, // TODO check usages in body
     /// body
     pub body: SelectBody,
     /// `ORDER BY`
-    pub order_by: Option<Vec<SortedColumn>>, // ORDER BY term does not match any column in the result set
+    pub order_by: Option<Vec<SortedColumn>>, // TODO: ORDER BY term does not match any column in the result set
     /// `LIMIT`
     pub limit: Option<Limit>,
+}
+
+impl Select {
+    /// Constructor
+    pub fn new(
+        with: Option<With>,
+        body: SelectBody,
+        order_by: Option<Vec<SortedColumn>>,
+        limit: Option<Limit>,
+    ) -> Result<Self, ParserError> {
+        let select = Self {
+            with,
+            body,
+            order_by,
+            limit,
+        };
+        if let Self {
+            order_by: Some(ref scs),
+            ..
+        } = select
+        {
+            if let ColumnCount::Fixed(n) = select.column_count() {
+                for sc in scs {
+                    sc.expr.check_range("ORDER", n)?;
+                }
+            }
+        }
+        Ok(select)
+    }
 }
 
 /// `SELECT` body
@@ -902,7 +936,7 @@ impl OneSelect {
         {
             if let ColumnCount::Fixed(n) = select.column_count() {
                 for expr in &gb.exprs {
-                    expr.check_range(n)?;
+                    expr.check_range("GROUP", n)?;
                 }
             }
         }
@@ -2019,7 +2053,7 @@ impl CommonTableExpr {
     ) -> Result<Self, ParserError> {
         if let Some(ref columns) = columns {
             if let check::ColumnCount::Fixed(cc) = select.column_count() {
-                if cc != columns.len() {
+                if cc as usize != columns.len() {
                     return Err(custom_err!(
                         "table {} has {} values for {} columns",
                         tbl_name,
