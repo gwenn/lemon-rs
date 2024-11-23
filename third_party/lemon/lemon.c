@@ -4215,8 +4215,8 @@ void print_stack_union(
   lemon_free(stddt);
   fprintf(out,"}\n"); lineno++;
 
-  fprintf(out,"impl<'i> Default for YYMINORTYPE<'i> {\n"); lineno++;
-  fprintf(out,"    fn default() -> YYMINORTYPE<'i> {\n"); lineno++;
+  fprintf(out,"impl Default for YYMINORTYPE<'_> {\n"); lineno++;
+  fprintf(out,"    fn default() -> Self {\n"); lineno++;
   fprintf(out,"        YYMINORTYPE::yyinit()\n"); lineno++;
   fprintf(out,"    }\n"); lineno++;
   fprintf(out,"}\n"); lineno++;

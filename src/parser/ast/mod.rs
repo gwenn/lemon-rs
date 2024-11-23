@@ -1236,10 +1236,10 @@ impl ColumnDefinition {
             let mut split = col_type.name.split_ascii_whitespace();
             let truncate = if split
                 .next_back()
-                .map_or(false, |s| s.eq_ignore_ascii_case("ALWAYS"))
+                .is_some_and(|s| s.eq_ignore_ascii_case("ALWAYS"))
                 && split
                     .next_back()
-                    .map_or(false, |s| s.eq_ignore_ascii_case("GENERATED"))
+                    .is_some_and(|s| s.eq_ignore_ascii_case("GENERATED"))
             {
                 let mut generated = false;
                 for constraint in &cd.constraints {
