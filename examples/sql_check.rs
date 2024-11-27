@@ -48,8 +48,11 @@ fn main() {
                 }
             }
         });
-        if let Err(e) = result {
-            eprintln!("Panic: {e:?} in {arg}");
+        match result {
+            Err(e) => {
+                eprintln!("Panic: {e:?} in {arg}");
+            }
+            _ => {}
         }
     }
 }
