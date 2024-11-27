@@ -153,7 +153,7 @@ fn analyze_filter_keyword(
 }
 
 macro_rules! try_with_position {
-    ($scanner:expr, $expr:expr) => {
+    ($scanner:expr_2021, $expr:expr_2021) => {
         match $expr {
             Ok(val) => val,
             Err(err) => {

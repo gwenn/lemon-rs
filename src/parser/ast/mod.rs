@@ -687,20 +687,20 @@ impl SelectBody {
     pub(crate) fn push(&mut self, cs: CompoundSelect) -> Result<(), ParserError> {
         use crate::ast::check::ColumnCount;
         if let ColumnCount::Fixed(n) = self.select.column_count() {
-            if let ColumnCount::Fixed(m) = cs.select.column_count() {
+            match cs.select.column_count() { ColumnCount::Fixed(m) => {
                 if n != m {
                     return Err(custom_err!(
                         "SELECTs to the left and right of {} do not have the same number of result columns",
                         cs.operator
                     ));
                 }
-            }
+            } _ => {}}
         }
-        if let Some(ref mut v) = self.compounds {
+        match self.compounds { Some(ref mut v) => {
             v.push(cs);
-        } else {
+        } _ => {
             self.compounds = Some(vec![cs]);
-        }
+        }}
         Ok(())
     }
 }
@@ -787,11 +787,11 @@ impl FromClause {
                     "a NATURAL join may not have an ON or USING clause"
                 ));
             }
-            if let Some(ref mut joins) = self.joins {
+            match self.joins { Some(ref mut joins) => {
                 joins.push(jst);
-            } else {
+            } _ => {
                 self.joins = Some(vec![jst]);
-            }
+            }}
         } else {
             if jc.is_some() {
                 return Err(custom_err!("a JOIN clause is required before ON"));
@@ -1243,10 +1243,10 @@ impl ColumnDefinition {
             {
                 let mut generated = false;
                 for constraint in &cd.constraints {
-                    if let ColumnConstraint::Generated { .. } = constraint.constraint {
+                    match constraint.constraint { ColumnConstraint::Generated { .. } => {
                         generated = true;
                         break;
-                    }
+                    } _ => {}}
                 }
                 generated
             } else {
@@ -1259,14 +1259,14 @@ impl ColumnDefinition {
             }
         }
         for constraint in &cd.constraints {
-            if let ColumnConstraint::ForeignKey {
+            match &constraint.constraint
+            { ColumnConstraint::ForeignKey {
                 clause:
                     ForeignKeyClause {
                         tbl_name, columns, ..
                     },
                 ..
-            } = &constraint.constraint
-            {
+            } => {
                 // The child table may reference the primary key of the parent without specifying the primary key column
                 if columns.as_ref().map_or(0, Vec::len) > 1 {
                     return Err(custom_err!(
@@ -1275,7 +1275,7 @@ impl ColumnDefinition {
                         tbl_name
                     ));
                 }
-            }
+            } _ => {}}
         }
         columns.insert(col_name.clone(), cd);
         Ok(())

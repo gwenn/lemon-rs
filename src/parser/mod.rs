@@ -46,10 +46,10 @@ macro_rules! custom_err {
     ($msg:literal $(,)?) => {
         $crate::parser::ParserError::Custom($msg.to_owned())
     };
-    ($err:expr $(,)?) => {
+    ($err:expr_2021 $(,)?) => {
         $crate::parser::ParserError::Custom(format!($err))
     };
-    ($fmt:expr, $($arg:tt)*) => {
+    ($fmt:expr_2021, $($arg:tt)*) => {
         $crate::parser::ParserError::Custom(format!($fmt, $($arg)*))
     };
 }
@@ -82,15 +82,15 @@ impl<'input> Context<'input> {
 
     /// Consume parsed command
     pub fn cmd(&mut self) -> Option<Cmd> {
-        if let Some(stmt) = self.stmt.take() {
+        match self.stmt.take() { Some(stmt) => {
             match self.explain.take() {
                 Some(ExplainKind::Explain) => Some(Cmd::Explain(stmt)),
                 Some(ExplainKind::QueryPlan) => Some(Cmd::ExplainQueryPlan(stmt)),
                 None => Some(Cmd::Stmt(stmt)),
             }
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 
     fn constraint_name(&mut self) -> Option<Name> {

@@ -515,10 +515,10 @@ impl ToTokens for Stmt {
             }
             Self::Vacuum(name, expr) => {
                 s.append(TK_VACUUM, None)?;
-                if let Some(ref name) = name {
+                if let &Some(ref name) = name {
                     name.to_tokens(s)?;
                 }
-                if let Some(ref expr) = expr {
+                if let &Some(ref expr) = expr {
                     s.append(TK_INTO, None)?;
                     expr.to_tokens(s)?;
                 }
@@ -557,7 +557,7 @@ impl ToTokens for Expr {
                 else_expr,
             } => {
                 s.append(TK_CASE, None)?;
-                if let Some(ref base) = base {
+                if let &Some(ref base) = base {
                     base.to_tokens(s)?;
                 }
                 for (when, then) in when_then_pairs {
@@ -566,7 +566,7 @@ impl ToTokens for Expr {
                     s.append(TK_THEN, None)?;
                     then.to_tokens(s)?;
                 }
-                if let Some(ref else_expr) = else_expr {
+                if let &Some(ref else_expr) = else_expr {
                     s.append(TK_ELSE, None)?;
                     else_expr.to_tokens(s)?;
                 }
@@ -577,7 +577,7 @@ impl ToTokens for Expr {
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
                 s.append(TK_AS, None)?;
-                if let Some(ref type_name) = type_name {
+                if let &Some(ref type_name) = type_name {
                     type_name.to_tokens(s)?;
                 }
                 s.append(TK_RP, None)
@@ -756,10 +756,10 @@ impl Display for Expr {
 impl ToTokens for Literal {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::Numeric(ref num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
-            Self::String(ref str) => s.append(TK_STRING, Some(str)),
-            Self::Blob(ref blob) => s.append(TK_BLOB, Some(blob)),
-            Self::Keyword(ref str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
+            &Self::Numeric(ref num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
+            &Self::String(ref str) => s.append(TK_STRING, Some(str)),
+            &Self::Blob(ref blob) => s.append(TK_BLOB, Some(blob)),
+            &Self::Keyword(ref str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
             Self::Null => s.append(TK_NULL, None),
             Self::CurrentDate => s.append(TK_CTIME_KW, Some("CURRENT_DATE")),
             Self::CurrentTime => s.append(TK_CTIME_KW, Some("CURRENT_TIME")),
@@ -897,22 +897,22 @@ impl ToTokens for OneSelect {
                 window_clause,
             } => {
                 s.append(TK_SELECT, None)?;
-                if let Some(ref distinctness) = distinctness {
+                if let &Some(ref distinctness) = distinctness {
                     distinctness.to_tokens(s)?;
                 }
                 comma(columns, s)?;
-                if let Some(ref from) = from {
+                if let &Some(ref from) = from {
                     s.append(TK_FROM, None)?;
                     from.to_tokens(s)?;
                 }
-                if let Some(ref where_clause) = where_clause {
+                if let &Some(ref where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
                     where_clause.to_tokens(s)?;
                 }
-                if let Some(ref group_by) = group_by {
+                if let &Some(ref group_by) = group_by {
                     group_by.to_tokens(s)?;
                 }
-                if let Some(ref window_clause) = window_clause {
+                if let &Some(ref window_clause) = window_clause {
                     s.append(TK_WINDOW, None)?;
                     comma(window_clause, s)?;
                 }
@@ -982,11 +982,11 @@ impl ToTokens for ResultColumn {
 impl ToTokens for As {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::As(ref name) => {
+            &Self::As(ref name) => {
                 s.append(TK_AS, None)?;
                 name.to_tokens(s)
             }
-            Self::Elided(ref name) => name.to_tokens(s),
+            &Self::Elided(ref name) => name.to_tokens(s),
         }
     }
 }
@@ -1054,7 +1054,7 @@ impl ToTokens for JoinOperator {
         match self {
             Self::Comma => s.append(TK_COMMA, None),
             Self::TypedJoin(join_type) => {
-                if let Some(ref join_type) = join_type {
+                if let &Some(ref join_type) = join_type {
                     join_type.to_tokens(s)?;
                 }
                 s.append(TK_JOIN, None)
@@ -1442,22 +1442,22 @@ impl ToTokens for ForeignKeyClause {
 impl ToTokens for RefArg {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::OnDelete(ref action) => {
+            &Self::OnDelete(ref action) => {
                 s.append(TK_ON, None)?;
                 s.append(TK_DELETE, None)?;
                 action.to_tokens(s)
             }
-            Self::OnInsert(ref action) => {
+            &Self::OnInsert(ref action) => {
                 s.append(TK_ON, None)?;
                 s.append(TK_INSERT, None)?;
                 action.to_tokens(s)
             }
-            Self::OnUpdate(ref action) => {
+            &Self::OnUpdate(ref action) => {
                 s.append(TK_ON, None)?;
                 s.append(TK_UPDATE, None)?;
                 action.to_tokens(s)
             }
-            Self::Match(ref name) => {
+            &Self::Match(ref name) => {
                 s.append(TK_MATCH, None)?;
                 name.to_tokens(s)
             }
@@ -1529,7 +1529,7 @@ impl ToTokens for IndexedColumn {
 impl ToTokens for Indexed {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::IndexedBy(ref name) => {
+            &Self::IndexedBy(ref name) => {
                 s.append(TK_INDEXED, None)?;
                 s.append(TK_BY, None)?;
                 name.to_tokens(s)
@@ -1634,7 +1634,7 @@ impl ToTokens for TriggerEvent {
             Self::Delete => s.append(TK_DELETE, None),
             Self::Insert => s.append(TK_INSERT, None),
             Self::Update => s.append(TK_UPDATE, None),
-            Self::UpdateOf(ref col_names) => {
+            &Self::UpdateOf(ref col_names) => {
                 s.append(TK_UPDATE, None)?;
                 s.append(TK_OF, None)?;
                 comma(col_names.deref(), s)
@@ -1883,8 +1883,8 @@ impl ToTokens for FunctionTail {
 impl ToTokens for Over {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::Window(ref window) => window.to_tokens(s),
-            Self::Name(ref name) => name.to_tokens(s),
+            &Self::Window(ref window) => window.to_tokens(s),
+            &Self::Name(ref name) => name.to_tokens(s),
         }
     }
 }
@@ -1923,14 +1923,14 @@ impl ToTokens for Window {
 impl ToTokens for FrameClause {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.mode.to_tokens(s)?;
-        if let Some(ref end) = self.end {
+        match self.end { Some(ref end) => {
             s.append(TK_BETWEEN, None)?;
             self.start.to_tokens(s)?;
             s.append(TK_AND, None)?;
             end.to_tokens(s)?;
-        } else {
+        } _ => {
             self.start.to_tokens(s)?;
-        }
+        }}
         if let Some(ref exclude) = self.exclude {
             s.append(TK_EXCLUDE, None)?;
             exclude.to_tokens(s)?;
