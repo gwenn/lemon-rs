@@ -1923,14 +1923,17 @@ impl ToTokens for Window {
 impl ToTokens for FrameClause {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.mode.to_tokens(s)?;
-        match self.end { Some(ref end) => {
-            s.append(TK_BETWEEN, None)?;
-            self.start.to_tokens(s)?;
-            s.append(TK_AND, None)?;
-            end.to_tokens(s)?;
-        } _ => {
-            self.start.to_tokens(s)?;
-        }}
+        match self.end {
+            Some(ref end) => {
+                s.append(TK_BETWEEN, None)?;
+                self.start.to_tokens(s)?;
+                s.append(TK_AND, None)?;
+                end.to_tokens(s)?;
+            }
+            _ => {
+                self.start.to_tokens(s)?;
+            }
+        }
         if let Some(ref exclude) = self.exclude {
             s.append(TK_EXCLUDE, None)?;
             exclude.to_tokens(s)?;

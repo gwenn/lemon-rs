@@ -361,11 +361,14 @@ fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
 }
 fn expect_parser_err(input: &[u8], err: ParserError) {
     let r = parse(input);
-    match r.unwrap_err() { Error::ParserError(e, _) => {
-        assert_eq!(e, err);
-    } _ => {
-        panic!("unexpected error type")
-    }};
+    match r.unwrap_err() {
+        Error::ParserError(e, _) => {
+            assert_eq!(e, err);
+        }
+        _ => {
+            panic!("unexpected error type")
+        }
+    };
 }
 fn parse_cmd(input: &[u8]) -> Cmd {
     parse(input).unwrap().unwrap()

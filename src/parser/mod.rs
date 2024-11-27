@@ -82,15 +82,14 @@ impl<'input> Context<'input> {
 
     /// Consume parsed command
     pub fn cmd(&mut self) -> Option<Cmd> {
-        match self.stmt.take() { Some(stmt) => {
-            match self.explain.take() {
+        match self.stmt.take() {
+            Some(stmt) => match self.explain.take() {
                 Some(ExplainKind::Explain) => Some(Cmd::Explain(stmt)),
                 Some(ExplainKind::QueryPlan) => Some(Cmd::ExplainQueryPlan(stmt)),
                 None => Some(Cmd::Stmt(stmt)),
-            }
-        } _ => {
-            None
-        }}
+            },
+            _ => None,
+        }
     }
 
     fn constraint_name(&mut self) -> Option<Name> {

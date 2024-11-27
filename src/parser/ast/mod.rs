@@ -687,20 +687,26 @@ impl SelectBody {
     pub(crate) fn push(&mut self, cs: CompoundSelect) -> Result<(), ParserError> {
         use crate::ast::check::ColumnCount;
         if let ColumnCount::Fixed(n) = self.select.column_count() {
-            match cs.select.column_count() { ColumnCount::Fixed(m) => {
-                if n != m {
-                    return Err(custom_err!(
+            match cs.select.column_count() {
+                ColumnCount::Fixed(m) => {
+                    if n != m {
+                        return Err(custom_err!(
                         "SELECTs to the left and right of {} do not have the same number of result columns",
                         cs.operator
                     ));
+                    }
                 }
-            } _ => {}}
+                _ => {}
+            }
         }
-        match self.compounds { Some(ref mut v) => {
-            v.push(cs);
-        } _ => {
-            self.compounds = Some(vec![cs]);
-        }}
+        match self.compounds {
+            Some(ref mut v) => {
+                v.push(cs);
+            }
+            _ => {
+                self.compounds = Some(vec![cs]);
+            }
+        }
         Ok(())
     }
 }
@@ -787,11 +793,14 @@ impl FromClause {
                     "a NATURAL join may not have an ON or USING clause"
                 ));
             }
-            match self.joins { Some(ref mut joins) => {
-                joins.push(jst);
-            } _ => {
-                self.joins = Some(vec![jst]);
-            }}
+            match self.joins {
+                Some(ref mut joins) => {
+                    joins.push(jst);
+                }
+                _ => {
+                    self.joins = Some(vec![jst]);
+                }
+            }
         } else {
             if jc.is_some() {
                 return Err(custom_err!("a JOIN clause is required before ON"));
@@ -1243,10 +1252,13 @@ impl ColumnDefinition {
             {
                 let mut generated = false;
                 for constraint in &cd.constraints {
-                    match constraint.constraint { ColumnConstraint::Generated { .. } => {
-                        generated = true;
-                        break;
-                    } _ => {}}
+                    match constraint.constraint {
+                        ColumnConstraint::Generated { .. } => {
+                            generated = true;
+                            break;
+                        }
+                        _ => {}
+                    }
                 }
                 generated
             } else {
@@ -1259,23 +1271,25 @@ impl ColumnDefinition {
             }
         }
         for constraint in &cd.constraints {
-            match &constraint.constraint
-            { ColumnConstraint::ForeignKey {
-                clause:
-                    ForeignKeyClause {
-                        tbl_name, columns, ..
-                    },
-                ..
-            } => {
-                // The child table may reference the primary key of the parent without specifying the primary key column
-                if columns.as_ref().map_or(0, Vec::len) > 1 {
-                    return Err(custom_err!(
-                        "foreign key on {} should reference only one column of table {}",
-                        col_name,
-                        tbl_name
-                    ));
+            match &constraint.constraint {
+                ColumnConstraint::ForeignKey {
+                    clause:
+                        ForeignKeyClause {
+                            tbl_name, columns, ..
+                        },
+                    ..
+                } => {
+                    // The child table may reference the primary key of the parent without specifying the primary key column
+                    if columns.as_ref().map_or(0, Vec::len) > 1 {
+                        return Err(custom_err!(
+                            "foreign key on {} should reference only one column of table {}",
+                            col_name,
+                            tbl_name
+                        ));
+                    }
                 }
-            } _ => {}}
+                _ => {}
+            }
         }
         columns.insert(col_name.clone(), cd);
         Ok(())
