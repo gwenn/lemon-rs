@@ -15,10 +15,10 @@ use fallible_iterator::FallibleIterator;
 use sqlite3_parser::lexer::sql::Parser;
 
 fn basic_queries(c: &mut Criterion) {
-    let mut group = c.benchmark_group("sqlparser-rs parsing benchmark");
+    let mut group = c.benchmark_group("sqlite3_parser parsing benchmark");
 
     let string = b"SELECT * FROM `table` WHERE 1 = 1";
-    group.bench_with_input("sqlparser::select", &string, |b, &s| {
+    group.bench_with_input("sqlite3_parser::select", &string, |b, &s| {
         b.iter(|| {
             let mut parser = Parser::new(s);
             assert!(parser.next().unwrap().unwrap().readonly())
@@ -36,7 +36,7 @@ fn basic_queries(c: &mut Criterion) {
         SELECT * FROM `table`
         LEFT JOIN derived USING (user_id)
     ";
-    group.bench_with_input("sqlparser::with_select", &with_query, |b, &s| {
+    group.bench_with_input("sqlite3_parser::with_select", &with_query, |b, &s| {
         b.iter(|| {
             let mut parser = Parser::new(s);
             assert!(parser.next().unwrap().unwrap().readonly())
