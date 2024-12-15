@@ -195,8 +195,11 @@ impl CreateTableBody {
             let mut generated_count = 0;
             for c in columns.values() {
                 for cs in &c.constraints {
-                    if let ColumnConstraint::Generated { .. } = cs.constraint {
-                        generated_count += 1;
+                    match cs.constraint {
+                        ColumnConstraint::Generated { .. } => {
+                            generated_count += 1;
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -259,8 +262,11 @@ impl CreateTableBody {
             }
             if let Some(constraints) = constraints {
                 for c in constraints {
-                    if let TableConstraint::PrimaryKey { .. } = c.constraint {
-                        return true;
+                    match c.constraint {
+                        TableConstraint::PrimaryKey { .. } => {
+                            return true;
+                        }
+                        _ => {}
                     }
                 }
             }
