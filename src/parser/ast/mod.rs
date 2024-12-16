@@ -144,7 +144,7 @@ pub enum Stmt {
         /// columns
         columns: Option<Vec<IndexedColumn>>,
         /// query
-        select: Select,
+        select: Box<Select>,
     },
     /// `CREATE VIRTUAL TABLE`
     CreateVirtualTable {
@@ -238,7 +238,7 @@ pub enum Stmt {
     /// `SAVEPOINT`: savepoint name
     Savepoint(Name),
     /// `SELECT`
-    Select(Select),
+    Select(Box<Select>),
     /// `UPDATE`
     Update {
         /// CTE
@@ -352,7 +352,7 @@ pub enum Expr {
         /// `NOT`
         not: bool,
         /// table name
-        rhs: QualifiedName,
+        rhs: Box<QualifiedName>,
         /// table function arguments
         args: Option<Vec<Expr>>,
     },
@@ -477,7 +477,7 @@ impl Expr {
         Self::InTable {
             lhs: Box::new(lhs),
             not,
-            rhs,
+            rhs: Box::new(rhs),
             args,
         }
     }
@@ -1193,7 +1193,7 @@ pub enum CreateTableBody {
         options: TableOptions,
     },
     /// `AS` select
-    AsSelect(Select),
+    AsSelect(Box<Select>),
 }
 
 impl CreateTableBody {
@@ -1520,7 +1520,7 @@ pub struct Limit {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InsertBody {
     /// `SELECT` or `VALUES`
-    Select(Select, Option<Upsert>),
+    Select(Box<Select>, Option<Upsert>),
     /// `DEFAULT VALUES`
     DefaultValues,
 }
