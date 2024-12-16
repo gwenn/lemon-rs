@@ -144,7 +144,7 @@ pub enum Stmt {
         /// columns
         columns: Option<Vec<IndexedColumn>>,
         /// query
-        select: Select,
+        select: Box<Select>,
     },
     /// `CREATE VIRTUAL TABLE`
     CreateVirtualTable {
@@ -172,7 +172,7 @@ pub enum Stmt {
         /// `ORDER BY`
         order_by: Option<Vec<SortedColumn>>,
         /// `LIMIT`
-        limit: Option<Limit>,
+        limit: Option<Box<Limit>>,
     },
     /// `DETACH DATABASE`: db name
     Detach(Expr), // TODO distinction between DETACH and DETACH DATABASE
@@ -238,7 +238,7 @@ pub enum Stmt {
     /// `SAVEPOINT`: savepoint name
     Savepoint(Name),
     /// `SELECT`
-    Select(Select),
+    Select(Box<Select>),
     /// `UPDATE`
     Update {
         /// CTE
@@ -260,7 +260,7 @@ pub enum Stmt {
         /// `ORDER BY`
         order_by: Option<Vec<SortedColumn>>,
         /// `LIMIT`
-        limit: Option<Limit>,
+        limit: Option<Box<Limit>>,
     },
     /// `VACUUM`: database name, into expr
     Vacuum(Option<Name>, Option<Expr>),
@@ -352,7 +352,7 @@ pub enum Expr {
         /// `NOT`
         not: bool,
         /// table name
-        rhs: QualifiedName,
+        rhs: Box<QualifiedName>,
         /// table function arguments
         args: Option<Vec<Expr>>,
     },
@@ -477,7 +477,7 @@ impl Expr {
         Self::InTable {
             lhs: Box::new(lhs),
             not,
-            rhs,
+            rhs: Box::new(rhs),
             args,
         }
     }
@@ -671,7 +671,7 @@ pub struct Select {
     /// `ORDER BY`
     pub order_by: Option<Vec<SortedColumn>>, // ORDER BY term does not match any column in the result set
     /// `LIMIT`
-    pub limit: Option<Limit>,
+    pub limit: Option<Box<Limit>>,
 }
 
 /// `SELECT` body
@@ -1193,7 +1193,7 @@ pub enum CreateTableBody {
         options: TableOptions,
     },
     /// `AS` select
-    AsSelect(Select),
+    AsSelect(Box<Select>),
 }
 
 impl CreateTableBody {
@@ -1520,7 +1520,7 @@ pub struct Limit {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InsertBody {
     /// `SELECT` or `VALUES`
-    Select(Select, Option<Upsert>),
+    Select(Box<Select>, Option<Upsert>),
     /// `DEFAULT VALUES`
     DefaultValues,
 }

@@ -127,7 +127,7 @@ create_table_args(A) ::= LP columnlist(C) conslist_opt(X) RP table_option_set(F)
   A = CreateTableBody::columns_and_constraints(C, X, F)?;
 }
 create_table_args(A) ::= AS select(S). {
-  A = CreateTableBody::AsSelect(S);
+  A = CreateTableBody::AsSelect(Box::new(S));
 }
 %type table_option_set {TableOptions}
 %type table_option {TableOptions}
@@ -476,7 +476,7 @@ ifexists(A) ::= .            {A = false;}
 cmd ::= createkw temp(T) VIEW ifnotexists(E) fullname(Y) eidlist_opt(C)
           AS select(S). {
   self.ctx.stmt = Some(Stmt::CreateView{ temporary: T, if_not_exists: E, view_name: Y, columns: C,
-                                         select: S });
+                                         select: Box::new(S) });
 }
 cmd ::= DROP VIEW ifexists(E) fullname(X). {
   self.ctx.stmt = Some(Stmt::DropView{ if_exists: E, view_name: X });
@@ -486,7 +486,7 @@ cmd ::= DROP VIEW ifexists(E) fullname(X). {
 //////////////////////// The SELECT statement /////////////////////////////////
 //
 cmd ::= select(X).  {
-  self.ctx.stmt = Some(Stmt::Select(X));
+  self.ctx.stmt = Some(Stmt::Select(Box::new(X)));
 }
 
 %type select {Select}
@@ -737,7 +737,7 @@ groupby_opt(A) ::= GROUP BY nexprlist(X) having_opt(Y). {A = Some(GroupBy{ exprs
 having_opt(A) ::= .                {A = None;}
 having_opt(A) ::= HAVING expr(X).  {A = Some(X);}
 
-%type limit_opt {Option<Limit>}
+%type limit_opt {Option<Box<Limit>>}
 
 // The destructor for limit_opt will never fire in the current grammar.
 // The limit_opt non-terminal only occurs at the end of a single production
@@ -749,11 +749,11 @@ having_opt(A) ::= HAVING expr(X).  {A = Some(X);}
 //%destructor limit_opt {sqlite3ExprDelete(pParse->db, $$);}
 limit_opt(A) ::= .       {A = None;}
 limit_opt(A) ::= LIMIT expr(X).
-                         {A = Some(Limit{ expr: X, offset: None });}
+                         {A = Some(Box::new(Limit{ expr: X, offset: None }));}
 limit_opt(A) ::= LIMIT expr(X) OFFSET expr(Y).
-                         {A = Some(Limit{ expr: X, offset: Some(Y) });}
+                         {A = Some(Box::new(Limit{ expr: X, offset: Some(Y) }));}
 limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y).
-                         {A = Some(Limit{ expr: X, offset: Some(Y) });}
+                         {A = Some(Box::new(Limit{ expr: X, offset: Some(Y) }));}
 
 /////////////////////////// The DELETE statement /////////////////////////////
 //
@@ -826,7 +826,7 @@ setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
         upsert(U). {
   let (upsert, returning) = U;
-  let body = InsertBody::Select(S, upsert);
+  let body = InsertBody::Select(Box::new(S), upsert);
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
                                      body, returning });
 }
