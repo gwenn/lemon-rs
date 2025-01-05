@@ -4215,8 +4215,8 @@ void print_stack_union(
   lemon_free(stddt);
   fprintf(out,"}\n"); lineno++;
 
-  fprintf(out,"impl<'i> Default for YYMINORTYPE<'i> {\n"); lineno++;
-  fprintf(out,"    fn default() -> YYMINORTYPE<'i> {\n"); lineno++;
+  fprintf(out,"impl Default for YYMINORTYPE<'_> {\n"); lineno++;
+  fprintf(out,"    fn default() -> Self {\n"); lineno++;
   fprintf(out,"        YYMINORTYPE::yyinit()\n"); lineno++;
   fprintf(out,"    }\n"); lineno++;
   fprintf(out,"}\n"); lineno++;
@@ -4518,6 +4518,8 @@ void ReportTable(
   print_stack_union(out,lemp,&lineno);
   if( lemp->stacksize ){
     fprintf(out,"const YYSTACKDEPTH: usize = %s;\n",lemp->stacksize);  lineno++;
+  }else{
+    fprintf(out, "const YYSTACKDEPTH: usize = 128;\n"); lineno++;
   }
   if( lemp->errsym && lemp->errsym->useCnt ){
     fprintf(out,"const YYERRORSYMBOL: YYCODETYPE = %d;\n",lemp->errsym->index); lineno++;

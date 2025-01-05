@@ -127,7 +127,7 @@ create_table_args(A) ::= LP columnlist(C) conslist_opt(X) RP table_option_set(F)
   A = CreateTableBody::columns_and_constraints(C, X, F)?;
 }
 create_table_args(A) ::= AS select(S). {
-  A = CreateTableBody::AsSelect(S);
+  A = CreateTableBody::AsSelect(Box::new(S));
 }
 %type table_option_set {TabFlags}
 %type table_option {TabFlags}
@@ -476,7 +476,7 @@ ifexists(A) ::= .            {A = false;}
 cmd ::= createkw temp(T) VIEW ifnotexists(E) fullname(Y) eidlist_opt(C)
           AS select(S). {
   self.ctx.stmt = Some(Stmt::CreateView{ temporary: T, if_not_exists: E, view_name: Y, columns: C,
-                                         select: S });
+                                         select: Box::new(S) });
 }
 cmd ::= DROP VIEW ifexists(E) fullname(X). {
   self.ctx.stmt = Some(Stmt::DropView{ if_exists: E, view_name: X });
@@ -486,7 +486,7 @@ cmd ::= DROP VIEW ifexists(E) fullname(X). {
 //////////////////////// The SELECT statement /////////////////////////////////
 //
 cmd ::= select(X).  {
-  self.ctx.stmt = Some(Stmt::Select(X));
+  self.ctx.stmt = Some(Stmt::Select(Box::new(X)));
 }
 
 %type select {Select}
@@ -619,7 +619,7 @@ seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z)
 %ifndef SQLITE_OMIT_SUBQUERY
   seltablist(A) ::= stl_prefix(A) LP select(S) RP
                     as(Z) on_using(N). {
-    let st = SelectTable::Select(S, Z);
+    let st = SelectTable::Select(Box::new(S), Z);
     let jc = N;
     A.push(st, jc)?;
   }
@@ -824,7 +824,7 @@ setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
         upsert(U). {
   let (upsert, returning) = U;
-  let body = InsertBody::Select(S, upsert);
+  let body = InsertBody::Select(Box::new(S), upsert);
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
                                      body, returning });
 }
@@ -1241,7 +1241,7 @@ trigger_cmd(A) ::= insert_cmd(R) INTO
   if returning.is_some() {
     return Err(custom_err!("cannot use RETURNING in a trigger"));
   }
-  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: S, upsert, returning };/*A-overwrites-R*/
+  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert, returning };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
@@ -1249,7 +1249,7 @@ trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
 
 // SELECT
 trigger_cmd(A) ::= select(X).
-   {A = TriggerCmd::Select(X); /*A-overwrites-X*/}
+   {A = TriggerCmd::Select(Box::new(X)); /*A-overwrites-X*/}
 
 // The special RAISE expression that may occur in trigger programs
 expr(A) ::= RAISE LP IGNORE RP.  {
