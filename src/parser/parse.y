@@ -526,13 +526,13 @@ multiselect_op(A) ::= INTERSECT.         {A = CompoundOperator::Intersect;}
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
                  groupby_opt(P). {
   A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y,
-                         group_by: P, window_clause: None };
+                         group_by: P.map(Box::new), window_clause: None };
     }
 %ifndef SQLITE_OMIT_WINDOWFUNC
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
                  groupby_opt(P) window_clause(R). {
   A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y,
-                         group_by: P, window_clause: Some(R) };
+                         group_by: P.map(Box::new), window_clause: Some(R) };
 }
 %endif
 
@@ -826,7 +826,7 @@ setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
         upsert(U). {
   let (upsert, returning) = U;
-  let body = InsertBody::Select(Box::new(S), upsert);
+  let body = InsertBody::Select(Box::new(S), upsert.map(Box::new));
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
                                      body, returning });
 }
@@ -1241,7 +1241,7 @@ trigger_cmd(A) ::=
 trigger_cmd(A) ::= insert_cmd(R) INTO
                       trnm(X) idlist_opt(F) select(S) upsert(U). {
   let (upsert, returning) = U;
-   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert, returning };/*A-overwrites-R*/
+   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert: upsert.map(Box::new), returning };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
@@ -1482,7 +1482,7 @@ filter_over(A) ::= filter_clause(F). {
 }
 
 over_clause(A) ::= OVER LP window(Z) RP. {
-  A = Over::Window(Z);
+  A = Over::Window(Box::new(Z));
 }
 over_clause(A) ::= OVER nm(Z). {
   A = Over::Name(Z);

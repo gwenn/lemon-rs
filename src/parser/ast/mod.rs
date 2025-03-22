@@ -743,7 +743,7 @@ pub enum OneSelect {
         /// `WHERE` clause
         where_clause: Option<Expr>,
         /// `GROUP BY`
-        group_by: Option<GroupBy>,
+        group_by: Option<Box<GroupBy>>,
         /// `WINDOW` definition
         window_clause: Option<Vec<WindowDef>>,
     },
@@ -1520,7 +1520,7 @@ pub struct Limit {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InsertBody {
     /// `SELECT` or `VALUES`
-    Select(Box<Select>, Option<Upsert>),
+    Select(Box<Select>, Option<Box<Upsert>>),
     /// `DEFAULT VALUES`
     DefaultValues,
 }
@@ -1600,8 +1600,8 @@ pub enum TriggerCmd {
         col_names: Option<DistinctNames>,
         /// `SELECT` or `VALUES`
         select: Box<Select>,
-        /// `ON CONLICT` clause
-        upsert: Option<Upsert>,
+        /// `ON CONFLICT` clause
+        upsert: Option<Box<Upsert>>,
         /// `RETURNING`
         returning: Option<Vec<ResultColumn>>,
     },
@@ -1759,7 +1759,7 @@ pub struct FunctionTail {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Over {
     /// Window definition
-    Window(Window),
+    Window(Box<Window>),
     /// Window name
     Name(Name),
 }
