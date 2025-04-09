@@ -403,6 +403,7 @@ pub enum FunctionCallOrder {
 
 impl FunctionCallOrder {
     /// Constructor
+    #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
     pub fn within_group(expr: Expr) -> Self {
         Self::WithinGroup(Box::new(expr))
     }
