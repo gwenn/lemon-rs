@@ -384,8 +384,8 @@ pub enum Expr {
         distinctness: Option<Distinctness>,
         /// arguments
         args: Option<Vec<Expr>>,
-        /// `ORDER BY`
-        order_by: Option<Vec<SortedColumn>>,
+        /// `ORDER BY` or `WITHIN GROUP`
+        order_by: Option<FunctionCallOrder>,
         /// `FILTER`
         filter_over: Option<FunctionTail>,
     },
@@ -460,6 +460,24 @@ pub enum Expr {
     Unary(UnaryOperator, Box<Expr>),
     /// Parameters
     Variable(String),
+}
+
+/// Function call order
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FunctionCallOrder {
+    /// `ORDER BY cols`
+    SortList(Vec<SortedColumn>),
+    /// `WITHIN GROUP (ORDER BY expr)`
+    #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+    WithinGroup(Box<Expr>),
+}
+
+impl FunctionCallOrder {
+    /// Constructor
+    #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+    pub fn within_group(expr: Expr) -> Self {
+        Self::WithinGroup(Box::new(expr))
+    }
 }
 
 impl Expr {
@@ -562,7 +580,7 @@ impl Expr {
         x: Token,
         distinctness: Option<Distinctness>,
         args: Option<Vec<Self>>,
-        order_by: Option<Vec<SortedColumn>>,
+        order_by: Option<FunctionCallOrder>,
         filter_over: Option<FunctionTail>,
     ) -> Result<Self, ParserError> {
         if let Some(Distinctness::Distinct) = distinctness {
@@ -896,7 +914,7 @@ pub enum OneSelect {
         /// `WHERE` clause
         where_clause: Option<Expr>,
         /// `GROUP BY`
-        group_by: Option<GroupBy>,
+        group_by: Option<Box<GroupBy>>,
         /// `WINDOW` definition
         window_clause: Option<Vec<WindowDef>>,
     },
@@ -926,7 +944,7 @@ impl OneSelect {
             columns,
             from,
             where_clause,
-            group_by,
+            group_by: group_by.map(Box::new),
             window_clause,
         };
         if let Self::Select {
@@ -1896,7 +1914,7 @@ pub struct Limit {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InsertBody {
     /// `SELECT` or `VALUES`
-    Select(Box<Select>, Option<Upsert>),
+    Select(Box<Select>, Option<Box<Upsert>>),
     /// `DEFAULT VALUES`
     DefaultValues,
 }
@@ -1976,8 +1994,8 @@ pub enum TriggerCmd {
         col_names: Option<DistinctNames>,
         /// `SELECT` or `VALUES`
         select: Box<Select>,
-        /// `ON CONLICT` clause
-        upsert: Option<Upsert>,
+        /// `ON CONFLICT` clause
+        upsert: Option<Box<Upsert>>,
         /// `RETURNING`
         returning: Option<Vec<ResultColumn>>,
     },
@@ -2175,7 +2193,7 @@ pub struct FunctionTail {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Over {
     /// Window definition
-    Window(Window),
+    Window(Box<Window>),
     /// Window name
     Name(Name),
 }

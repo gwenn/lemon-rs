@@ -216,6 +216,8 @@ impl TokenType {
             TK_WHERE => Some("WHERE"),
             TK_WINDOW => Some("WINDOW"),
             TK_WITH => Some("WITH"),
+            #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+            TK_WITHIN => Some("WITHIN"),
             TK_WITHOUT => Some("WITHOUT"),
             TK_BITAND => Some("&"),
             TK_BITNOT => Some("~"),

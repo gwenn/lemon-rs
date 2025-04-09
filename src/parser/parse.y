@@ -198,6 +198,9 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
   CURRENT FOLLOWING PARTITION PRECEDING RANGE UNBOUNDED
   EXCLUDE GROUPS OTHERS TIES
 %endif SQLITE_OMIT_WINDOWFUNC
+%ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
+  WITHIN
+%endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 %ifndef SQLITE_OMIT_GENERATED_COLUMNS
   GENERATED ALWAYS
 %endif
@@ -824,7 +827,7 @@ setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
         upsert(U). {
   let (upsert, returning) = U;
-  let body = InsertBody::Select(Box::new(S), upsert);
+  let body = InsertBody::Select(Box::new(S), upsert.map(Box::new));
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
                                      body, returning });
 }
@@ -917,23 +920,36 @@ expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP. {
   A = Expr::function_call(@X, X, D, Y, None, None)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP. {
-  A = Expr::function_call(@X, X, D, Y, Some(O), None)?; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O)), None)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP. {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: None }; /*A-overwrites-X*/
 }
+
+%ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
+expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP. {
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), None);
+}
+%endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
   A = Expr::function_call(@X, X, D, Y, None, Some(Z))?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP filter_over(Z). {
-  A = Expr::function_call(@X, X, D, Y, Some(O), Some(Z))?; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O)), Some(Z))?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: Some(Z) }; /*A-overwrites-X*/
 }
-%endif
+%ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
+expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP
+            filter_over(Z). {
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), Some(Z)); /*A-overwrites-X*/
+}
+%endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
+
+%endif SQLITE_OMIT_WINDOWFUNC
 
 term(A) ::= CTIME_KW(OP). {
   A = Expr::Literal(Literal::from_ctime_kw(OP));
@@ -1241,7 +1257,7 @@ trigger_cmd(A) ::= insert_cmd(R) INTO
   if returning.is_some() {
     return Err(custom_err!("cannot use RETURNING in a trigger"));
   }
-  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert, returning };/*A-overwrites-R*/
+  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert: upsert.map(Box::new), returning };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
@@ -1383,7 +1399,8 @@ wqlist(A) ::= wqlist(A) COMMA wqitem(X). {
 // These must be at the end of this file. Specifically, the rules that
 // introduce tokens WINDOW, OVER and FILTER must appear last. This causes
 // the integer values assigned to these tokens to be larger than all other
-// tokens that may be output by the tokenizer except TK_SPACE and TK_ILLEGAL.
+// tokens that may be output by the tokenizer except TK_SPACE, TK_COMMENT,
+// and TK_ILLEGAL.
 //
 %ifndef SQLITE_OMIT_WINDOWFUNC
 %type windowdefn_list {Vec<WindowDef>}
@@ -1482,7 +1499,7 @@ filter_over(A) ::= filter_clause(F). {
 }
 
 over_clause(A) ::= OVER LP window(Z) RP. {
-  A = Over::Window(Z);
+  A = Over::Window(Box::new(Z));
 }
 over_clause(A) ::= OVER nm(Z). {
   A = Over::Name(Z);

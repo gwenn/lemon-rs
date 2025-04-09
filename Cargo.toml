@@ -1,6 +1,6 @@
 [package]
 name = "sqlite3-parser"
-version = "0.13.0"
+version = "0.14.0"
 edition = "2021"
 authors = ["gwenn"]
 description = "SQL parser (as understood by SQLite)"
@@ -21,6 +21,8 @@ YYTRACKMAXSTACKDEPTH = []
 YYNOERRORRECOVERY = []
 YYCOVERAGE = []
 NDEBUG = []
+# FIXME token.rs needs to be regenerated
+SQLITE_ENABLE_ORDERED_SET_AGGREGATES = []
 default = ["YYNOERRORRECOVERY", "NDEBUG"]
 
 [dependencies]

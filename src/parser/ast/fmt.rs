@@ -616,9 +616,23 @@ impl ToTokens for Expr {
                     comma(args, s)?;
                 }
                 if let Some(order_by) = order_by {
-                    s.append(TK_ORDER, None)?;
-                    s.append(TK_BY, None)?;
-                    comma(order_by, s)?;
+                    match order_by {
+                        FunctionCallOrder::SortList(order_by) => {
+                            s.append(TK_ORDER, None)?;
+                            s.append(TK_BY, None)?;
+                            comma(order_by, s)?;
+                        }
+                        #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+                        FunctionCallOrder::WithinGroup(order_by) => {
+                            s.append(TK_RP, None)?;
+                            s.append(TK_WITHIN, None)?;
+                            s.append(TK_GROUP, None)?;
+                            s.append(TK_LP, None)?;
+                            s.append(TK_ORDER, None)?;
+                            s.append(TK_BY, None)?;
+                            order_by.to_tokens(s)?;
+                        }
+                    }
                 }
                 s.append(TK_RP, None)?;
                 if let Some(filter_over) = filter_over {

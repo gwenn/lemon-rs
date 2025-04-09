@@ -31,13 +31,16 @@ fn main() -> Result<()> {
     let sql_parser = "src/parser/parse.y";
     // run rlemon / generate parser:
     {
-        assert!(Command::new(rlemon)
-            .arg("-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT")
-            .arg("-Tthird_party/lemon/lempar.rs")
+        let mut cmd = Command::new(rlemon);
+        cmd.arg("-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT");
+        #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+        {
+            cmd.arg("-DSQLITE_ENABLE_ORDERED_SET_AGGREGATES");
+        }
+        cmd.arg("-Tthird_party/lemon/lempar.rs")
             .arg(format!("-d{out_dir}"))
-            .arg(sql_parser)
-            .status()?
-            .success());
+            .arg(sql_parser);
+        assert!(cmd.status()?.success());
         // TODO ./rlemon -m -Tthird_party/lemon/lempar.rs examples/simple.y
     }
 
