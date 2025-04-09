@@ -198,6 +198,9 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
   CURRENT FOLLOWING PARTITION PRECEDING RANGE UNBOUNDED
   EXCLUDE GROUPS OTHERS TIES
 %endif SQLITE_OMIT_WINDOWFUNC
+%ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
+  WITHIN
+%endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 %ifndef SQLITE_OMIT_GENERATED_COLUMNS
   GENERATED ALWAYS
 %endif
@@ -919,23 +922,36 @@ expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP. {
   A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: None, filter_over: None }; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP. {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(O), filter_over: None }; /*A-overwrites-X*/
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(FunctionCallOrder::SortList(O)), filter_over: None }; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP. {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: None }; /*A-overwrites-X*/
 }
+
+%ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
+expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP. {
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(FunctionCallOrder::within_group(E)), filter_over: None };
+}
+%endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
   A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: None, filter_over: Some(Z) }; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP filter_over(Z). {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(O), filter_over: Some(Z) }; /*A-overwrites-X*/
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(FunctionCallOrder::SortList(O)), filter_over: Some(Z) }; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: Some(Z) }; /*A-overwrites-X*/
 }
-%endif
+%ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
+expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP
+            filter_over(Z). {
+  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(FunctionCallOrder::within_group(E)), filter_over: Some(Z) }; /*A-overwrites-X*/
+}
+%endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
+
+%endif SQLITE_OMIT_WINDOWFUNC
 
 term(A) ::= CTIME_KW(OP). {
   A = Expr::Literal(Literal::from_ctime_kw(OP));
@@ -1383,7 +1399,8 @@ wqlist(A) ::= wqlist(A) COMMA wqitem(X). {
 // These must be at the end of this file. Specifically, the rules that
 // introduce tokens WINDOW, OVER and FILTER must appear last. This causes
 // the integer values assigned to these tokens to be larger than all other
-// tokens that may be output by the tokenizer except TK_SPACE and TK_ILLEGAL.
+// tokens that may be output by the tokenizer except TK_SPACE, TK_COMMENT,
+// and TK_ILLEGAL.
 //
 %ifndef SQLITE_OMIT_WINDOWFUNC
 %type windowdefn_list {Vec<WindowDef>}

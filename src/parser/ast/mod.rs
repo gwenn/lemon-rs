@@ -313,8 +313,8 @@ pub enum Expr {
         distinctness: Option<Distinctness>,
         /// arguments
         args: Option<Vec<Expr>>,
-        /// `ORDER BY`
-        order_by: Option<Vec<SortedColumn>>,
+        /// `ORDER BY` or `WITHIN GROUP`
+        order_by: Option<FunctionCallOrder>,
         /// `FILTER`
         filter_over: Option<FunctionTail>,
     },
@@ -389,6 +389,23 @@ pub enum Expr {
     Unary(UnaryOperator, Box<Expr>),
     /// Parameters
     Variable(String),
+}
+
+/// Function call order
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FunctionCallOrder {
+    /// `ORDER BY cols`
+    SortList(Vec<SortedColumn>),
+    /// `WITHIN GROUP (ORDER BY expr)`
+    #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+    WithinGroup(Box<Expr>),
+}
+
+impl FunctionCallOrder {
+    /// Constructor
+    pub fn within_group(expr: Expr) -> Self {
+        Self::WithinGroup(Box::new(expr))
+    }
 }
 
 impl Expr {

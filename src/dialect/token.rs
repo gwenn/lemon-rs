@@ -177,4 +177,6 @@ pub enum TokenType {
     TK_WINDOW = 165,
     TK_OVER = 166,
     TK_FILTER = 167,
+    #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+    TK_WITHIN = 168,
 }

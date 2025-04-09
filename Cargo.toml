@@ -21,6 +21,8 @@ YYTRACKMAXSTACKDEPTH = []
 YYNOERRORRECOVERY = []
 YYCOVERAGE = []
 NDEBUG = []
+# FIXME token.rs needs to be regenerated
+SQLITE_ENABLE_ORDERED_SET_AGGREGATES = []
 default = ["YYNOERRORRECOVERY", "NDEBUG"]
 
 [dependencies]
