@@ -1,5 +1,5 @@
 //! Abstract Syntax Tree
-
+#[cfg(feature = "extra_checks")]
 pub mod check;
 pub mod fmt;
 
@@ -7,8 +7,9 @@ use std::num::ParseIntError;
 use std::ops::Deref;
 use std::str::{self, Bytes, FromStr};
 
+#[cfg(feature = "extra_checks")]
 use check::ColumnCount;
-use fmt::{ToTokens, TokenStream};
+use fmt::TokenStream;
 use indexmap::{IndexMap, IndexSet};
 
 use crate::custom_err;
@@ -611,6 +612,7 @@ impl Expr {
             None
         }
     }
+    #[cfg(feature = "extra_checks")]
     fn check_range(&self, term: &str, mx: u16) -> Result<(), ParserError> {
         if let Some(i) = self.is_integer() {
             if i < 1 || i > mx as i64 {
@@ -826,6 +828,7 @@ impl Select {
             order_by,
             limit,
         };
+        #[cfg(feature = "extra_checks")]
         if let Self {
             order_by: Some(ref scs),
             ..
@@ -852,7 +855,7 @@ pub struct SelectBody {
 
 impl SelectBody {
     pub(crate) fn push(&mut self, cs: CompoundSelect) -> Result<(), ParserError> {
-        use crate::ast::check::ColumnCount;
+        #[cfg(feature = "extra_checks")]
         if let ColumnCount::Fixed(n) = self.select.column_count() {
             if let ColumnCount::Fixed(m) = cs.select.column_count() {
                 if n != m {
@@ -947,6 +950,7 @@ impl OneSelect {
             having: having.map(Box::new),
             window_clause,
         };
+        #[cfg(feature = "extra_checks")]
         if let Self::Select {
             group_by: Some(ref gb),
             ..
@@ -959,6 +963,14 @@ impl OneSelect {
             }
         }
         Ok(select)
+    }
+    /// Check all VALUES have the same number of terms
+    pub fn push(values: &mut Vec<Vec<Expr>>, v: Vec<Expr>) -> Result<(), ParserError> {
+        if values[0].len() != v.len() {
+            return Err(custom_err!("all VALUES must have the same number of terms"));
+        }
+        values.push(v);
+        Ok(())
     }
 }
 
@@ -1220,7 +1232,7 @@ impl Name {
         let (sub, quote) = unquote(self.0.as_str());
         QuotedIterator(sub.bytes(), quote)
     }
-
+    #[cfg(feature = "extra_checks")]
     fn is_reserved(&self) -> bool {
         let bytes = self.as_bytes();
         let reserved = QuotedIterator("sqlite_".bytes(), 0);
@@ -2060,6 +2072,7 @@ impl CommonTableExpr {
         materialized: Materialized,
         select: Select,
     ) -> Result<Self, ParserError> {
+        #[cfg(feature = "extra_checks")]
         if let Some(ref columns) = columns {
             if let check::ColumnCount::Fixed(cc) = select.column_count() {
                 if cc as usize != columns.len() {

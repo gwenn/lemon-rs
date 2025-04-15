@@ -221,11 +221,13 @@ fn having_without_group_by() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn insert_mismatch_count() {
     expect_parser_err_msg(b"INSERT INTO t (a, b) VALUES (1)", "1 values for 2 columns");
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn insert_default_values() {
     expect_parser_err_msg(
         b"INSERT INTO t (a) DEFAULT VALUES",
@@ -234,6 +236,7 @@ fn insert_default_values() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn create_view_mismatch_count() {
     expect_parser_err_msg(
         b"CREATE VIEW v (c1, c2) AS SELECT 1",
@@ -242,6 +245,7 @@ fn create_view_mismatch_count() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn create_view_duplicate_column_name() {
     expect_parser_err_msg(
         b"CREATE VIEW v (c1, c1) AS SELECT 1, 2",
@@ -250,6 +254,7 @@ fn create_view_duplicate_column_name() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn create_table_without_rowid_missing_pk() {
     expect_parser_err_msg(
         b"CREATE TABLE t (c1) WITHOUT ROWID",
@@ -258,6 +263,7 @@ fn create_table_without_rowid_missing_pk() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn create_temporary_table_with_qualified_name() {
     expect_parser_err_msg(
         b"CREATE TEMPORARY TABLE mem.x AS SELECT 1",
@@ -267,6 +273,7 @@ fn create_temporary_table_with_qualified_name() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn create_table_with_only_generated_column() {
     expect_parser_err_msg(
         b"CREATE TABLE test(data AS (1))",
@@ -275,11 +282,13 @@ fn create_table_with_only_generated_column() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn create_strict_table_missing_datatype() {
     expect_parser_err_msg(b"CREATE TABLE t (c1) STRICT", "missing datatype for t.c1");
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn create_strict_table_unknown_datatype() {
     expect_parser_err_msg(
         b"CREATE TABLE t (c1 BOOL) STRICT",
@@ -312,6 +321,7 @@ fn create_strict_table_generated_column() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn selects_compound_mismatch_columns_count() {
     expect_parser_err_msg(
         b"SELECT 1 UNION SELECT 1, 2",
@@ -320,6 +330,7 @@ fn selects_compound_mismatch_columns_count() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn delete_order_by_without_limit() {
     expect_parser_err_msg(
         b"DELETE FROM t ORDER BY x",
@@ -352,6 +363,7 @@ fn column_specified_more_than_once() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn alter_add_column_primary_key() {
     expect_parser_err_msg(
         b"ALTER TABLE t ADD COLUMN c PRIMARY KEY",
@@ -360,6 +372,7 @@ fn alter_add_column_primary_key() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn alter_add_column_unique() {
     expect_parser_err_msg(
         b"ALTER TABLE t ADD COLUMN c UNIQUE",
@@ -368,6 +381,7 @@ fn alter_add_column_unique() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn alter_rename_same() {
     expect_parser_err_msg(
         b"ALTER TABLE t RENAME TO t",
@@ -413,6 +427,7 @@ fn distinct_aggregates() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn cte_column_count() {
     expect_parser_err_msg(
         b"WITH i(x, y) AS ( VALUES(1) )
@@ -442,6 +457,7 @@ fn no_tables_specified() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn group_by_out_of_range() {
     expect_parser_err_msg(
         b"SELECT a, b FROM x GROUP BY 0",
@@ -454,6 +470,7 @@ fn group_by_out_of_range() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn order_by_out_of_range() {
     expect_parser_err_msg(
         b"SELECT a, b FROM x ORDER BY -1",
@@ -522,6 +539,7 @@ fn returning_within_trigger() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn reserved_name() {
     expect_parser_err_msg(
         b"CREATE TABLE sqlite_x(a)",

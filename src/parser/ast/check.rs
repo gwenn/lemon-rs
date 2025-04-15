@@ -1,7 +1,6 @@
 //! Check for additional syntax error
 use crate::ast::*;
 use crate::custom_err;
-use std::fmt::{Display, Formatter};
 
 impl Cmd {
     /// Statement accessor
@@ -291,20 +290,6 @@ impl OneSelect {
                 ColumnCount::Fixed(u16::try_from(values[0].len()).unwrap())
             }
         }
-    }
-    /// Check all VALUES have the same number of terms
-    pub fn push(values: &mut Vec<Vec<Expr>>, v: Vec<Expr>) -> Result<(), ParserError> {
-        if values[0].len() != v.len() {
-            return Err(custom_err!("all VALUES must have the same number of terms"));
-        }
-        values.push(v);
-        Ok(())
-    }
-}
-
-impl Display for QualifiedName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.to_fmt(f)
     }
 }
 

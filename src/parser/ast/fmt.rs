@@ -1162,6 +1162,12 @@ impl ToTokens for QualifiedName {
     }
 }
 
+impl Display for QualifiedName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.to_fmt(f)
+    }
+}
+
 impl ToTokens for AlterTableBody {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
