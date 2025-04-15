@@ -540,13 +540,26 @@ oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
 %endif
 
 
+// Single row VALUES clause.
+//
+%type values {Vec<Vec<Expr>>}
 oneselect(A) ::= values(X). { A = OneSelect::Values(X); }
 
-%type values {Vec<Vec<Expr>>}
 values(A) ::= VALUES LP nexprlist(X) RP. {
   A = vec![X];
 }
-values(A) ::= values(A) COMMA LP nexprlist(Y) RP. {
+
+// Multiple row VALUES clause.
+//
+%type mvalues {Vec<Vec<Expr>>}
+oneselect(A) ::= mvalues(X). {
+  A = OneSelect::Values(X);
+}
+mvalues(A) ::= values(A) COMMA LP nexprlist(Y) RP. {
+  let exprs = Y;
+  OneSelect::push(A, exprs)?;
+}
+mvalues(A) ::= mvalues(A) COMMA LP nexprlist(Y) RP. {
   let exprs = Y;
   OneSelect::push(A, exprs)?;
 }
