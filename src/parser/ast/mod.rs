@@ -912,9 +912,11 @@ pub enum OneSelect {
         /// `FROM` clause
         from: Option<FromClause>,
         /// `WHERE` clause
-        where_clause: Option<Expr>,
+        where_clause: Option<Box<Expr>>,
         /// `GROUP BY`
-        group_by: Option<Box<GroupBy>>,
+        group_by: Option<Vec<Expr>>,
+        /// `HAVING`
+        having: Option<Box<Expr>>,
         /// `WINDOW` definition
         window_clause: Option<Vec<WindowDef>>,
     },
@@ -929,7 +931,8 @@ impl OneSelect {
         columns: Vec<ResultColumn>,
         from: Option<FromClause>,
         where_clause: Option<Expr>,
-        group_by: Option<GroupBy>,
+        group_by: Option<Vec<Expr>>,
+        having: Option<Expr>,
         window_clause: Option<Vec<WindowDef>>,
     ) -> Result<Self, ParserError> {
         if from.is_none()
@@ -943,8 +946,9 @@ impl OneSelect {
             distinctness,
             columns,
             from,
-            where_clause,
-            group_by: group_by.map(Box::new),
+            where_clause: where_clause.map(Box::new),
+            group_by,
+            having: having.map(Box::new),
             window_clause,
         };
         if let Self::Select {
@@ -953,7 +957,7 @@ impl OneSelect {
         } = select
         {
             if let ColumnCount::Fixed(n) = select.column_count() {
-                for expr in &gb.exprs {
+                for expr in gb {
                     expr.check_range("GROUP", n)?;
                 }
             }
@@ -1170,15 +1174,6 @@ pub enum JoinConstraint {
     On(Expr),
     /// `USING`: col names
     Using(DistinctNames),
-}
-
-/// `GROUP BY`
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GroupBy {
-    /// expressions
-    pub exprs: Vec<Expr>,
-    /// `HAVING`
-    pub having: Option<Expr>, // HAVING clause on a non-aggregate query
 }
 
 /// identifier or one of several keywords or `INDEXED`

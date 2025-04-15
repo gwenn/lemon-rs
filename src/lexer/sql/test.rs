@@ -206,6 +206,21 @@ fn extra_comments_between_statements() {
 }
 
 #[test]
+fn values() {
+    parse_cmd(b"SELECT * FROM (VALUES (1))");
+    parse_cmd(b"SELECT * FROM (VALUES (1), (2))");
+    expect_parser_err(
+        b"SELECT * FROM (VALUES (1), VALUES (2))",
+        ParserError::SyntaxError("VALUES".to_owned()),
+    );
+}
+
+#[test]
+fn having_without_group_by() {
+    parse_cmd(b"SELECT count(*) FROM t2 HAVING count(*)>1");
+}
+
+#[test]
 fn insert_mismatch_count() {
     expect_parser_err_msg(b"INSERT INTO t (a, b) VALUES (1)", "1 values for 2 columns");
 }
