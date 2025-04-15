@@ -527,15 +527,15 @@ multiselect_op(A) ::= INTERSECT.         {A = CompoundOperator::Intersect;}
 %endif SQLITE_OMIT_COMPOUND_SELECT
 
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
-                 groupby_opt(P). {
-  A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y,
-                         group_by: P.map(Box::new), window_clause: None };
+                 groupby_opt(P) having_opt(Q). {
+  A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y.map(Box::new),
+                         group_by: P, having: Q.map(Box::new), window_clause: None };
     }
 %ifndef SQLITE_OMIT_WINDOWFUNC
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
-                 groupby_opt(P) window_clause(R). {
-  A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y,
-                         group_by: P.map(Box::new), window_clause: Some(R) };
+                 groupby_opt(P) having_opt(Q) window_clause(R). {
+  A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y.map(Box::new),
+                         group_by: P, having: Q.map(Box::new), window_clause: Some(R) };
 }
 %endif
 
@@ -622,27 +622,23 @@ stl_prefix(A) ::= seltablist(A) joinop(Y).    {
    A.push_op(op);
 }
 stl_prefix(A) ::= .                           {A = FromClause::empty();}
-seltablist(A) ::= stl_prefix(A) fullname(Y) as(Z) indexed_opt(I)
-                  on_using(N). {
+seltablist(A) ::= stl_prefix(A) fullname(Y) as(Z) indexed_opt(I) on_using(N). {
     let st = SelectTable::Table(Y, Z, I);
     let jc = N;
     A.push(st, jc)?;
 }
-seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z)
-                  on_using(N). {
+seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z) on_using(N). {
     let st = SelectTable::TableCall(Y, E, Z);
     let jc = N;
     A.push(st, jc)?;
 }
 %ifndef SQLITE_OMIT_SUBQUERY
-  seltablist(A) ::= stl_prefix(A) LP select(S) RP
-                    as(Z) on_using(N). {
+  seltablist(A) ::= stl_prefix(A) LP select(S) RP as(Z) on_using(N). {
     let st = SelectTable::Select(Box::new(S), Z);
     let jc = N;
     A.push(st, jc)?;
   }
-  seltablist(A) ::= stl_prefix(A) LP seltablist(F) RP
-                    as(Z) on_using(N). {
+  seltablist(A) ::= stl_prefix(A) LP seltablist(F) RP as(Z) on_using(N). {
     let st = SelectTable::Sub(F, Z);
     let jc = N;
     A.push(st, jc)?;
@@ -745,9 +741,9 @@ nulls(A) ::= NULLS FIRST.       {A = Some(NullsOrder::First);}
 nulls(A) ::= NULLS LAST.        {A = Some(NullsOrder::Last);}
 nulls(A) ::= .                  {A = None;}
 
-%type groupby_opt {Option<GroupBy>}
+%type groupby_opt {Option<Vec<Expr>>}
 groupby_opt(A) ::= .                      {A = None;}
-groupby_opt(A) ::= GROUP BY nexprlist(X) having_opt(Y). {A = Some(GroupBy{ exprs: X, having: Y });}
+groupby_opt(A) ::= GROUP BY nexprlist(X). {A = Some(X);}
 
 %type having_opt {Option<Expr>}
 having_opt(A) ::= .                {A = None;}
@@ -1342,11 +1338,11 @@ cmd ::= ALTER TABLE fullname(X)
   let cd = ColumnDefinition{ col_name, col_type, constraints: C };
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::AddColumn(cd)));
 }
-cmd ::= ALTER TABLE fullname(X) RENAME kwcolumn_opt nm(Y) TO nm(Z). {
-  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameColumn{ old: Y, new: Z }));
-}
 cmd ::= ALTER TABLE fullname(X) DROP kwcolumn_opt nm(Y). {
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::DropColumn(Y)));
+}
+cmd ::= ALTER TABLE fullname(X) RENAME kwcolumn_opt nm(Y) TO nm(Z). {
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameColumn{ old: Y, new: Z }));
 }
 
 kwcolumn_opt ::= .

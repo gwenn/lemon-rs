@@ -908,6 +908,7 @@ impl ToTokens for OneSelect {
                 from,
                 where_clause,
                 group_by,
+                having,
                 window_clause,
             } => {
                 s.append(TK_SELECT, None)?;
@@ -924,7 +925,13 @@ impl ToTokens for OneSelect {
                     where_clause.to_tokens(s)?;
                 }
                 if let Some(ref group_by) = group_by {
-                    group_by.to_tokens(s)?;
+                    s.append(TK_GROUP, None)?;
+                    s.append(TK_BY, None)?;
+                    comma(group_by, s)?;
+                }
+                if let Some(ref having) = having {
+                    s.append(TK_HAVING, None)?;
+                    having.to_tokens(s)?;
                 }
                 if let Some(ref window_clause) = window_clause {
                     s.append(TK_WINDOW, None)?;
@@ -1119,19 +1126,6 @@ impl ToTokens for JoinConstraint {
                 s.append(TK_RP, None)
             }
         }
-    }
-}
-
-impl ToTokens for GroupBy {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_GROUP, None)?;
-        s.append(TK_BY, None)?;
-        comma(&self.exprs, s)?;
-        if let Some(ref having) = self.having {
-            s.append(TK_HAVING, None)?;
-            having.to_tokens(s)?;
-        }
-        Ok(())
     }
 }
 

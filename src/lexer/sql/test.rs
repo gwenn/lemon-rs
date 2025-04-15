@@ -157,6 +157,11 @@ fn values() {
 }
 
 #[test]
+fn having_without_group_by() {
+    parse_cmd(b"SELECT count(*) FROM t2 HAVING count(*)>1");
+}
+
+#[test]
 fn insert_mismatch_count() {
     expect_parser_err_msg(b"INSERT INTO t (a, b) VALUES (1)", "1 values for 2 columns");
 }

@@ -759,9 +759,11 @@ pub enum OneSelect {
         /// `FROM` clause
         from: Option<FromClause>,
         /// `WHERE` clause
-        where_clause: Option<Expr>,
+        where_clause: Option<Box<Expr>>,
         /// `GROUP BY`
-        group_by: Option<Box<GroupBy>>,
+        group_by: Option<Vec<Expr>>,
+        /// `HAVING`
+        having: Option<Box<Expr>>,
         /// `WINDOW` definition
         window_clause: Option<Vec<WindowDef>>,
     },
@@ -977,15 +979,6 @@ pub enum JoinConstraint {
     On(Expr),
     /// `USING`: col names
     Using(DistinctNames),
-}
-
-/// `GROUP BY`
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GroupBy {
-    /// expressions
-    pub exprs: Vec<Expr>,
-    /// `HAVING`
-    pub having: Option<Expr>, // HAVING clause on a non-aggregate query
 }
 
 /// identifier or one of several keywords or `INDEXED`
