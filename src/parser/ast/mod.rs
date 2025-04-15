@@ -310,7 +310,7 @@ impl Stmt {
             if matches!(select.as_ref(),
                 SelectTable::Table(qn, _, _) | SelectTable::TableCall(qn, _, _)
                     if *qn == tbl_name)
-                || joins.as_ref().map_or(false, |js| js.iter().any(|j|
+                || joins.as_ref().is_some_and(|js| js.iter().any(|j|
                     matches!(j.table, SelectTable::Table(ref qn, _, _) | SelectTable::TableCall(ref qn, _, _)
                     if *qn == tbl_name)))
             {
@@ -602,11 +602,7 @@ impl Expr {
     /// Check if an expression is an integer
     pub fn is_integer(&self) -> Option<i64> {
         if let Self::Literal(Literal::Numeric(s)) = self {
-            if let Ok(n) = i64::from_str(s) {
-                Some(n)
-            } else {
-                None
-            }
+            i64::from_str(s).ok()
         } else if let Self::Unary(UnaryOperator::Positive, e) = self {
             e.is_integer()
         } else if let Self::Unary(UnaryOperator::Negative, e) = self {
@@ -1574,7 +1570,7 @@ impl ColumnDefinition {
                 }
                 ColumnConstraint::PrimaryKey { auto_increment, .. } => {
                     if *auto_increment
-                        && col_type.as_ref().map_or(true, |t| {
+                        && col_type.as_ref().is_none_or(|t| {
                             !unquote(t.name.as_str()).0.eq_ignore_ascii_case("INTEGER")
                         })
                     {
@@ -1603,10 +1599,10 @@ impl ColumnDefinition {
                 let mut split = col_type.name.split_ascii_whitespace();
                 if split
                     .next_back()
-                    .map_or(false, |s| s.eq_ignore_ascii_case("ALWAYS"))
+                    .is_some_and(|s| s.eq_ignore_ascii_case("ALWAYS"))
                     && split
                         .next_back()
-                        .map_or(false, |s| s.eq_ignore_ascii_case("GENERATED"))
+                        .is_some_and(|s| s.eq_ignore_ascii_case("GENERATED"))
                 {
                     // str_split_whitespace_remainder
                     let new_type: Vec<&str> = split.collect();
@@ -1614,7 +1610,7 @@ impl ColumnDefinition {
                 }
             }
         }
-        if col_type.as_ref().map_or(false, |t| !t.name.is_empty()) {
+        if col_type.as_ref().is_some_and(|t| !t.name.is_empty()) {
             flags |= ColFlags::HASTYPE;
         }
         Ok(Self {
