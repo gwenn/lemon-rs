@@ -41,7 +41,7 @@
     error!(target: TARGET, "incomplete input");
     self.ctx.error = Some(ParserError::UnexpectedEof);
   } else {
-    error!(target: TARGET, "near \"{:?}\": syntax error", yyminor);
+    error!(target: TARGET, "near \"{}\": syntax error", std::str::from_utf8(yyminor.1).unwrap_or(""));
     self.ctx.error = Some(ParserError::SyntaxError(from_bytes(yyminor.1)));
   }
 }
@@ -129,15 +129,15 @@ create_table_args(A) ::= LP columnlist(C) conslist_opt(X) RP table_option_set(F)
 create_table_args(A) ::= AS select(S). {
   A = CreateTableBody::AsSelect(Box::new(S));
 }
-%type table_option_set {TableOptions}
-%type table_option {TableOptions}
-table_option_set(A) ::= .    {A = TableOptions::NONE;}
+%type table_option_set {TabFlags}
+%type table_option {TabFlags}
+table_option_set(A) ::= .    {A = TabFlags::empty();}
 table_option_set(A) ::= table_option(A).
 table_option_set(A) ::= table_option_set(X) COMMA table_option(Y). {A = X|Y;}
 table_option(A) ::= WITHOUT nm(X). {
   let option = X;
   if option == "rowid" {
-    A = TableOptions::WITHOUT_ROWID;
+    A = TabFlags::WithoutRowid;
   }else{
     return Err(custom_err!("unknown table option: {}", option));
   }
@@ -145,7 +145,7 @@ table_option(A) ::= WITHOUT nm(X). {
 table_option(A) ::= nm(X). {
   let option = X;
   if option == "strict" {
-    A = TableOptions::STRICT;
+    A = TabFlags::Strict;
   }else{
     return Err(custom_err!("unknown table option: {}", option));
   }
@@ -153,12 +153,12 @@ table_option(A) ::= nm(X). {
 %type columnlist {IndexMap<Name,ColumnDefinition>}
 columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
   let col = X;
-  let cd = ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y };
+  let cd = ColumnDefinition::new(col.0, col.1, Y)?;
   ColumnDefinition::add_column(A, cd)?;
 }
 columnlist(A) ::= columnname(X) carglist(Y). {
   let col = X;
-  let cd = ColumnDefinition{ col_name: col.0, col_type: col.1, constraints: Y };
+  let cd = ColumnDefinition::new(col.0, col.1, Y)?;
   let mut map = IndexMap::new();
   ColumnDefinition::add_column(&mut map, cd)?;
   A = map;
@@ -426,12 +426,12 @@ tconscomma ::= .
 tcons ::= CONSTRAINT nm(X).      { self.ctx.constraint_name = Some(X)}
 tcons(A) ::= PRIMARY KEY LP sortlist(X) autoinc(I) RP onconf(R). {
   let name = self.ctx.constraint_name();
-  let constraint = TableConstraint::PrimaryKey{ columns: X, auto_increment: I, conflict_clause: R };
+  let constraint = TableConstraint::primary_key(X, I, R)?;
   A = NamedTableConstraint{ name, constraint };
 }
 tcons(A) ::= UNIQUE LP sortlist(X) RP onconf(R). {
   let name = self.ctx.constraint_name();
-  let constraint = TableConstraint::Unique{ columns: X, conflict_clause: R };
+  let constraint = TableConstraint::unique(X, R)?;
   A = NamedTableConstraint{ name, constraint };
 }
 tcons(A) ::= CHECK LP expr(E) RP onconf. {
@@ -501,14 +501,14 @@ cmd ::= select(X).  {
 
 %ifndef SQLITE_OMIT_CTE
 select(A) ::= WITH wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select{ with: Some(With { recursive: false, ctes: W }), body: X, order_by: Z, limit: L };
+  A = Select::new(Some(With { recursive: false, ctes: W }), X, Z, L)?;
 }
 select(A) ::= WITH RECURSIVE wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select{ with: Some(With { recursive: true, ctes: W }), body: X, order_by: Z, limit: L };
+  A = Select::new(Some(With { recursive: true, ctes: W }), X, Z, L)?;
 }
 %endif /* SQLITE_OMIT_CTE */
 select(A) ::= selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select{ with: None, body: X, order_by: Z, limit: L }; /*A-overwrites-X*/
+  A = Select::new(None, X, Z, L)?; /*A-overwrites-X*/
 }
 
 selectnowith(A) ::= oneselect(X). {
@@ -528,14 +528,12 @@ multiselect_op(A) ::= INTERSECT.         {A = CompoundOperator::Intersect;}
 
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
                  groupby_opt(P) having_opt(Q). {
-  A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y.map(Box::new),
-                         group_by: P, having: Q.map(Box::new), window_clause: None };
+  A = OneSelect::new(D, W, X, Y, P, Q, None)?;
     }
 %ifndef SQLITE_OMIT_WINDOWFUNC
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
                  groupby_opt(P) having_opt(Q) window_clause(R). {
-  A = OneSelect::Select{ distinctness: D, columns: W, from: X, where_clause: Y.map(Box::new),
-                         group_by: P, having: Q.map(Box::new), window_clause: Some(R) };
+  A = OneSelect::new(D, W, X, Y, P, Q, Some(R))?;
 }
 %endif
 
@@ -618,8 +616,8 @@ from(A) ::= FROM seltablist(X). {
 // in a SELECT statement.  "stl_prefix" is a prefix of this list.
 //
 stl_prefix(A) ::= seltablist(A) joinop(Y).    {
-   let op = Y;
-   A.push_op(op);
+  let op = Y;
+  A.push_op(op);
 }
 stl_prefix(A) ::= .                           {A = FromClause::empty();}
 seltablist(A) ::= stl_prefix(A) fullname(Y) as(Z) indexed_opt(I) on_using(N). {
@@ -659,10 +657,10 @@ xfullname(A) ::= nm(X).
 xfullname(A) ::= nm(X) DOT nm(Y).
    {A = QualifiedName::fullname(X, Y); /*A-overwrites-X*/}
 xfullname(A) ::= nm(X) DOT nm(Y) AS nm(Z).  {
-   A = QualifiedName::xfullname(X, Y, Z); /*A-overwrites-X*/
+  A = QualifiedName::xfullname(X, Y, Z); /*A-overwrites-X*/
 }
 xfullname(A) ::= nm(X) AS nm(Z). {
-   A = QualifiedName::alias(X, Z); /*A-overwrites-X*/
+  A = QualifiedName::alias(X, Z); /*A-overwrites-X*/
 }
 
 %type joinop {JoinOperator}
@@ -802,15 +800,15 @@ where_opt_ret(A) ::= WHERE expr(X) RETURNING selcollist(Y).
 cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from(F)
         where_opt_ret(W) orderby_opt(O) limit_opt(L).  {
   let (where_clause, returning) = W;
-  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y, from: F,
-                                      where_clause, returning, order_by: O, limit: L });
+  self.ctx.stmt = Some(Stmt::update(C, R, X,  I, Y, F,
+                                      where_clause, returning, O, L)?);
 }
 %else
 cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from(F)
         where_opt_ret(W). {
   let (where_clause, returning) = W;
-  self.ctx.stmt = Some(Stmt::Update { with: C, or_conflict: R, tbl_name: X, indexed: I, sets: Y, from: F,
-                                      where_clause, returning, order_by: None, limit: None });
+  self.ctx.stmt = Some(Stmt::update(C, R, X, I, Y, F,
+                                      where_clause, returning, None, None)?);
 }
 %endif
 
@@ -860,12 +858,12 @@ upsert(A) ::= . { A = (None, None); }
 upsert(A) ::= RETURNING selcollist(X).  { A = (None, Some(X)); }
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW)
               DO UPDATE SET setlist(Z) where_opt(W) upsert(N).
-              { let index = UpsertIndex{ targets: T, where_clause: TW };
+              { let index = UpsertIndex::new(T, TW)?;
                 let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
                 let (next, returning) = N;
                 A = (Some(Upsert{ index: Some(index), do_clause, next: next.map(Box::new) }), returning);}
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING upsert(N).
-              { let index = UpsertIndex{ targets: T, where_clause: TW };
+              { let index = UpsertIndex::new(T, TW)?;
                 let (next, returning) = N;
                 A = (Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing, next: next.map(Box::new) }), returning); }
 upsert(A) ::= ON CONFLICT DO NOTHING returning(R).
@@ -928,10 +926,10 @@ expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
 %endif  SQLITE_OMIT_CAST
 
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP. {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: None, filter_over: None }; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, None, None)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP. {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(FunctionCallOrder::SortList(O)), filter_over: None }; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O)), None)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP. {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: None }; /*A-overwrites-X*/
@@ -939,16 +937,16 @@ expr(A) ::= idj(X) LP STAR RP. {
 
 %ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP. {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(FunctionCallOrder::within_group(E)), filter_over: None };
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), None);
 }
 %endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: None, filter_over: Some(Z) }; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, None, Some(Z))?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP filter_over(Z). {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(FunctionCallOrder::SortList(O)), filter_over: Some(Z) }; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O)), Some(Z))?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: Some(Z) }; /*A-overwrites-X*/
@@ -956,7 +954,7 @@ expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
 %ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP
             filter_over(Z). {
-  A = Expr::FunctionCall{ name: Id::from_token(@X, X), distinctness: D, args: Y, order_by: Some(FunctionCallOrder::within_group(E)), filter_over: Some(Z) }; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), Some(Z)); /*A-overwrites-X*/
 }
 %endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 
@@ -1102,8 +1100,7 @@ paren_exprlist(A) ::= LP exprlist(X) RP.  {A = X;}
 //
 cmd ::= createkw uniqueflag(U) INDEX ifnotexists(NE) fullname(X)
         ON nm(Y) LP sortlist(Z) RP where_opt(W). {
-  self.ctx.stmt = Some(Stmt::CreateIndex { unique: U, if_not_exists: NE, idx_name: X,
-                                            tbl_name: Y, columns: Z, where_clause: W });
+  self.ctx.stmt = Some(Stmt::create_index(U, NE, X, Y, Z, W)?);
 }
 
 %type uniqueflag {bool}
@@ -1266,7 +1263,10 @@ trigger_cmd(A) ::=
 trigger_cmd(A) ::= insert_cmd(R) INTO
                       trnm(X) idlist_opt(F) select(S) upsert(U). {
   let (upsert, returning) = U;
-   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert: upsert.map(Box::new), returning };/*A-overwrites-R*/
+  if returning.is_some() {
+    return Err(custom_err!("cannot use RETURNING in a trigger"));
+  }
+  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert: upsert.map(Box::new) };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
@@ -1335,7 +1335,7 @@ cmd ::= ALTER TABLE fullname(X) RENAME TO nm(Z). {
 cmd ::= ALTER TABLE fullname(X)
         ADD kwcolumn_opt columnname(Y) carglist(C). {
   let (col_name, col_type) = Y;
-  let cd = ColumnDefinition{ col_name, col_type, constraints: C };
+  let cd = ColumnDefinition::new(col_name, col_type, C)?;
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::AddColumn(cd)));
 }
 cmd ::= ALTER TABLE fullname(X) DROP kwcolumn_opt nm(Y). {
@@ -1393,7 +1393,7 @@ wqas(A)   ::= AS.                  {A = Materialized::Any;}
 wqas(A)   ::= AS MATERIALIZED.     {A = Materialized::Yes;}
 wqas(A)   ::= AS NOT MATERIALIZED. {A = Materialized::No;}
 wqitem(A) ::= nm(X) eidlist_opt(Y) wqas(M) LP select(Z) RP. {
-  A = CommonTableExpr{ tbl_name: X, columns: Y, materialized: M, select: Box::new(Z) }; /*A-overwrites-X*/
+  A = CommonTableExpr::new(X, Y, M, Z)?; /*A-overwrites-X*/
 }
 wqlist(A) ::= wqitem(X). {
   A = vec![X]; /*A-overwrites-X*/

@@ -6,10 +6,40 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
+/// Position
+#[derive(Debug)]
+pub struct Pos {
+    /// line number
+    pub line: usize,
+    /// column number (byte offset, not char offset)
+    pub column: usize,
+}
+
+impl Pos {
+    pub fn from(input: &[u8], offset: usize) -> Self {
+        let (mut line, mut column) = (1, 1);
+        for byte in &input[..offset] {
+            if *byte == b'\n' {
+                line += 1;
+                column = 1;
+            } else {
+                column += 1;
+            }
+        }
+        Self { line, column }
+    }
+}
+
+impl fmt::Display for Pos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "line: {}, column: {}", self.line, self.column)
+    }
+}
+
 /// Error with position
 pub trait ScanError: Error + From<io::Error> + Sized {
     /// Update the position where the error occurs
-    fn position(&mut self, line: u64, column: usize);
+    fn position(&mut self, p: Pos);
 }
 
 /// The `(&[u8], TokenType)` is the token.
@@ -23,7 +53,7 @@ pub trait Splitter: Sized {
     type Error: ScanError;
     //type Item: ?Sized;
     /// Token generated
-    type TokenType;
+    type TokenType: std::fmt::Debug;
 
     /// The arguments are an initial substring of the remaining unprocessed
     /// data.
@@ -49,13 +79,9 @@ pub struct Scanner<S: Splitter> {
     /// offset in `input`
     offset: usize,
     /// mark
-    mark: (usize, u64, usize),
+    mark: usize,
     /// The function to tokenize the input.
     splitter: S,
-    /// current line number
-    line: u64,
-    /// current column number (byte offset, not char offset)
-    column: usize,
 }
 
 impl<S: Splitter> Scanner<S> {
@@ -63,40 +89,32 @@ impl<S: Splitter> Scanner<S> {
     pub fn new(splitter: S) -> Self {
         Self {
             offset: 0,
-            mark: (0, 0, 0),
+            mark: 0,
             splitter,
-            line: 1,
-            column: 1,
         }
     }
 
-    /// Current line number
-    pub fn line(&self) -> u64 {
-        self.line
+    /// Current position
+    pub fn position(&self, input: &[u8]) -> Pos {
+        Pos::from(input, self.offset)
     }
 
-    /// Current column number (byte offset, not char offset)
-    pub fn column(&self) -> usize {
-        self.column
-    }
     /// Associated splitter
     pub fn splitter(&self) -> &S {
         &self.splitter
     }
     /// Mark current position
     pub fn mark(&mut self) {
-        self.mark = (self.offset, self.line, self.column);
+        self.mark = self.offset;
     }
     /// Reset to mark
     pub fn reset_to_mark(&mut self) {
-        (self.offset, self.line, self.column) = self.mark;
+        self.offset = self.mark;
     }
 
     /// Reset the scanner such that it behaves as if it had never been used.
     pub fn reset(&mut self) {
         self.offset = 0;
-        self.line = 1;
-        self.column = 1;
     }
 }
 
@@ -112,7 +130,7 @@ impl<S: Splitter> Scanner<S> {
         &mut self,
         input: &'input [u8],
     ) -> ScanResult<'input, S::TokenType, S::Error> {
-        debug!(target: "scanner", "scan(line: {}, column: {})", self.line, self.column);
+        debug!(target: "scanner", "scan({})", Pos::from(input, self.offset));
         // Loop until we have a token.
         loop {
             // See if we can get a token with what we already have.
@@ -120,7 +138,7 @@ impl<S: Splitter> Scanner<S> {
                 let data = &input[self.offset..];
                 match self.splitter.split(data) {
                     Err(mut e) => {
-                        e.position(self.line, self.column);
+                        e.position(Pos::from(input, self.offset));
                         return Err(e);
                     }
                     Ok((None, 0)) => {
@@ -134,6 +152,7 @@ impl<S: Splitter> Scanner<S> {
                     Ok((tok, amt)) => {
                         let start = self.offset;
                         self.consume(data, amt);
+                        debug!(target: "scanner", "scan(start: {}, tok: {:?}, offset: {})", start, tok, self.offset);
                         return Ok((start, tok, self.offset));
                     }
                 }
@@ -148,14 +167,6 @@ impl<S: Splitter> Scanner<S> {
     fn consume(&mut self, data: &[u8], amt: usize) {
         debug!(target: "scanner", "consume({})", amt);
         debug_assert!(amt <= data.len());
-        for byte in &data[..amt] {
-            if *byte == b'\n' {
-                self.line += 1;
-                self.column = 1;
-            } else {
-                self.column += 1;
-            }
-        }
         self.offset += amt;
     }
 }
@@ -165,8 +176,6 @@ impl<S: Splitter> fmt::Debug for Scanner<S> {
         f.debug_struct("Scanner")
             .field("offset", &self.offset)
             .field("mark", &self.mark)
-            .field("line", &self.line)
-            .field("column", &self.column)
             .finish()
     }
 }

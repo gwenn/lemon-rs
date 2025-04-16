@@ -10,6 +10,7 @@ fn main() {
     use TokenType::*;
     let args = env::args();
     for arg in args.skip(1) {
+        //eprintln!("{arg}");
         let input = read(arg.clone()).unwrap();
         let tokenizer = Tokenizer::new();
         let mut s = Scanner::new(tokenizer);
@@ -50,11 +51,16 @@ fn main() {
                             if res.is_err() {
                                 eprintln!("Err: {} in {}", res.unwrap_err(), arg);
                             }*/
-                            debug_assert!(token.iter().all(u8::is_ascii_digit))
+                            debug_assert!(token.iter().all(|b| b.is_ascii_digit() || *b == b'_'))
                         }
                     }
                     TK_FLOAT => {
-                        debug_assert!(str::from_utf8(token).unwrap().parse::<f64>().is_ok())
+                        let raw = str::from_utf8(token).unwrap();
+                        let res = raw.parse::<f64>();
+                        if res.is_err() {
+                            eprintln!("Err: {} in {}", res.unwrap_err(), arg);
+                        }
+                        //debug_assert!(str::from_utf8(token).unwrap().parse::<f64>().is_ok())
                     }
                     TK_CTIME_KW => debug_assert!(
                         b"CURRENT_DATE".eq_ignore_ascii_case(token)

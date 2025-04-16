@@ -1,5 +1,5 @@
 //! Abstract Syntax Tree
-
+#[cfg(feature = "extra_checks")]
 pub mod check;
 pub mod fmt;
 
@@ -7,7 +7,9 @@ use std::num::ParseIntError;
 use std::ops::Deref;
 use std::str::{self, Bytes, FromStr};
 
-use fmt::{ToTokens, TokenStream};
+#[cfg(feature = "extra_checks")]
+use check::ColumnCount;
+use fmt::TokenStream;
 use indexmap::{IndexMap, IndexSet};
 
 use crate::custom_err;
@@ -19,7 +21,7 @@ use crate::parser::{parse::YYCODETYPE, ParserError};
 #[derive(Default)]
 pub struct ParameterInfo {
     /// Number of SQL parameters in a prepared statement, like `sqlite3_bind_parameter_count`
-    pub count: u32,
+    pub count: u16,
     /// Parameter name(s) if any
     pub names: IndexSet<String>,
 }
@@ -34,7 +36,7 @@ impl TokenStream for ParameterInfo {
                 if variable == "?" {
                     self.count = self.count.saturating_add(1);
                 } else if variable.as_bytes()[0] == b'?' {
-                    let n = u32::from_str(&variable[1..])?;
+                    let n = u16::from_str(&variable[1..])?;
                     if n > self.count {
                         self.count = n;
                     }
@@ -264,6 +266,78 @@ pub enum Stmt {
     },
     /// `VACUUM`: database name, into expr
     Vacuum(Option<Name>, Option<Expr>),
+}
+
+impl Stmt {
+    /// CREATE INDEX constructor
+    pub fn create_index(
+        unique: bool,
+        if_not_exists: bool,
+        idx_name: QualifiedName,
+        tbl_name: Name,
+        columns: Vec<SortedColumn>,
+        where_clause: Option<Expr>,
+    ) -> Result<Self, ParserError> {
+        has_explicit_nulls(&columns)?;
+        Ok(Self::CreateIndex {
+            unique,
+            if_not_exists,
+            idx_name,
+            tbl_name,
+            columns,
+            where_clause,
+        })
+    }
+    /// UPDATE constructor
+    #[allow(clippy::too_many_arguments)]
+    pub fn update(
+        with: Option<With>,
+        or_conflict: Option<ResolveType>,
+        tbl_name: QualifiedName,
+        indexed: Option<Indexed>,
+        sets: Vec<Set>, // FIXME unique
+        from: Option<FromClause>,
+        where_clause: Option<Expr>,
+        returning: Option<Vec<ResultColumn>>,
+        order_by: Option<Vec<SortedColumn>>,
+        limit: Option<Limit>,
+    ) -> Result<Self, ParserError> {
+        #[cfg(feature = "extra_checks")]
+        if let Some(FromClause {
+            select: Some(ref select),
+            ref joins,
+            ..
+        }) = from
+        {
+            if matches!(select.as_ref(),
+                SelectTable::Table(qn, _, _) | SelectTable::TableCall(qn, _, _)
+                    if *qn == tbl_name)
+                || joins.as_ref().is_some_and(|js| js.iter().any(|j|
+                    matches!(j.table, SelectTable::Table(ref qn, _, _) | SelectTable::TableCall(ref qn, _, _)
+                    if *qn == tbl_name)))
+            {
+                return Err(custom_err!(
+                    "target object/alias may not appear in FROM clause",
+                ));
+            }
+        }
+        #[cfg(feature = "extra_checks")]
+        if order_by.is_some() && limit.is_none() {
+            return Err(custom_err!("ORDER BY without LIMIT on UPDATE"));
+        }
+        Ok(Self::Update {
+            with,
+            or_conflict,
+            tbl_name,
+            indexed,
+            sets,
+            from,
+            where_clause,
+            returning,
+            order_by,
+            limit,
+        })
+    }
 }
 
 /// SQL expression
@@ -503,6 +577,57 @@ impl Expr {
     pub fn sub_query(query: Select) -> Self {
         Self::Subquery(Box::new(query))
     }
+    /// Constructor
+    pub fn function_call(
+        xt: YYCODETYPE,
+        x: Token,
+        distinctness: Option<Distinctness>,
+        args: Option<Vec<Self>>,
+        order_by: Option<FunctionCallOrder>,
+        filter_over: Option<FunctionTail>,
+    ) -> Result<Self, ParserError> {
+        #[cfg(feature = "extra_checks")]
+        if let Some(Distinctness::Distinct) = distinctness {
+            if args.as_ref().map_or(0, Vec::len) != 1 {
+                return Err(custom_err!(
+                    "DISTINCT aggregates must have exactly one argument"
+                ));
+            }
+        }
+        Ok(Self::FunctionCall {
+            name: Id::from_token(xt, x),
+            distinctness,
+            args,
+            order_by,
+            filter_over,
+        })
+    }
+
+    /// Check if an expression is an integer
+    pub fn is_integer(&self) -> Option<i64> {
+        if let Self::Literal(Literal::Numeric(s)) = self {
+            i64::from_str(s).ok()
+        } else if let Self::Unary(UnaryOperator::Positive, e) = self {
+            e.is_integer()
+        } else if let Self::Unary(UnaryOperator::Negative, e) = self {
+            e.is_integer().map(i64::saturating_neg)
+        } else {
+            None
+        }
+    }
+    #[cfg(feature = "extra_checks")]
+    fn check_range(&self, term: &str, mx: u16) -> Result<(), ParserError> {
+        if let Some(i) = self.is_integer() {
+            if i < 1 || i > mx as i64 {
+                return Err(custom_err!(
+                    "{} BY term out of range - should be between 1 and {}",
+                    term,
+                    mx
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// SQL literal
@@ -683,13 +808,43 @@ impl From<YYCODETYPE> for UnaryOperator {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Select {
     /// CTE
-    pub with: Option<With>,
+    pub with: Option<With>, // TODO check usages in body
     /// body
     pub body: SelectBody,
     /// `ORDER BY`
-    pub order_by: Option<Vec<SortedColumn>>, // ORDER BY term does not match any column in the result set
+    pub order_by: Option<Vec<SortedColumn>>, // TODO: ORDER BY term does not match any column in the result set
     /// `LIMIT`
     pub limit: Option<Limit>,
+}
+
+impl Select {
+    /// Constructor
+    pub fn new(
+        with: Option<With>,
+        body: SelectBody,
+        order_by: Option<Vec<SortedColumn>>,
+        limit: Option<Limit>,
+    ) -> Result<Self, ParserError> {
+        let select = Self {
+            with,
+            body,
+            order_by,
+            limit,
+        };
+        #[cfg(feature = "extra_checks")]
+        if let Self {
+            order_by: Some(ref scs),
+            ..
+        } = select
+        {
+            if let ColumnCount::Fixed(n) = select.column_count() {
+                for sc in scs {
+                    sc.expr.check_range("ORDER", n)?;
+                }
+            }
+        }
+        Ok(select)
+    }
 }
 
 /// `SELECT` body
@@ -703,7 +858,7 @@ pub struct SelectBody {
 
 impl SelectBody {
     pub(crate) fn push(&mut self, cs: CompoundSelect) -> Result<(), ParserError> {
-        use crate::ast::check::ColumnCount;
+        #[cfg(feature = "extra_checks")]
         if let ColumnCount::Fixed(n) = self.select.column_count() {
             if let ColumnCount::Fixed(m) = cs.select.column_count() {
                 if n != m {
@@ -769,6 +924,59 @@ pub enum OneSelect {
     },
     /// `VALUES`
     Values(Vec<Vec<Expr>>),
+}
+
+impl OneSelect {
+    /// Constructor
+    pub fn new(
+        distinctness: Option<Distinctness>,
+        columns: Vec<ResultColumn>,
+        from: Option<FromClause>,
+        where_clause: Option<Expr>,
+        group_by: Option<Vec<Expr>>,
+        having: Option<Expr>,
+        window_clause: Option<Vec<WindowDef>>,
+    ) -> Result<Self, ParserError> {
+        #[cfg(feature = "extra_checks")]
+        if from.is_none()
+            && columns
+                .iter()
+                .any(|rc| matches!(rc, ResultColumn::Star | ResultColumn::TableStar(_)))
+        {
+            return Err(custom_err!("no tables specified"));
+        }
+        let select = Self::Select {
+            distinctness,
+            columns,
+            from,
+            where_clause: where_clause.map(Box::new),
+            group_by,
+            having: having.map(Box::new),
+            window_clause,
+        };
+        #[cfg(feature = "extra_checks")]
+        if let Self::Select {
+            group_by: Some(ref gb),
+            ..
+        } = select
+        {
+            if let ColumnCount::Fixed(n) = select.column_count() {
+                for expr in gb {
+                    expr.check_range("GROUP", n)?;
+                }
+            }
+        }
+        Ok(select)
+    }
+    /// Check all VALUES have the same number of terms
+    pub fn push(values: &mut Vec<Vec<Expr>>, v: Vec<Expr>) -> Result<(), ParserError> {
+        #[cfg(feature = "extra_checks")]
+        if values[0].len() != v.len() {
+            return Err(custom_err!("all VALUES must have the same number of terms"));
+        }
+        values.push(v);
+        Ok(())
+    }
 }
 
 /// `SELECT` ... `FROM` clause
@@ -909,10 +1117,10 @@ impl JoinOperator {
                 || (jt & (JoinType::OUTER | JoinType::LEFT | JoinType::RIGHT)) == JoinType::OUTER
             {
                 return Err(custom_err!(
-                    "unsupported JOIN type: {:?} {:?} {:?}",
-                    str::from_utf8(token.1),
-                    n1,
-                    n2
+                    "unknown join type: {} {} {}",
+                    str::from_utf8(token.1).unwrap_or("invalid utf8"),
+                    n1.as_ref().map_or("", |n| n.0.as_str()),
+                    n2.as_ref().map_or("", |n| n.0.as_str())
                 ));
             }
             Self::TypedJoin(Some(jt))
@@ -965,8 +1173,8 @@ impl TryFrom<&[u8]> for JoinType {
             Ok(Self::OUTER)
         } else {
             Err(custom_err!(
-                "unsupported JOIN type: {:?}",
-                str::from_utf8(s)
+                "unknown join type: {}",
+                str::from_utf8(s).unwrap_or("invalid utf8")
             ))
         }
     }
@@ -998,6 +1206,27 @@ impl Id {
 #[derive(Clone, Debug, Eq)]
 pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
 
+pub(crate) fn unquote(s: &str) -> (&str, u8) {
+    if s.is_empty() {
+        return (s, 0);
+    }
+    let bytes = s.as_bytes();
+    let mut quote = bytes[0];
+    if quote != b'"' && quote != b'`' && quote != b'\'' && quote != b'[' {
+        return (s, 0);
+    } else if quote == b'[' {
+        quote = b']';
+    }
+    debug_assert!(bytes.len() > 1);
+    debug_assert_eq!(quote, bytes[bytes.len() - 1]);
+    let sub = &s[1..bytes.len() - 1];
+    if quote == b']' || sub.len() < 2 {
+        (sub, 0)
+    } else {
+        (sub, quote)
+    }
+}
+
 impl Name {
     /// Constructor
     pub fn from_token(ty: YYCODETYPE, token: Token) -> Self {
@@ -1005,23 +1234,16 @@ impl Name {
     }
 
     fn as_bytes(&self) -> QuotedIterator<'_> {
-        if self.0.is_empty() {
-            return QuotedIterator(self.0.bytes(), 0);
-        }
-        let bytes = self.0.as_bytes();
-        let mut quote = bytes[0];
-        if quote != b'"' && quote != b'`' && quote != b'\'' && quote != b'[' {
-            return QuotedIterator(self.0.bytes(), 0);
-        } else if quote == b'[' {
-            quote = b']';
-        }
-        debug_assert!(bytes.len() > 1);
-        debug_assert_eq!(quote, bytes[bytes.len() - 1]);
-        let sub = &self.0.as_str()[1..bytes.len() - 1];
-        if quote == b']' {
-            return QuotedIterator(sub.bytes(), 0); // no escape
-        }
+        let (sub, quote) = unquote(self.0.as_str());
         QuotedIterator(sub.bytes(), quote)
+    }
+    #[cfg(feature = "extra_checks")]
+    fn is_reserved(&self) -> bool {
+        let bytes = self.as_bytes();
+        let reserved = QuotedIterator("sqlite_".bytes(), 0);
+        bytes.zip(reserved).fold(0u8, |acc, (b1, b2)| {
+            acc + if b1.eq_ignore_ascii_case(&b2) { 1 } else { 0 }
+        }) == 7u8
     }
 }
 
@@ -1189,6 +1411,42 @@ pub enum AlterTableBody {
     DropColumn(Name), // TODO distinction between DROP and DROP COLUMN
 }
 
+bitflags::bitflags! {
+    /// `CREATE TABLE` flags
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct TabFlags: u32 {
+        //const TF_Readonly = 0x00000001; // Read-only system table
+        /// Has one or more hidden columns
+        const HasHidden = 0x00000002;
+        /// Table has a primary key
+        const HasPrimaryKey = 0x00000004;
+        /// Integer primary key is autoincrement
+        const Autoincrement = 0x00000008;
+        //const TF_HasStat1 = 0x00000010; // nRowLogEst set from sqlite_stat1
+        /// Has one or more VIRTUAL columns
+        const HasVirtual = 0x00000020;
+        /// Has one or more STORED columns
+        const HasStored = 0x00000040;
+        /// Combo: HasVirtual + HasStored
+        const HasGenerated = 0x00000060;
+        /// No rowid. PRIMARY KEY is the key
+        const WithoutRowid = 0x00000080;
+        //const TF_MaybeReanalyze = 0x00000100; // Maybe run ANALYZE on this table
+        // No user-visible "rowid" column
+        //const NoVisibleRowid = 0x00000200;
+        // Out-of-Order hidden columns
+        //const OOOHidden = 0x00000400;
+        /// Contains NOT NULL constraints
+        const HasNotNull = 0x00000800;
+        //const Shadow = 0x00001000; // True for a shadow table
+        //const TF_HasStat4 = 0x00002000; // STAT4 info available for this table
+        //const Ephemeral = 0x00004000; // An ephemeral table
+        //const TF_Eponymous = 0x00008000; // An eponymous virtual table
+        /// STRICT mode
+        const Strict = 0x00010000;
+    }
+}
+
 /// `CREATE TABLE` body
 // https://sqlite.org/lang_createtable.html
 // https://sqlite.org/syntax/create-table-stmt.html
@@ -1200,8 +1458,8 @@ pub enum CreateTableBody {
         columns: IndexMap<Name, ColumnDefinition>,
         /// table constraints
         constraints: Option<Vec<NamedTableConstraint>>,
-        /// table options
-        options: TableOptions,
+        /// table flags
+        flags: TabFlags,
     },
     /// `AS` select
     AsSelect(Box<Select>),
@@ -1212,13 +1470,64 @@ impl CreateTableBody {
     pub fn columns_and_constraints(
         columns: IndexMap<Name, ColumnDefinition>,
         constraints: Option<Vec<NamedTableConstraint>>,
-        options: TableOptions,
+        mut flags: TabFlags,
     ) -> Result<Self, ParserError> {
+        for col in columns.values() {
+            if col.flags.contains(ColFlags::PRIMKEY) {
+                flags |= TabFlags::HasPrimaryKey;
+            }
+        }
+        if let Some(ref constraints) = constraints {
+            for c in constraints {
+                if let NamedTableConstraint {
+                    constraint: TableConstraint::PrimaryKey { .. },
+                    ..
+                } = c
+                {
+                    if flags.contains(TabFlags::HasPrimaryKey) {
+                        // FIXME table name
+                        #[cfg(feature = "extra_checks")]
+                        return Err(custom_err!("table has more than one primary key"));
+                    } else {
+                        flags |= TabFlags::HasPrimaryKey;
+                    }
+                }
+            }
+        }
         Ok(Self::ColumnsAndConstraints {
             columns,
             constraints,
-            options,
+            flags,
         })
+    }
+}
+
+bitflags::bitflags! {
+    /// Column definition flags
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct ColFlags: u16 {
+        /// Column is part of the primary key
+        const PRIMKEY = 0x0001;
+        // A hidden column in a virtual table
+        //const HIDDEN = 0x0002;
+        /// Type name follows column name
+        const HASTYPE = 0x0004;
+        /// Column def contains "UNIQUE" or "PK"
+        const UNIQUE = 0x0008;
+        //const SORTERREF =  0x0010;   /* Use sorter-refs with this column */
+        /// GENERATED ALWAYS AS ... VIRTUAL
+        const VIRTUAL = 0x0020;
+        /// GENERATED ALWAYS AS ... STORED
+        const STORED = 0x0040;
+        //const NOTAVAIL = 0x0080;   /* STORED column not yet calculated */
+        //const BUSY = 0x0100; /* Blocks recursion on GENERATED columns */
+        /// Has collating sequence name in zCnName
+        const HASCOLL = 0x0200;
+        //const NOEXPAND = 0x0400;   /* Omit this column when expanding "*" */
+        /// Combo: STORED, VIRTUAL
+        const GENERATED = Self::STORED.bits() | Self::VIRTUAL.bits();
+        // Combo: HIDDEN, STORED, VIRTUAL
+        //const NOINSERT = Self::HIDDEN.bits() | Self::STORED.bits() | Self::VIRTUAL.bits();
     }
 }
 
@@ -1232,61 +1541,121 @@ pub struct ColumnDefinition {
     pub col_type: Option<Type>,
     /// column constraints
     pub constraints: Vec<NamedColumnConstraint>,
+    /// column flags
+    pub flags: ColFlags,
 }
 
 impl ColumnDefinition {
     /// Constructor
-    pub fn add_column(columns: &mut IndexMap<Name, Self>, mut cd: Self) -> Result<(), ParserError> {
-        let col_name = &cd.col_name;
-        if columns.contains_key(col_name) {
-            // TODO unquote
-            return Err(custom_err!("duplicate column name: {}", col_name));
-        }
-        // https://github.com/sqlite/sqlite/blob/e452bf40a14aca57fd9047b330dff282f3e4bbcc/src/build.c#L1511-L1514
-        if let Some(ref mut col_type) = cd.col_type {
-            let mut split = col_type.name.split_ascii_whitespace();
-            let truncate = if split
-                .next_back()
-                .is_some_and(|s| s.eq_ignore_ascii_case("ALWAYS"))
-                && split
-                    .next_back()
-                    .is_some_and(|s| s.eq_ignore_ascii_case("GENERATED"))
-            {
-                let mut generated = false;
-                for constraint in &cd.constraints {
-                    if let ColumnConstraint::Generated { .. } = constraint.constraint {
-                        generated = true;
-                        break;
+    pub fn new(
+        col_name: Name,
+        mut col_type: Option<Type>,
+        constraints: Vec<NamedColumnConstraint>,
+    ) -> Result<Self, ParserError> {
+        let mut flags = ColFlags::empty();
+        #[allow(unused_variables)]
+        let mut default = false;
+        for constraint in &constraints {
+            match &constraint.constraint {
+                #[allow(unused_assignments)]
+                ColumnConstraint::Default(..) => {
+                    default = true;
+                }
+                ColumnConstraint::Collate { .. } => {
+                    flags |= ColFlags::HASCOLL;
+                }
+                ColumnConstraint::Generated { typ, .. } => {
+                    flags |= ColFlags::VIRTUAL;
+                    if let Some(id) = typ {
+                        if id.0.eq_ignore_ascii_case("STORED") {
+                            flags |= ColFlags::STORED;
+                        }
                     }
                 }
-                generated
-            } else {
-                false
-            };
-            if truncate {
-                // str_split_whitespace_remainder
-                let new_type: Vec<&str> = split.collect();
-                col_type.name = new_type.join(" ");
+                #[cfg(feature = "extra_checks")]
+                ColumnConstraint::ForeignKey {
+                    clause:
+                        ForeignKeyClause {
+                            tbl_name, columns, ..
+                        },
+                    ..
+                } => {
+                    // The child table may reference the primary key of the parent without specifying the primary key column
+                    if columns.as_ref().map_or(0, Vec::len) > 1 {
+                        return Err(custom_err!(
+                            "foreign key on {} should reference only one column of table {}",
+                            col_name,
+                            tbl_name
+                        ));
+                    }
+                }
+                #[allow(unused_variables)]
+                ColumnConstraint::PrimaryKey { auto_increment, .. } => {
+                    #[cfg(feature = "extra_checks")]
+                    if *auto_increment
+                        && col_type.as_ref().is_none_or(|t| {
+                            !unquote(t.name.as_str()).0.eq_ignore_ascii_case("INTEGER")
+                        })
+                    {
+                        return Err(custom_err!(
+                            "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY"
+                        ));
+                    }
+                    flags |= ColFlags::PRIMKEY | ColFlags::UNIQUE;
+                }
+                ColumnConstraint::Unique(..) => {
+                    flags |= ColFlags::UNIQUE;
+                }
+                _ => {}
             }
         }
-        for constraint in &cd.constraints {
-            if let ColumnConstraint::ForeignKey {
-                clause:
-                    ForeignKeyClause {
-                        tbl_name, columns, ..
-                    },
-                ..
-            } = &constraint.constraint
-            {
-                // The child table may reference the primary key of the parent without specifying the primary key column
-                if columns.as_ref().map_or(0, Vec::len) > 1 {
-                    return Err(custom_err!(
-                        "foreign key on {} should reference only one column of table {}",
-                        col_name,
-                        tbl_name
-                    ));
+        #[cfg(feature = "extra_checks")]
+        if flags.contains(ColFlags::PRIMKEY) && flags.intersects(ColFlags::GENERATED) {
+            return Err(custom_err!(
+                "generated columns cannot be part of the PRIMARY KEY"
+            ));
+        } else if default && flags.intersects(ColFlags::GENERATED) {
+            return Err(custom_err!("cannot use DEFAULT on a generated column"));
+        }
+        if flags.intersects(ColFlags::GENERATED) {
+            // https://github.com/sqlite/sqlite/blob/e452bf40a14aca57fd9047b330dff282f3e4bbcc/src/build.c#L1511-L1514
+            if let Some(ref mut col_type) = col_type {
+                let mut split = col_type.name.split_ascii_whitespace();
+                if split
+                    .next_back()
+                    .is_some_and(|s| s.eq_ignore_ascii_case("ALWAYS"))
+                    && split
+                        .next_back()
+                        .is_some_and(|s| s.eq_ignore_ascii_case("GENERATED"))
+                {
+                    // str_split_whitespace_remainder
+                    let new_type: Vec<&str> = split.collect();
+                    col_type.name = new_type.join(" ");
                 }
             }
+        }
+        if col_type.as_ref().is_some_and(|t| !t.name.is_empty()) {
+            flags |= ColFlags::HASTYPE;
+        }
+        Ok(Self {
+            col_name,
+            col_type,
+            constraints,
+            flags,
+        })
+    }
+    /// Collector
+    pub fn add_column(columns: &mut IndexMap<Name, Self>, cd: Self) -> Result<(), ParserError> {
+        let col_name = &cd.col_name;
+        if columns.contains_key(col_name) {
+            return Err(custom_err!("duplicate column name: {}", col_name));
+        } else if cd.flags.contains(ColFlags::PRIMKEY)
+            && columns
+                .values()
+                .any(|c| c.flags.contains(ColFlags::PRIMKEY))
+        {
+            #[cfg(feature = "extra_checks")]
+            return Err(custom_err!("table has more than one primary key")); // FIXME table name
         }
         columns.insert(col_name.clone(), cd);
         Ok(())
@@ -1395,16 +1764,30 @@ pub enum TableConstraint {
     },
 }
 
-bitflags::bitflags! {
-    /// `CREATE TABLE` options
-    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-    pub struct TableOptions: u8 {
-        /// None
-        const NONE = 0;
-        /// `WITHOUT ROWID`
-        const WITHOUT_ROWID = 1;
-        /// `STRICT`
-        const STRICT = 2;
+impl TableConstraint {
+    /// PK constructor
+    pub fn primary_key(
+        columns: Vec<SortedColumn>,
+        auto_increment: bool,
+        conflict_clause: Option<ResolveType>,
+    ) -> Result<Self, ParserError> {
+        has_explicit_nulls(&columns)?;
+        Ok(Self::PrimaryKey {
+            columns,
+            auto_increment,
+            conflict_clause,
+        })
+    }
+    /// UNIQUE constructor
+    pub fn unique(
+        columns: Vec<SortedColumn>,
+        conflict_clause: Option<ResolveType>,
+    ) -> Result<Self, ParserError> {
+        has_explicit_nulls(&columns)?;
+        Ok(Self::Unique {
+            columns,
+            conflict_clause,
+        })
     }
 }
 
@@ -1516,6 +1899,24 @@ pub struct SortedColumn {
     pub nulls: Option<NullsOrder>,
 }
 
+#[allow(unused_variables)]
+fn has_explicit_nulls(columns: &[SortedColumn]) -> Result<(), ParserError> {
+    #[cfg(feature = "extra_checks")]
+    for column in columns {
+        if let Some(ref nulls) = column.nulls {
+            return Err(custom_err!(
+                "unsupported use of NULLS {}",
+                if *nulls == NullsOrder::First {
+                    "FIRST"
+                } else {
+                    "LAST"
+                }
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// `LIMIT`
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limit {
@@ -1613,8 +2014,6 @@ pub enum TriggerCmd {
         select: Box<Select>,
         /// `ON CONFLICT` clause
         upsert: Option<Box<Upsert>>,
-        /// `RETURNING`
-        returning: Option<Vec<ResultColumn>>,
     },
     /// `DELETE`
     Delete {
@@ -1680,7 +2079,35 @@ pub struct CommonTableExpr {
 
 impl CommonTableExpr {
     /// Constructor
+    pub fn new(
+        tbl_name: Name,
+        columns: Option<Vec<IndexedColumn>>,
+        materialized: Materialized,
+        select: Select,
+    ) -> Result<Self, ParserError> {
+        #[cfg(feature = "extra_checks")]
+        if let Some(ref columns) = columns {
+            if let check::ColumnCount::Fixed(cc) = select.column_count() {
+                if cc as usize != columns.len() {
+                    return Err(custom_err!(
+                        "table {} has {} values for {} columns",
+                        tbl_name,
+                        cc,
+                        columns.len()
+                    ));
+                }
+            }
+        }
+        Ok(Self {
+            tbl_name,
+            columns,
+            materialized,
+            select: Box::new(select),
+        })
+    }
+    /// Constructor
     pub fn add_cte(ctes: &mut Vec<Self>, cte: Self) -> Result<(), ParserError> {
+        #[cfg(feature = "extra_checks")]
         if ctes.iter().any(|c| c.tbl_name == cte.tbl_name) {
             return Err(custom_err!("duplicate WITH table name: {}", cte.tbl_name));
         }
@@ -1740,6 +2167,20 @@ pub struct UpsertIndex {
     pub targets: Vec<SortedColumn>,
     /// `WHERE` clause
     pub where_clause: Option<Expr>,
+}
+
+impl UpsertIndex {
+    /// constructor
+    pub fn new(
+        targets: Vec<SortedColumn>,
+        where_clause: Option<Expr>,
+    ) -> Result<Self, ParserError> {
+        has_explicit_nulls(&targets)?;
+        Ok(Self {
+            targets,
+            where_clause,
+        })
+    }
 }
 
 /// Upsert `DO` action

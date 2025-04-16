@@ -1,7 +1,6 @@
 //! Check for additional syntax error
 use crate::ast::*;
 use crate::custom_err;
-use std::fmt::{Display, Formatter};
 
 impl Cmd {
     /// Statement accessor
@@ -39,7 +38,8 @@ pub enum ColumnCount {
     /// With `SELECT *` / PRAGMA
     Dynamic,
     /// Constant count
-    Fixed(usize),
+    // The default setting for SQLITE_MAX_COLUMN is 2000. You can change it at compile time to values as large as 32767.
+    Fixed(u16),
     /// No column
     None,
 }
@@ -104,21 +104,21 @@ impl Stmt {
                 Ok(())
             }
             Self::AlterTable(.., AlterTableBody::AddColumn(cd)) => {
-                for c in cd {
-                    if let ColumnConstraint::PrimaryKey { .. } = c {
-                        return Err(custom_err!("Cannot add a PRIMARY KEY column"));
-                    } else if let ColumnConstraint::Unique(..) = c {
-                        return Err(custom_err!("Cannot add a UNIQUE column"));
-                    }
+                if cd.flags.contains(ColFlags::PRIMKEY) {
+                    return Err(custom_err!("Cannot add a PRIMARY KEY column"));
+                } else if cd.flags.contains(ColFlags::UNIQUE) {
+                    return Err(custom_err!("Cannot add a UNIQUE column"));
                 }
                 Ok(())
             }
+            Self::CreateIndex { idx_name, .. } => check_reserved_name(idx_name),
             Self::CreateTable {
                 temporary,
                 tbl_name,
                 body,
                 ..
             } => {
+                check_reserved_name(tbl_name)?;
                 if *temporary {
                     if let Some(ref db_name) = tbl_name.db_name {
                         if db_name != "TEMP" {
@@ -128,12 +128,14 @@ impl Stmt {
                 }
                 body.check(tbl_name)
             }
+            Self::CreateTrigger { trigger_name, .. } => check_reserved_name(trigger_name),
             Self::CreateView {
                 view_name,
                 columns: Some(columns),
                 select,
                 ..
             } => {
+                check_reserved_name(view_name)?;
                 // SQLite3 engine renames duplicates:
                 for (i, c) in columns.iter().enumerate() {
                     for o in &columns[i + 1..] {
@@ -144,7 +146,7 @@ impl Stmt {
                 }
                 // SQLite3 engine raises this error later (not while parsing):
                 match select.column_count() {
-                    ColumnCount::Fixed(n) if n != columns.len() => Err(custom_err!(
+                    ColumnCount::Fixed(n) if n as usize != columns.len() => Err(custom_err!(
                         "expected {} columns for {} but got {}",
                         columns.len(),
                         view_name,
@@ -163,7 +165,7 @@ impl Stmt {
                 body: InsertBody::Select(select, ..),
                 ..
             } => match select.body.select.column_count() {
-                ColumnCount::Fixed(n) if n != columns.len() => {
+                ColumnCount::Fixed(n) if n as usize != columns.len() => {
                     Err(custom_err!("{} values for {} columns", n, columns.len()))
                 }
                 _ => Ok(()),
@@ -173,14 +175,19 @@ impl Stmt {
                 body: InsertBody::DefaultValues,
                 ..
             } => Err(custom_err!("0 values for {} columns", columns.len())),
-            Self::Update {
-                order_by: Some(_),
-                limit: None,
-                ..
-            } => Err(custom_err!("ORDER BY without LIMIT on UPDATE")),
             _ => Ok(()),
         }
     }
+}
+
+fn check_reserved_name(name: &QualifiedName) -> Result<(), ParserError> {
+    if name.name.is_reserved() {
+        return Err(custom_err!(
+            "object name reserved for internal use: {}",
+            name.name
+        ));
+    }
+    Ok(())
 }
 
 impl CreateTableBody {
@@ -188,26 +195,37 @@ impl CreateTableBody {
     pub fn check(&self, tbl_name: &QualifiedName) -> Result<(), ParserError> {
         if let Self::ColumnsAndConstraints {
             columns,
-            constraints: _,
-            options,
+            constraints,
+            flags,
         } = self
         {
             let mut generated_count = 0;
             for c in columns.values() {
-                for cs in &c.constraints {
-                    if let ColumnConstraint::Generated { .. } = cs.constraint {
-                        generated_count += 1;
-                    }
+                if c.flags.intersects(ColFlags::GENERATED) {
+                    generated_count += 1;
                 }
             }
             if generated_count == columns.len() {
                 return Err(custom_err!("must have at least one non-generated column"));
             }
 
-            if options.contains(TableOptions::STRICT) {
+            if flags.contains(TabFlags::Strict) {
                 for c in columns.values() {
                     match &c.col_type {
+                        Some(Type {
+                            name,
+                            size: Some(_),
+                        }) => {
+                            return Err(custom_err!(
+                                "unknown datatype for {}.{}: \"{}(...)\"",
+                                tbl_name,
+                                c.col_name,
+                                unquote(name).0,
+                            ));
+                        }
+                        // FIXME unquote
                         Some(Type { name, .. }) => {
+                            let name = unquote(name).0;
                             // The datatype must be one of following: INT INTEGER REAL TEXT BLOB ANY
                             if !(name.eq_ignore_ascii_case("INT")
                                 || name.eq_ignore_ascii_case("INTEGER")
@@ -235,37 +253,11 @@ impl CreateTableBody {
                     }
                 }
             }
-            if options.contains(TableOptions::WITHOUT_ROWID) && !self.has_primary_key() {
+            if flags.contains(TabFlags::WithoutRowid) && !flags.contains(TabFlags::HasPrimaryKey) {
                 return Err(custom_err!("PRIMARY KEY missing on table {}", tbl_name,));
             }
         }
         Ok(())
-    }
-
-    /// explicit primary key constraint ?
-    pub fn has_primary_key(&self) -> bool {
-        if let Self::ColumnsAndConstraints {
-            columns,
-            constraints,
-            ..
-        } = self
-        {
-            for col in columns.values() {
-                for c in col {
-                    if let ColumnConstraint::PrimaryKey { .. } = c {
-                        return true;
-                    }
-                }
-            }
-            if let Some(constraints) = constraints {
-                for c in constraints {
-                    if let TableConstraint::PrimaryKey { .. } = c.constraint {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
     }
 }
 
@@ -295,23 +287,9 @@ impl OneSelect {
             Self::Select { columns, .. } => column_count(columns),
             Self::Values(values) => {
                 assert!(!values.is_empty()); // TODO Validate
-                ColumnCount::Fixed(values[0].len())
+                ColumnCount::Fixed(u16::try_from(values[0].len()).unwrap())
             }
         }
-    }
-    /// Check all VALUES have the same number of terms
-    pub fn push(values: &mut Vec<Vec<Expr>>, v: Vec<Expr>) -> Result<(), ParserError> {
-        if values[0].len() != v.len() {
-            return Err(custom_err!("all VALUES must have the same number of terms"));
-        }
-        values.push(v);
-        Ok(())
-    }
-}
-
-impl Display for QualifiedName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.to_fmt(f)
     }
 }
 

@@ -15,8 +15,7 @@ mod error;
 #[cfg(test)]
 mod test;
 
-use crate::lexer::scan::ScanError;
-use crate::lexer::scan::Splitter;
+use crate::lexer::scan::{Pos, ScanError, Splitter};
 use crate::lexer::Scanner;
 pub use crate::parser::ParserError;
 pub use error::Error;
@@ -49,13 +48,9 @@ impl<'input> Parser<'input> {
         self.input = input;
         self.scanner.reset();
     }
-    /// Current line position in input
-    pub fn line(&self) -> u64 {
-        self.scanner.line()
-    }
-    /// Current column position in input
-    pub fn column(&self) -> usize {
-        self.scanner.column()
+    /// Current position in input
+    pub fn position(&self) -> Pos {
+        self.scanner.position(self.input)
     }
 }
 
@@ -153,12 +148,12 @@ fn analyze_filter_keyword(
 }
 
 macro_rules! try_with_position {
-    ($scanner:expr, $expr:expr) => {
+    ($input:expr, $offset:expr, $expr:expr) => {
         match $expr {
             Ok(val) => val,
             Err(err) => {
                 let mut err = Error::from(err);
-                err.position($scanner.line(), $scanner.column());
+                err.position(Pos::from($input, $offset));
                 return Err(err);
             }
         }
@@ -173,10 +168,12 @@ impl FallibleIterator for Parser<'_> {
         //print!("line: {}, column: {}: ", self.scanner.line(), self.scanner.column());
         self.parser.ctx.reset();
         let mut last_token_parsed = TK_EOF;
+        let offset;
         let mut eof = false;
         loop {
             let (start, (value, mut token_type), end) = match self.scanner.scan(self.input)? {
-                (_, None, _) => {
+                (start, None, _) => {
+                    offset = start;
                     eof = true;
                     break;
                 }
@@ -202,10 +199,15 @@ impl FallibleIterator for Parser<'_> {
                 token_type.to_token(start, value, end)
             };
             //println!("({:?}, {:?})", token_type, token);
-            try_with_position!(self.scanner, self.parser.sqlite3Parser(token_type, token));
+            try_with_position!(
+                self.input,
+                start,
+                self.parser.sqlite3Parser(token_type, token)
+            );
             last_token_parsed = token_type;
             if self.parser.ctx.done() {
                 //println!();
+                offset = start;
                 break;
             }
         }
@@ -217,26 +219,29 @@ impl FallibleIterator for Parser<'_> {
         if eof && self.parser.ctx.is_ok() {
             if last_token_parsed != TK_SEMI {
                 try_with_position!(
-                    self.scanner,
+                    self.input,
+                    offset,
                     self.parser
                         .sqlite3Parser(TK_SEMI, sentinel(self.input.len()))
                 );
             }
             try_with_position!(
-                self.scanner,
+                self.input,
+                offset,
                 self.parser
                     .sqlite3Parser(TK_EOF, sentinel(self.input.len()))
             );
         }
         self.parser.sqlite3ParserFinalize();
         if let Some(e) = self.parser.ctx.error() {
-            let err = Error::ParserError(e, Some((self.scanner.line(), self.scanner.column())));
+            let err = Error::ParserError(e, Some(Pos::from(self.input, offset)));
             return Err(err);
         }
         let cmd = self.parser.ctx.cmd();
+        #[cfg(feature = "extra_checks")]
         if let Some(ref cmd) = cmd {
             if let Err(e) = cmd.check() {
-                let err = Error::ParserError(e, Some((self.scanner.line(), self.scanner.column())));
+                let err = Error::ParserError(e, Some(Pos::from(self.input, offset)));
                 return Err(err);
             }
         }

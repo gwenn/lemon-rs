@@ -20,6 +20,23 @@
 
 ## TODO
 
+### wrong error location
+
+```
+RUST_LOG=sqlite3Parser=debug cargo run --example sql_cmd "PRAGMA test=?"
+[ERROR sqlite3Parser] near "Ok("")": syntax error
+Err: near "": syntax error at (1, 14) in PRAGMA test=?
+```
+vs
+```
+sqlite> .parameter init
+sqlite> .parameter set ?1 1
+sqlite> PRAGMA test=?;
+Parse error: near "?": syntax error
+  PRAGMA test=?;
+              ^--- error here
+```
+
 ### `CREATE TABLE`
 
 - [x] qualified (different of `temp`) temporary table
@@ -46,11 +63,11 @@ Parse error: must have at least one non-generated column
 
 ```sql
 sqlite> CREATE TABLE t(a REFERENCES o(a,b));
-Parse error: foreign key on a should reference only one column of table o
+Parse error: foreign key on a should reference only one column of table o -- done
   CREATE TABLE t(a REFERENCES o(a,b));
                 error here ---^
 sqlite> CREATE TABLE t(a PRIMARY KEY AUTOINCREMENT) WITHOUT ROWID;
-Parse error: AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY
+Parse error: AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY -- done
 sqlite> CREATE TABLE t(a INTEGER PRIMARY KEY AUTOINCREMENT) WITHOUT ROWID;
 Parse error: AUTOINCREMENT not allowed on WITHOUT ROWID tables
 ```
@@ -60,15 +77,6 @@ Parse error: AUTOINCREMENT not allowed on WITHOUT ROWID tables
 ```sql
 sqlite> CREATE TABLE test (a, b, FOREIGN KEY (b) REFERENCES test(a,b));
 Parse error: number of columns in foreign key does not match the number of columns in the referenced table
-```
-
-```sql
-sqlite> create table test (a,b, primary key(a), primary key(b));
-Parse error: table "test" has more than one primary key
-sqlite> create table test (a primary key, b primary key);
-Parse error: table "test" has more than one primary key
-sqlite> create table test (a primary key, b, primary key(a));
-Parse error: table "test" has more than one primary key
 ```
 
 ### `HAVING`
@@ -115,7 +123,7 @@ Parse error: no such column: j
 
 ```sql
 sqlite> CREATE TABLE test (n, m);
-sqlite> INSERT INTO test (n, n, m) VALUES (1, 0, 1); -- pgsql KO
+sqlite> INSERT INTO test (n, n, m) VALUES (1, 0, 1); -- pgsql KO, done
 sqlite> SELECT * FROM test;
 1|1
 sqlite> UPDATE test SET n = 1, n = 0; -- pgsql KO
