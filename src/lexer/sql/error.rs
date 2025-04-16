@@ -56,7 +56,7 @@ impl fmt::Display for Error {
             Self::MalformedHexInteger(pos) => {
                 write!(f, "malformed hex integer at {pos:?}")
             }
-            Self::ParserError(ref msg, Some(pos)) => write!(f, "{msg} at {pos:?}"),
+            Self::ParserError(ref msg, Some(pos)) => write!(f, "{msg} at {pos}"),
             Self::ParserError(ref msg, _) => write!(f, "{msg}"),
         }
     }

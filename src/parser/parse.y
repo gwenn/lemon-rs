@@ -41,7 +41,7 @@
     error!(target: TARGET, "incomplete input");
     self.ctx.error = Some(ParserError::UnexpectedEof);
   } else {
-    error!(target: TARGET, "near \"{:?}\": syntax error", yyminor);
+    error!(target: TARGET, "near \"{}\": syntax error", std::str::from_utf8(yyminor.1).unwrap_or(""));
     self.ctx.error = Some(ParserError::SyntaxError(from_bytes(yyminor.1)));
   }
 }
