@@ -1486,6 +1486,7 @@ impl CreateTableBody {
                 {
                     if flags.contains(TabFlags::HasPrimaryKey) {
                         // FIXME table name
+                        #[cfg(feature = "extra_checks")]
                         return Err(custom_err!("table has more than one primary key"));
                     } else {
                         flags |= TabFlags::HasPrimaryKey;
@@ -1898,7 +1899,9 @@ pub struct SortedColumn {
     pub nulls: Option<NullsOrder>,
 }
 
-fn has_explicit_nulls(columns: &Vec<SortedColumn>) -> Result<(), ParserError> {
+#[allow(unused_variables)]
+fn has_explicit_nulls(columns: &[SortedColumn]) -> Result<(), ParserError> {
+    #[cfg(feature = "extra_checks")]
     for column in columns {
         if let Some(ref nulls) = column.nulls {
             return Err(custom_err!(
@@ -2104,6 +2107,7 @@ impl CommonTableExpr {
     }
     /// Constructor
     pub fn add_cte(ctes: &mut Vec<Self>, cte: Self) -> Result<(), ParserError> {
+        #[cfg(feature = "extra_checks")]
         if ctes.iter().any(|c| c.tbl_name == cte.tbl_name) {
             return Err(custom_err!("duplicate WITH table name: {}", cte.tbl_name));
         }

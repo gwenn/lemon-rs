@@ -108,6 +108,7 @@ fn more_than_one_pk() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn has_explicit_nulls() {
     expect_parser_err_msg(
         b"CREATE TABLE x(a TEXT, PRIMARY KEY (a ASC NULLS FIRST))",

@@ -21,7 +21,9 @@ jobs:
       - name: Build
         run: cargo build
       - name: Run tests
-        run: cargo test
+        run: |
+          cargo test
+          cargo test --features extra_checks
 
   direct-minimal-versions:
     name: Test min versions
