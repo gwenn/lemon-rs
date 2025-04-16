@@ -70,6 +70,7 @@ fn create_table_without_column() {
 fn auto_increment() {
     parse_cmd(b"CREATE TABLE t (x INTEGER PRIMARY KEY AUTOINCREMENT)");
     parse_cmd(b"CREATE TABLE t (x \"INTEGER\" PRIMARY KEY AUTOINCREMENT)");
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT PRIMARY KEY AUTOINCREMENT)",
         "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY",
@@ -77,6 +78,7 @@ fn auto_increment() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn generated() {
     expect_parser_err_msg(
         b"CREATE TABLE x(a PRIMARY KEY AS ('id'))",
@@ -89,6 +91,7 @@ fn generated() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn more_than_one_pk() {
     expect_parser_err_msg(
         b"CREATE TABLE test (a,b, PRIMARY KEY(a), PRIMARY KEY(b))",
@@ -263,8 +266,8 @@ fn create_table_without_rowid_missing_pk() {
 }
 
 #[test]
-#[cfg(feature = "extra_checks")]
 fn create_temporary_table_with_qualified_name() {
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE TEMPORARY TABLE mem.x AS SELECT 1",
         "temporary table name must be unqualified",
@@ -302,6 +305,7 @@ fn create_strict_table_unknown_datatype() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn foreign_key_on_column() {
     expect_parser_err_msg(
         b"CREATE TABLE t(a REFERENCES o(a,b))",
@@ -339,6 +343,7 @@ fn delete_order_by_without_limit() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn update_order_by_without_limit() {
     expect_parser_err_msg(
         b"UPDATE t SET x = 1 ORDER BY x",
@@ -347,6 +352,7 @@ fn update_order_by_without_limit() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn values_mismatch_columns_count() {
     expect_parser_err_msg(
         b"INSERT INTO t VALUES (1), (1,2)",
@@ -415,6 +421,7 @@ fn cast_without_typename() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn distinct_aggregates() {
     expect_parser_err_msg(
         b"SELECT count(DISTINCT) FROM t",
@@ -450,8 +457,11 @@ fn unknown_join_type() {
 
 #[test]
 fn no_tables_specified() {
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(b"SELECT *", "no tables specified");
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(b"SELECT t.*", "no tables specified");
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(b"SELECT count(*), *", "no tables specified");
     parse_cmd(b"SELECT count(*)");
 }
@@ -487,6 +497,7 @@ fn order_by_out_of_range() {
 }
 
 #[test]
+#[cfg(feature = "extra_checks")]
 fn update_from_target() {
     expect_parser_err_msg(
         b"UPDATE x1 SET a=5 FROM x1",
@@ -539,20 +550,23 @@ fn returning_within_trigger() {
 }
 
 #[test]
-#[cfg(feature = "extra_checks")]
 fn reserved_name() {
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE TABLE sqlite_x(a)",
         "object name reserved for internal use: sqlite_x",
     );
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE VIEW sqlite_x(a) AS SELECT 1",
         "object name reserved for internal use: sqlite_x",
     );
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE INDEX sqlite_x ON x(a)",
         "object name reserved for internal use: sqlite_x",
     );
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE TRIGGER sqlite_x AFTER INSERT ON x BEGIN SELECT 1; END;",
         "object name reserved for internal use: sqlite_x",

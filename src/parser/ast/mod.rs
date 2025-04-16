@@ -302,6 +302,7 @@ impl Stmt {
         order_by: Option<Vec<SortedColumn>>,
         limit: Option<Limit>,
     ) -> Result<Self, ParserError> {
+        #[cfg(feature = "extra_checks")]
         if let Some(FromClause {
             select: Some(ref select),
             ref joins,
@@ -320,6 +321,7 @@ impl Stmt {
                 ));
             }
         }
+        #[cfg(feature = "extra_checks")]
         if order_by.is_some() && limit.is_none() {
             return Err(custom_err!("ORDER BY without LIMIT on UPDATE"));
         }
@@ -584,6 +586,7 @@ impl Expr {
         order_by: Option<FunctionCallOrder>,
         filter_over: Option<FunctionTail>,
     ) -> Result<Self, ParserError> {
+        #[cfg(feature = "extra_checks")]
         if let Some(Distinctness::Distinct) = distinctness {
             if args.as_ref().map_or(0, Vec::len) != 1 {
                 return Err(custom_err!(
@@ -934,6 +937,7 @@ impl OneSelect {
         having: Option<Expr>,
         window_clause: Option<Vec<WindowDef>>,
     ) -> Result<Self, ParserError> {
+        #[cfg(feature = "extra_checks")]
         if from.is_none()
             && columns
                 .iter()
@@ -966,6 +970,7 @@ impl OneSelect {
     }
     /// Check all VALUES have the same number of terms
     pub fn push(values: &mut Vec<Vec<Expr>>, v: Vec<Expr>) -> Result<(), ParserError> {
+        #[cfg(feature = "extra_checks")]
         if values[0].len() != v.len() {
             return Err(custom_err!("all VALUES must have the same number of terms"));
         }
@@ -1547,9 +1552,11 @@ impl ColumnDefinition {
         constraints: Vec<NamedColumnConstraint>,
     ) -> Result<Self, ParserError> {
         let mut flags = ColFlags::empty();
+        #[allow(unused_variables)]
         let mut default = false;
         for constraint in &constraints {
             match &constraint.constraint {
+                #[allow(unused_assignments)]
                 ColumnConstraint::Default(..) => {
                     default = true;
                 }
@@ -1564,6 +1571,7 @@ impl ColumnDefinition {
                         }
                     }
                 }
+                #[cfg(feature = "extra_checks")]
                 ColumnConstraint::ForeignKey {
                     clause:
                         ForeignKeyClause {
@@ -1580,7 +1588,9 @@ impl ColumnDefinition {
                         ));
                     }
                 }
+                #[allow(unused_variables)]
                 ColumnConstraint::PrimaryKey { auto_increment, .. } => {
+                    #[cfg(feature = "extra_checks")]
                     if *auto_increment
                         && col_type.as_ref().is_none_or(|t| {
                             !unquote(t.name.as_str()).0.eq_ignore_ascii_case("INTEGER")
@@ -1598,6 +1608,7 @@ impl ColumnDefinition {
                 _ => {}
             }
         }
+        #[cfg(feature = "extra_checks")]
         if flags.contains(ColFlags::PRIMKEY) && flags.intersects(ColFlags::GENERATED) {
             return Err(custom_err!(
                 "generated columns cannot be part of the PRIMARY KEY"
@@ -1642,6 +1653,7 @@ impl ColumnDefinition {
                 .values()
                 .any(|c| c.flags.contains(ColFlags::PRIMKEY))
         {
+            #[cfg(feature = "extra_checks")]
             return Err(custom_err!("table has more than one primary key")); // FIXME table name
         }
         columns.insert(col_name.clone(), cd);
