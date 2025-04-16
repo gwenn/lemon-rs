@@ -20,6 +20,23 @@
 
 ## TODO
 
+### wrong error location
+
+```
+RUST_LOG=sqlite3Parser=debug cargo run --example sql_cmd "PRAGMA test=?"
+[ERROR sqlite3Parser] near "Ok("")": syntax error
+Err: near "": syntax error at (1, 14) in PRAGMA test=?
+```
+vs
+```
+sqlite> .parameter init
+sqlite> .parameter set ?1 1
+sqlite> PRAGMA test=?;
+Parse error: near "?": syntax error
+  PRAGMA test=?;
+              ^--- error here
+```
+
 ### `CREATE TABLE`
 
 - [x] qualified (different of `temp`) temporary table
