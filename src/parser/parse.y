@@ -1266,7 +1266,7 @@ trigger_cmd(A) ::= insert_cmd(R) INTO
   if returning.is_some() {
     return Err(custom_err!("cannot use RETURNING in a trigger"));
   }
-  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert: upsert.map(Box::new), returning };/*A-overwrites-R*/
+  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert: upsert.map(Box::new) };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).

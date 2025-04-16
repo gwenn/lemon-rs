@@ -1999,8 +1999,6 @@ pub enum TriggerCmd {
         select: Box<Select>,
         /// `ON CONFLICT` clause
         upsert: Option<Box<Upsert>>,
-        /// `RETURNING`
-        returning: Option<Vec<ResultColumn>>,
     },
     /// `DELETE`
     Delete {

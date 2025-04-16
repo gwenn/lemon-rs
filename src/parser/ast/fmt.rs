@@ -1691,7 +1691,6 @@ impl ToTokens for TriggerCmd {
                 col_names,
                 select,
                 upsert,
-                returning,
             } => {
                 if let Some(ResolveType::Replace) = or_conflict {
                     s.append(TK_REPLACE, None)?;
@@ -1712,10 +1711,6 @@ impl ToTokens for TriggerCmd {
                 select.to_tokens(s)?;
                 if let Some(upsert) = upsert {
                     upsert.to_tokens(s)?;
-                }
-                if let Some(returning) = returning {
-                    s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
                 }
                 Ok(())
             }
