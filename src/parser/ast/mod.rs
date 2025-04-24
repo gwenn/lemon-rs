@@ -660,7 +660,6 @@ pub enum Literal {
 impl Literal {
     /// Constructor
     pub fn from_ctime_kw(token: Token) -> Self {
-        // FIXME
         if b"CURRENT_DATE".eq_ignore_ascii_case(token.1) {
             Self::CurrentDate(
                 #[cfg(feature = "span")]
@@ -1140,9 +1139,7 @@ impl JoinOperator {
             Self::TypedJoin(
                 Some(jt),
                 #[cfg(feature = "span")]
-                Span::from(&token)
-                    .union_opt(&n1.as_ref().map(Spanned::span))
-                    .union_opt(&n2.as_ref().map(Spanned::span)),
+                Span::from(&token).union(&n1.span()).union(&n2.span()),
             )
         })
     }
