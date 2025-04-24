@@ -40,34 +40,10 @@ Parse error: near "?": syntax error
 ### `CREATE TABLE`
 
 - [x] qualified (different of `temp`) temporary table
-
-```sql
-sqlite> ATTACH DATABASE ':memory:' AS mem;
-sqlite> CREATE TEMPORARY TABLE mem.x AS SELECT 1;
-Parse error: temporary table name must be unqualified
-```
-
-```sql
-sqlite> CREATE TEMPORARY TABLE temp.x AS SELECT 1;
--- OK
-```
-
 - [x] must have at least one non-generated column
-
-```sql
-sqlite> CREATE TABLE test(data AS (1));
-Parse error: must have at least one non-generated column
-```
-
 - [ ] column constraint(s) checks
 
 ```sql
-sqlite> CREATE TABLE t(a REFERENCES o(a,b));
-Parse error: foreign key on a should reference only one column of table o -- done
-  CREATE TABLE t(a REFERENCES o(a,b));
-                error here ---^
-sqlite> CREATE TABLE t(a PRIMARY KEY AUTOINCREMENT) WITHOUT ROWID;
-Parse error: AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY -- done
 sqlite> CREATE TABLE t(a INTEGER PRIMARY KEY AUTOINCREMENT) WITHOUT ROWID;
 Parse error: AUTOINCREMENT not allowed on WITHOUT ROWID tables
 ```
@@ -81,18 +57,11 @@ Parse error: number of columns in foreign key does not match the number of colum
 
 ### `HAVING`
 
-- [x] HAVING clause on a non-aggregate query (`GroupBy::having`): grammar already prevents this case (grammar differs from SQLite official grammar).
+- [ ] HAVING clause on a non-aggregate query (`GroupBy::having`): grammar already prevents this case (grammar differs from SQLite official grammar).
 
 ```sql
 sqlite> SELECT 1 as i HAVING i > 1;
 Parse error: HAVING clause on a non-aggregate query
-```
-
-vs
-
-```
-[ERROR sqlite3Parser] near HAVING, "Token(None)": syntax error
-Err: near HAVING, "None": syntax error at (1, 21) in SELECT 1 as i HAVING i > 1
 ```
 
 ### `SELECT ...`
@@ -122,10 +91,6 @@ Parse error: no such column: j
 ### DML
 
 ```sql
-sqlite> CREATE TABLE test (n, m);
-sqlite> INSERT INTO test (n, n, m) VALUES (1, 0, 1); -- pgsql KO, done
-sqlite> SELECT * FROM test;
-1|1
 sqlite> UPDATE test SET n = 1, n = 0; -- pgsql KO
 sqlite> SELECT * FROM test;
 0|1

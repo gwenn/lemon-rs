@@ -443,6 +443,16 @@ fn cte_column_count() {
         "table i has 1 values for 2 columns",
     )
 }
+#[test]
+#[cfg(feature = "extra_checks")]
+fn duplicate_cte() {
+    expect_parser_err_msg(
+        b"WITH i(x) AS (SELECT 1),
+      i(y) AS (SELECT 2)
+      SELECT * FROM i;",
+        "duplicate WITH table name: i",
+    )
+}
 
 #[test]
 fn unknown_join_type() {
