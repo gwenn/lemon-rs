@@ -573,6 +573,8 @@ impl yyParser<'_> {
     ) -> Result<YYACTIONTYPE, ParseError> {
         let _ = yy_look_ahead;
         let _ = yy_lookahead_token;
+        #[cfg(feature = "span")]
+        let span = Span::from(yy_lookahead_token);
 
         let yylhsminor: YYMINORTYPE<'_>;
         match yyruleno {
