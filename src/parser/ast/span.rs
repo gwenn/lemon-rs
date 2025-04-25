@@ -101,6 +101,7 @@ impl Spanned for Expr {
                 end,
             } => lhs.span().union(&end.span()),
             Expr::Binary(lhs, _, rhs) => lhs.span().union(&rhs.span()),
+            // FIXME CASE ... END <- CASE and END spans
             Expr::Case {
                 base,
                 when_then_pairs,
@@ -120,16 +121,21 @@ impl Spanned for Expr {
                 order_by,
                 filter_over,
             } => todo!(),
+            // FIXME name(*) [filter_over] <- right parenthesis span
             Expr::FunctionCallStar { name, filter_over } => name.span().union(&filter_over.span()),
             Expr::Id(id) => id.span(),
+            // FIXME lhs [NOT] IN (rhs) <- right parenthesis span
             Expr::InList { lhs, not: _, rhs } => lhs.span().union(&rhs.span()),
+            // FIXME lhs [NOT] IN (rhs) <- right parenthesis span
             Expr::InSelect { lhs, not: _, rhs } => todo!(),
+            // FIXME lhs ... (args) <- optional right parenthesis span
             Expr::InTable {
                 lhs,
                 not: _,
                 rhs,
                 args,
             } => lhs.span().union(&rhs.span()).union(&args.span()),
+            // FIXME expr IS NULL <- NULL span
             Expr::IsNull(expr) => expr.span(),
             Expr::Like {
                 lhs,
@@ -138,24 +144,17 @@ impl Spanned for Expr {
                 rhs,
                 escape,
             } => lhs.span().union(&rhs.span()).union(&escape.span()),
-            Expr::Literal(literal) => literal.span(),
+            Expr::Literal(lit) => lit.span(),
             Expr::Name(name) => name.span(),
-            Expr::NotNull(expr) => todo!(),
-            Expr::Parenthesized(exprs) => todo!(),
+            // FIXME expr NOT NULL <- NULL span
+            Expr::NotNull(expr) => expr.span(),
+            // FIXME (exprs) <- left and right parentheses spans
+            Expr::Parenthesized(exprs) => exprs.span(),
             Expr::Qualified(qualifier, qualified) => qualifier.span().union(&qualified.span()),
             Expr::Raise(resolve_type, expr) => todo!(),
             Expr::Subquery(select) => todo!(),
             Expr::Unary(unary_operator, expr) => todo!(),
-            Expr::Variable(_) => todo!(),
-        }
-    }
-}
-
-impl Spanned for As {
-    fn span(&self) -> Span {
-        match self {
-            As::As(name) => name.span(),
-            As::Elided(name) => name.span(),
+            Expr::Variable(var) => todo!(),
         }
     }
 }
@@ -175,6 +174,66 @@ impl Spanned for Literal {
     }
 }
 
+impl Spanned for Select {
+    fn span(&self) -> Span {
+        todo!()
+    }
+}
+
+impl Spanned for FromClause {
+    fn span(&self) -> Span {
+        self.select.span().union(&self.joins.span())
+    }
+}
+
+impl Spanned for ResultColumn {
+    fn span(&self) -> Span {
+        match self {
+            ResultColumn::Expr(expr, alias) => expr.span().union(&alias.span()),
+            // FIXME
+            ResultColumn::Star => Span::EMPTY,
+            // FIXME tbl_name.* <- * span
+            ResultColumn::TableStar(tbl_name) => tbl_name.span(),
+        }
+    }
+}
+
+impl Spanned for As {
+    fn span(&self) -> Span {
+        match self {
+            // FIXME AS name <- AS span
+            As::As(name) => name.span(),
+            As::Elided(name) => name.span(),
+        }
+    }
+}
+
+impl Spanned for JoinedSelectTable {
+    fn span(&self) -> Span {
+        self.operator
+            .span()
+            .union(&self.table.span())
+            .union(&self.constraint.span())
+    }
+}
+
+impl Spanned for SelectTable {
+    fn span(&self) -> Span {
+        match self {
+            SelectTable::Table(name, alias, indexed) => {
+                name.span().union(&alias.span()).union(&indexed.span())
+            }
+            SelectTable::TableCall(name, exprs, alias) => {
+                name.span().union(&exprs.span()).union(&alias.span())
+            }
+            // FIXME (select) alias <- left parenthesis (and right parentheis if no alias) spans
+            SelectTable::Select(select, alias) => select.span().union(&alias.span()),
+            // FIXME (from) alias <- left parenthesis (and right parentheis if no alias) spans
+            SelectTable::Sub(from, alias) => from.span().union(&alias.span()),
+        }
+    }
+}
+
 impl Spanned for JoinOperator {
     fn span(&self) -> Span {
         match self {
@@ -187,8 +246,10 @@ impl Spanned for JoinOperator {
 impl Spanned for JoinConstraint {
     fn span(&self) -> Span {
         match self {
+            // FIXME ON expr <- ON span
             JoinConstraint::On(expr) => expr.span(),
-            JoinConstraint::Using(distinct_names) => distinct_names.span(),
+            // FIXME USING (col_names) <- USING and right parenthesis spans
+            JoinConstraint::Using(col_names) => col_names.span(),
         }
     }
 }
@@ -218,14 +279,138 @@ impl Spanned for DistinctNames {
     }
 }
 
+impl Spanned for SortOrder {
+    fn span(&self) -> Span {
+        // FIXME
+        Span::EMPTY
+    }
+}
+
+impl Spanned for NullsOrder {
+    fn span(&self) -> Span {
+        // FIXME
+        Span::EMPTY
+    }
+}
+
+impl Spanned for ForeignKeyClause {
+    fn span(&self) -> Span {
+        self.tbl_name.span().union(&self.args.span())
+    }
+}
+
+impl Spanned for RefArg {
+    fn span(&self) -> Span {
+        // FIXME
+        Span::EMPTY
+    }
+}
+
+impl Spanned for IndexedColumn {
+    fn span(&self) -> Span {
+        self.col_name
+            .span()
+            .union(&self.collation_name.span())
+            .union(&self.order.span())
+    }
+}
+
+impl Spanned for Indexed {
+    fn span(&self) -> Span {
+        match self {
+            // FIXME INDEXED BY name <- INDEXED span
+            Indexed::IndexedBy(name) => name.span(),
+            // FIXME
+            Indexed::NotIndexed => Span::EMPTY,
+        }
+    }
+}
+
+impl Spanned for SortedColumn {
+    fn span(&self) -> Span {
+        self.expr
+            .span()
+            .union(&self.order.span())
+            .union(&self.nulls.span())
+    }
+}
+
+impl Spanned for Limit {
+    fn span(&self) -> Span {
+        // FIXME LIMIT expr OFFSET offset <- LIMIT span
+        self.expr.span().union(&self.offset.span())
+    }
+}
+
 impl Spanned for Set {
     fn span(&self) -> Span {
+        // FIXME (col_names) = expr <- optional left parenthesis span
         self.col_names.span().union(&self.expr.span())
+    }
+}
+
+impl Spanned for PragmaBody {
+    fn span(&self) -> Span {
+        match self {
+            // FIXME = expr <- equal sign span
+            PragmaBody::Equals(expr) => expr.span(),
+            // FIXME (expr) <- parentheses spans
+            PragmaBody::Call(expr) => expr.span(),
+        }
+    }
+}
+
+impl Spanned for With {
+    fn span(&self) -> Span {
+        // FIXME WITH [RECURSIVE] ctes <- WITH span
+        self.ctes.span()
+    }
+}
+
+impl Spanned for CommonTableExpr {
+    fn span(&self) -> Span {
+        // FIXME tbl_name ... (select) <- right parenthesis span
+        self.tbl_name.span().union(&self.select.span())
+    }
+}
+
+impl Spanned for TypeSize {
+    fn span(&self) -> Span {
+        match self {
+            TypeSize::MaxSize(size) => size.span(),
+            TypeSize::TypeSize(size1, size2) => size1.span().union(&size2.span()),
+        }
+    }
+}
+
+impl Spanned for Upsert {
+    fn span(&self) -> Span {
+        // FIXME ON CONFLICT index .. <- ON span
+        self.index.span().union(&self.next.span())
+    }
+}
+
+impl Spanned for UpsertIndex {
+    fn span(&self) -> Span {
+        // FIXME (targets) [WHERE clause] <- left (and optional right) parentheses spans
+        self.targets.span().union(&self.where_clause.span())
+    }
+}
+
+impl Spanned for UpsertDo {
+    fn span(&self) -> Span {
+        match self {
+            // FIXME DO UPDATE SET sets ... <- DO span
+            UpsertDo::Set { sets, where_clause } => sets.span().union(&where_clause.span()),
+            // FIXME DO NOTHING <- spans
+            UpsertDo::Nothing => Span::EMPTY,
+        }
     }
 }
 
 impl Spanned for FunctionTail {
     fn span(&self) -> Span {
+        // FIXME FILTER (WHERE filter_clause) OVER over_clause <- FILTER or OVER span
         self.filter_clause.span().union(&self.over_clause.span())
     }
 }
