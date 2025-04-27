@@ -1132,10 +1132,12 @@ uniqueflag(A) ::= .        {A = false;}
 eidlist_opt(A) ::= .                         {A = None;}
 eidlist_opt(A) ::= LP eidlist(X) RP.         {A = Some(X);}
 eidlist(A) ::= eidlist(A) COMMA nm(Y) collate(C) sortorder(Z).  {
+  // FIXME
   let ic = IndexedColumn{ col_name: Y, collation_name: C, order: Z };
   A.push(ic);
 }
 eidlist(A) ::= nm(Y) collate(C) sortorder(Z). {
+  // FIXME
   A = vec![IndexedColumn{ col_name: Y, collation_name: C, order: Z }]; /*A-overwrites-Y*/
 }
 

@@ -144,7 +144,7 @@ pub enum Stmt {
         /// view name
         view_name: QualifiedName,
         /// columns
-        columns: Option<Vec<IndexedColumn>>,
+        columns: Option<Vec<IndexedColumn>>, // TODO check no duplicate directly
         /// query
         select: Box<Select>,
     },
@@ -162,7 +162,7 @@ pub enum Stmt {
     /// `DELETE`
     Delete {
         /// CTE
-        with: Option<With>,
+        with: Option<With>, // TODO check usages in where_clause
         /// `FROM` table name
         tbl_name: QualifiedName,
         /// `INDEXED`
@@ -209,7 +209,7 @@ pub enum Stmt {
     /// `INSERT`
     Insert {
         /// CTE
-        with: Option<With>,
+        with: Option<With>, // TODO check usages in body
         /// `OR`
         or_conflict: Option<ResolveType>, // TODO distinction between REPLACE and INSERT OR REPLACE
         /// table name
@@ -244,7 +244,7 @@ pub enum Stmt {
     /// `UPDATE`
     Update {
         /// CTE
-        with: Option<With>,
+        with: Option<With>, // TODO check usages in where_clause
         /// `OR`
         or_conflict: Option<ResolveType>,
         /// table name
@@ -252,7 +252,7 @@ pub enum Stmt {
         /// `INDEXED`
         indexed: Option<Indexed>,
         /// `SET` assignments
-        sets: Vec<Set>,
+        sets: Vec<Set>, // FIXME unique
         /// `FROM`
         from: Option<FromClause>,
         /// `WHERE` clause
@@ -918,7 +918,7 @@ pub enum OneSelect {
         /// `GROUP BY`
         group_by: Option<Vec<Expr>>,
         /// `HAVING`
-        having: Option<Box<Expr>>,
+        having: Option<Box<Expr>>, // TODO: HAVING clause on a non-aggregate query
         /// `WINDOW` definition
         window_clause: Option<Vec<WindowDef>>,
     },
@@ -1771,6 +1771,7 @@ impl TableConstraint {
         auto_increment: bool,
         conflict_clause: Option<ResolveType>,
     ) -> Result<Self, ParserError> {
+        has_expression(&columns)?;
         has_explicit_nulls(&columns)?;
         Ok(Self::PrimaryKey {
             columns,
@@ -1783,6 +1784,7 @@ impl TableConstraint {
         columns: Vec<SortedColumn>,
         conflict_clause: Option<ResolveType>,
     ) -> Result<Self, ParserError> {
+        has_expression(&columns)?;
         has_explicit_nulls(&columns)?;
         Ok(Self::Unique {
             columns,
@@ -1899,6 +1901,16 @@ pub struct SortedColumn {
     pub nulls: Option<NullsOrder>,
 }
 
+fn has_expression(columns: &Vec<SortedColumn>) -> Result<(), ParserError> {
+    for _column in columns {
+        if false {
+            return Err(custom_err!(
+                "expressions prohibited in PRIMARY KEY and UNIQUE constraints"
+            ));
+        }
+    }
+    Ok(())
+}
 #[allow(unused_variables)]
 fn has_explicit_nulls(columns: &[SortedColumn]) -> Result<(), ParserError> {
     #[cfg(feature = "extra_checks")]
@@ -1996,7 +2008,7 @@ pub enum TriggerCmd {
         /// table name
         tbl_name: Name,
         /// `SET` assignments
-        sets: Vec<Set>,
+        sets: Vec<Set>, // FIXME unique
         /// `FROM`
         from: Option<FromClause>,
         /// `WHERE` clause
@@ -2070,7 +2082,7 @@ pub struct CommonTableExpr {
     /// table name
     pub tbl_name: Name,
     /// table columns
-    pub columns: Option<Vec<IndexedColumn>>, // check no duplicate
+    pub columns: Option<Vec<IndexedColumn>>, // TODO: check no duplicate (eidlist_opt)
     /// `MATERIALIZED`
     pub materialized: Materialized,
     /// query
