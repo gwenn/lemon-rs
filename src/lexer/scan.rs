@@ -165,7 +165,7 @@ impl<S: Splitter> Scanner<S> {
 
     /// Consume `amt` bytes of the buffer.
     fn consume(&mut self, data: &[u8], amt: usize) {
-        debug!(target: "scanner", "consume({})", amt);
+        debug!(target: "scanner", "consume({amt})");
         debug_assert!(amt <= data.len());
         self.offset += amt;
     }

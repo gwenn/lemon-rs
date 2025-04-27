@@ -4517,7 +4517,7 @@ void ReportTable(
   if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
   else                    prefix = "";
   if( mhflag ){
-    fprintf(out,"#[expect(non_camel_case_types)]\n"); lineno++;
+    fprintf(out,"#[expect(non_camel_case_types, missing_docs)]\n"); lineno++;
     fprintf(out,"#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]\n"); lineno++;
     fprintf(out,"#[repr(%s)]\n",
       minimum_size_type(0, lemp->nsymbol+1, 0)); lineno++;
