@@ -176,7 +176,7 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 //
 %token ABORT ACTION AFTER ANALYZE ASC ATTACH BEFORE BEGIN BY CASCADE CAST.
 %token CONFLICT DATABASE DEFERRED DESC DETACH EACH END EXCLUSIVE EXPLAIN FAIL.
-%token OR AND NOT IS ISNOT MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ.
+%token OR AND NOT IS MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ.
 %token GT LE LT GE ESCAPE.
 
 // The following directive causes tokens ABORT, AFTER, ASC, etc. to
@@ -1132,10 +1132,12 @@ uniqueflag(A) ::= .        {A = false;}
 eidlist_opt(A) ::= .                         {A = None;}
 eidlist_opt(A) ::= LP eidlist(X) RP.         {A = Some(X);}
 eidlist(A) ::= eidlist(A) COMMA nm(Y) collate(C) sortorder(Z).  {
+  // FIXME
   let ic = IndexedColumn{ col_name: Y, collation_name: C, order: Z };
   A.push(ic);
 }
 eidlist(A) ::= nm(Y) collate(C) sortorder(Z). {
+  // FIXME
   A = vec![IndexedColumn{ col_name: Y, collation_name: C, order: Z }]; /*A-overwrites-Y*/
 }
 
