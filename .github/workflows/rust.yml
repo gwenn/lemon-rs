@@ -24,6 +24,7 @@ jobs:
         run: |
           cargo test
           cargo test --features extra_checks
+          cargo test --features span
 
   direct-minimal-versions:
     name: Test min versions

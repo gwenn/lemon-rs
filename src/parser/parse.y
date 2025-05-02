@@ -56,6 +56,8 @@
 %include {
 use crate::custom_err;
 use crate::parser::ast::*;
+#[cfg(feature = "span")]
+use crate::parser::ast::span::Span;
 use crate::parser::{Context, ParserError};
 use crate::dialect::{from_bytes, from_token, Token, TokenType};
 use indexmap::IndexMap;
@@ -664,8 +666,8 @@ xfullname(A) ::= nm(X) AS nm(Z). {
 }
 
 %type joinop {JoinOperator}
-joinop(X) ::= COMMA.              { X = JoinOperator::Comma; }
-joinop(X) ::= JOIN.              { X = JoinOperator::TypedJoin(None); }
+joinop(X) ::= COMMA.              { X = JoinOperator::Comma(#[cfg(feature = "span")] span); }
+joinop(X) ::= JOIN.              { X = JoinOperator::TypedJoin(None, #[cfg(feature = "span")] span); }
 joinop(X) ::= JOIN_KW(A) JOIN.
                   {X = JoinOperator::from(A, None, None)?;  /*X-overwrites-A*/}
 joinop(X) ::= JOIN_KW(A) nm(B) JOIN.
@@ -907,11 +909,11 @@ expr(A) ::= nm(X) DOT nm(Y). {
 expr(A) ::= nm(X) DOT nm(Y) DOT nm(Z). {
   A = Expr::DoublyQualified(X, Y, Z); /*A-overwrites-X*/
 }
-term(A) ::= NULL. {A=Expr::Literal(Literal::Null);}
-term(A) ::= BLOB(X). {A=Expr::Literal(Literal::Blob(X.unwrap())); /*A-overwrites-X*/}
-term(A) ::= STRING(X).          {A=Expr::Literal(Literal::String(X.unwrap())); /*A-overwrites-X*/}
+term(A) ::= NULL. {A=Expr::Literal(Literal::Null(#[cfg(feature = "span")] span));}
+term(A) ::= BLOB(X). {A=Expr::Literal(Literal::Blob(X.unwrap(), #[cfg(feature = "span")] span)); /*A-overwrites-X*/}
+term(A) ::= STRING(X).          {A=Expr::Literal(Literal::String(X.unwrap(), #[cfg(feature = "span")] span)); /*A-overwrites-X*/}
 term(A) ::= FLOAT|INTEGER(X). {
-  A = Expr::Literal(Literal::Numeric(X.unwrap())); /*A-overwrites-X*/
+  A = Expr::Literal(Literal::Numeric(X.unwrap(), #[cfg(feature = "span")] span)); /*A-overwrites-X*/
 }
 expr(A) ::= VARIABLE(X).     {
   A = Expr::Variable(X.unwrap()); /*A-overwrites-X*/
@@ -1174,16 +1176,16 @@ cmd ::= PRAGMA fullname(X) LP minus_num(Y) RP.
 %type nmnum {Expr}
 nmnum(A) ::= plus_num(A).
 nmnum(A) ::= nm(X). {A = Expr::Name(X);}
-nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
-nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
-nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
+nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X), #[cfg(feature = "span")] span));}
+nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X), #[cfg(feature = "span")] span));}
+nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X), #[cfg(feature = "span")] span));}
 %endif SQLITE_OMIT_PRAGMA
 %token_class number INTEGER|FLOAT.
 %type plus_num {Expr}
-plus_num(A) ::= PLUS number(X).       {A = Expr::unary(UnaryOperator::Positive, Expr::Literal(Literal::Numeric(X.unwrap())));}
-plus_num(A) ::= number(X).            {A = Expr::Literal(Literal::Numeric(X.unwrap()));}
+plus_num(A) ::= PLUS number(X).       {A = Expr::unary(UnaryOperator::Positive, Expr::Literal(Literal::Numeric(X.unwrap(), #[cfg(feature = "span")] span)));}
+plus_num(A) ::= number(X).            {A = Expr::Literal(Literal::Numeric(X.unwrap(), #[cfg(feature = "span")] span));}
 %type minus_num {Expr}
-minus_num(A) ::= MINUS number(X).     {A = Expr::unary(UnaryOperator::Negative, Expr::Literal(Literal::Numeric(X.unwrap())));}
+minus_num(A) ::= MINUS number(X).     {A = Expr::unary(UnaryOperator::Negative, Expr::Literal(Literal::Numeric(X.unwrap(), #[cfg(feature = "span")] span)));}
 //////////////////////////// The CREATE TRIGGER command /////////////////////
 
 %ifndef SQLITE_OMIT_TRIGGER

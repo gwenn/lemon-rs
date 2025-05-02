@@ -25,6 +25,7 @@ NDEBUG = []
 SQLITE_ENABLE_ORDERED_SET_AGGREGATES = []
 default = ["YYNOERRORRECOVERY", "NDEBUG"]
 extra_checks = []
+span = []
 
 [dependencies]
 phf = { version = "0.11", features = ["uncased"] }

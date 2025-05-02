@@ -138,10 +138,10 @@ fn vtab_args() -> Result<(), Error> {
     let r = parse_cmd(sql);
     let Cmd::Stmt(Stmt::CreateVirtualTable {
         tbl_name: QualifiedName {
-            name: Name(tbl_name),
+            name: Name(tbl_name, ..),
             ..
         },
-        module_name: Name(module_name),
+        module_name: Name(module_name, ..),
         args: Some(args),
         ..
     }) = r

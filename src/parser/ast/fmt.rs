@@ -770,14 +770,14 @@ impl Display for Expr {
 impl ToTokens for Literal {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::Numeric(ref num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
-            Self::String(ref str) => s.append(TK_STRING, Some(str)),
-            Self::Blob(ref blob) => s.append(TK_BLOB, Some(blob)),
-            Self::Keyword(ref str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
-            Self::Null => s.append(TK_NULL, None),
-            Self::CurrentDate => s.append(TK_CTIME_KW, Some("CURRENT_DATE")),
-            Self::CurrentTime => s.append(TK_CTIME_KW, Some("CURRENT_TIME")),
-            Self::CurrentTimestamp => s.append(TK_CTIME_KW, Some("CURRENT_TIMESTAMP")),
+            Self::Numeric(ref num, ..) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
+            Self::String(ref str, ..) => s.append(TK_STRING, Some(str)),
+            Self::Blob(ref blob, ..) => s.append(TK_BLOB, Some(blob)),
+            Self::Keyword(ref str, ..) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
+            Self::Null(..) => s.append(TK_NULL, None),
+            Self::CurrentDate(..) => s.append(TK_CTIME_KW, Some("CURRENT_DATE")),
+            Self::CurrentTime(..) => s.append(TK_CTIME_KW, Some("CURRENT_TIME")),
+            Self::CurrentTimestamp(..) => s.append(TK_CTIME_KW, Some("CURRENT_TIMESTAMP")),
         }
     }
 }
@@ -1073,8 +1073,8 @@ impl ToTokens for SelectTable {
 impl ToTokens for JoinOperator {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::Comma => s.append(TK_COMMA, None),
-            Self::TypedJoin(join_type) => {
+            Self::Comma(..) => s.append(TK_COMMA, None),
+            Self::TypedJoin(join_type, ..) => {
                 if let Some(ref join_type) = join_type {
                     join_type.to_tokens(s)?;
                 }

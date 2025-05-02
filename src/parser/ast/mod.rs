@@ -2,6 +2,8 @@
 #[cfg(feature = "extra_checks")]
 pub mod check;
 pub mod fmt;
+#[cfg(feature = "span")]
+pub mod span;
 
 use std::num::ParseIntError;
 use std::ops::Deref;
@@ -11,6 +13,8 @@ use std::str::{self, Bytes, FromStr};
 use check::ColumnCount;
 use fmt::TokenStream;
 use indexmap::{IndexMap, IndexSet};
+#[cfg(feature = "span")]
+use span::{Span, Spanned};
 
 use crate::custom_err;
 use crate::dialect::TokenType::{self, *};
@@ -605,7 +609,7 @@ impl Expr {
 
     /// Check if an expression is an integer
     pub fn is_integer(&self) -> Option<i64> {
-        if let Self::Literal(Literal::Numeric(s)) = self {
+        if let Self::Literal(Literal::Numeric(s, ..)) = self {
             i64::from_str(s).ok()
         } else if let Self::Unary(UnaryOperator::Positive, e) = self {
             e.is_integer()
@@ -634,34 +638,43 @@ impl Expr {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     /// Number
-    Numeric(String),
+    Numeric(String, #[cfg(feature = "span")] Span),
     /// String
     // TODO Check that string is already quoted and correctly escaped
-    String(String),
+    String(String, #[cfg(feature = "span")] Span),
     /// BLOB
     // TODO Check that string is valid (only hexa)
-    Blob(String),
+    Blob(String, #[cfg(feature = "span")] Span),
     /// Keyword
-    Keyword(String),
+    Keyword(String, #[cfg(feature = "span")] Span),
     /// `NULL`
-    Null,
+    Null(#[cfg(feature = "span")] Span),
     /// `CURRENT_DATE`
-    CurrentDate,
+    CurrentDate(#[cfg(feature = "span")] Span),
     /// `CURRENT_TIME`
-    CurrentTime,
+    CurrentTime(#[cfg(feature = "span")] Span),
     /// `CURRENT_TIMESTAMP`
-    CurrentTimestamp,
+    CurrentTimestamp(#[cfg(feature = "span")] Span),
 }
 
 impl Literal {
     /// Constructor
     pub fn from_ctime_kw(token: Token) -> Self {
         if b"CURRENT_DATE".eq_ignore_ascii_case(token.1) {
-            Self::CurrentDate
+            Self::CurrentDate(
+                #[cfg(feature = "span")]
+                Span::from(&token),
+            )
         } else if b"CURRENT_TIME".eq_ignore_ascii_case(token.1) {
-            Self::CurrentTime
+            Self::CurrentTime(
+                #[cfg(feature = "span")]
+                Span::from(&token),
+            )
         } else if b"CURRENT_TIMESTAMP".eq_ignore_ascii_case(token.1) {
-            Self::CurrentTimestamp
+            Self::CurrentTimestamp(
+                #[cfg(feature = "span")]
+                Span::from(&token),
+            )
         } else {
             unreachable!()
         }
@@ -1097,9 +1110,9 @@ pub enum SelectTable {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum JoinOperator {
     /// `,`
-    Comma,
+    Comma(#[cfg(feature = "span")] Span),
     /// `JOIN`
-    TypedJoin(Option<JoinType>),
+    TypedJoin(Option<JoinType>, #[cfg(feature = "span")] Span),
 }
 
 impl JoinOperator {
@@ -1123,12 +1136,16 @@ impl JoinOperator {
                     n2.as_ref().map_or("", |n| n.0.as_str())
                 ));
             }
-            Self::TypedJoin(Some(jt))
+            Self::TypedJoin(
+                Some(jt),
+                #[cfg(feature = "span")]
+                Span::from(&token).union(&n1.span()).union(&n2.span()),
+            )
         })
     }
     fn is_natural(&self) -> bool {
         match self {
-            Self::TypedJoin(Some(jt)) => jt.contains(JoinType::NATURAL),
+            Self::TypedJoin(Some(jt), ..) => jt.contains(JoinType::NATURAL),
             _ => false,
         }
     }
@@ -1191,12 +1208,16 @@ pub enum JoinConstraint {
 
 /// identifier or one of several keywords or `INDEXED`
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Id(pub String);
+pub struct Id(pub String, #[cfg(feature = "span")] pub Span);
 
 impl Id {
     /// Constructor
     pub fn from_token(ty: YYCODETYPE, token: Token) -> Self {
-        Self(from_token(ty, token))
+        Self(
+            from_token(ty, token),
+            #[cfg(feature = "span")]
+            Span::from(&token),
+        )
     }
 }
 
@@ -1204,7 +1225,7 @@ impl Id {
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
 #[derive(Clone, Debug, Eq)]
-pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
+pub struct Name(pub String, #[cfg(feature = "span")] pub Span); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 pub(crate) fn unquote(s: &str) -> (&str, u8) {
     if s.is_empty() {
@@ -1230,7 +1251,11 @@ pub(crate) fn unquote(s: &str) -> (&str, u8) {
 impl Name {
     /// Constructor
     pub fn from_token(ty: YYCODETYPE, token: Token) -> Self {
-        Self(from_token(ty, token))
+        Self(
+            from_token(ty, token),
+            #[cfg(feature = "span")]
+            Span::from(&token),
+        )
     }
 
     fn as_bytes(&self) -> QuotedIterator<'_> {
@@ -2319,6 +2344,10 @@ mod test {
     }
 
     fn name(s: &'static str) -> Name {
-        Name(s.to_owned())
+        Name(
+            s.to_owned(),
+            #[cfg(feature = "span")]
+            super::span::Span::empty(),
+        )
     }
 }
