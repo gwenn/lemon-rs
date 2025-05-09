@@ -157,7 +157,7 @@ pub enum Stmt {
         /// module
         module_name: Name,
         /// args
-        args: Option<Vec<String>>, // TODO smol str
+        args: Option<Vec<Box<str>>>,
     },
     /// `DELETE`
     Delete {
@@ -374,7 +374,7 @@ pub enum Expr {
         type_name: Option<Type>,
     },
     /// `COLLATE`: expression
-    Collate(Box<Expr>, String),
+    Collate(Box<Expr>, Box<str>),
     /// schema-name.table-name.column-name
     DoublyQualified(Name, Name, Name),
     /// `EXISTS` subquery
@@ -462,7 +462,7 @@ pub enum Expr {
     /// Unary expression
     Unary(UnaryOperator, Box<Expr>),
     /// Parameters
-    Variable(String),
+    Variable(Box<str>),
 }
 
 /// Function call order
@@ -634,15 +634,15 @@ impl Expr {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     /// Number
-    Numeric(String),
+    Numeric(Box<str>),
     /// String
     // TODO Check that string is already quoted and correctly escaped
-    String(String),
+    String(Box<str>),
     /// BLOB
     // TODO Check that string is valid (only hexa)
-    Blob(String),
+    Blob(Box<str>),
     /// Keyword
-    Keyword(String),
+    Keyword(Box<str>),
     /// `NULL`
     Null,
     /// `CURRENT_DATE`
@@ -1111,7 +1111,7 @@ impl JoinOperator {
         Ok({
             let mut jt = JoinType::try_from(token.1)?;
             for n in [&n1, &n2].into_iter().flatten() {
-                jt |= JoinType::try_from(n.0.as_ref())?;
+                jt |= JoinType::try_from(n.0.as_ref().as_bytes())?;
             }
             if (jt & (JoinType::INNER | JoinType::OUTER)) == (JoinType::INNER | JoinType::OUTER)
                 || (jt & (JoinType::OUTER | JoinType::LEFT | JoinType::RIGHT)) == JoinType::OUTER
@@ -1119,8 +1119,8 @@ impl JoinOperator {
                 return Err(custom_err!(
                     "unknown join type: {} {} {}",
                     str::from_utf8(token.1).unwrap_or("invalid utf8"),
-                    n1.as_ref().map_or("", |n| n.0.as_str()),
-                    n2.as_ref().map_or("", |n| n.0.as_str())
+                    n1.as_ref().map_or("", |n| n.0.as_ref()),
+                    n2.as_ref().map_or("", |n| n.0.as_ref())
                 ));
             }
             Self::TypedJoin(Some(jt))
@@ -1191,7 +1191,7 @@ pub enum JoinConstraint {
 
 /// identifier or one of several keywords or `INDEXED`
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Id(pub String);
+pub struct Id(pub Box<str>);
 
 impl Id {
     /// Constructor
@@ -1204,7 +1204,7 @@ impl Id {
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
 #[derive(Clone, Debug, Eq)]
-pub struct Name(pub String); // TODO distinction between Name and "Name"/[Name]/`Name`
+pub struct Name(pub Box<str>); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 pub(crate) fn unquote(s: &str) -> (&str, u8) {
     if s.is_empty() {
@@ -1234,7 +1234,7 @@ impl Name {
     }
 
     fn as_bytes(&self) -> QuotedIterator<'_> {
-        let (sub, quote) = unquote(self.0.as_str());
+        let (sub, quote) = unquote(self.0.as_ref());
         QuotedIterator(sub.bytes(), quote)
     }
     #[cfg(feature = "extra_checks")]
@@ -2319,6 +2319,6 @@ mod test {
     }
 
     fn name(s: &'static str) -> Name {
-        Name(s.to_owned())
+        Name(s.into())
     }
 }
