@@ -60,10 +60,7 @@ fn duplicate_column() {
 
 #[test]
 fn create_table_without_column() {
-    expect_parser_err(
-        b"CREATE TABLE t ()",
-        ParserError::SyntaxError(")".to_owned()),
-    );
+    expect_parser_err(b"CREATE TABLE t ()", ParserError::SyntaxError(")".into()));
 }
 
 #[test]
@@ -148,11 +145,11 @@ fn vtab_args() -> Result<(), Error> {
     else {
         panic!("unexpected AST")
     };
-    assert_eq!(tbl_name, "mail");
-    assert_eq!(module_name, "fts3");
+    assert_eq!(tbl_name.as_ref(), "mail");
+    assert_eq!(module_name.as_ref(), "fts3");
     assert_eq!(args.len(), 2);
-    assert_eq!(args[0], "subject VARCHAR(256) NOT NULL");
-    assert_eq!(args[1], "body TEXT CHECK(length(body)<10240)");
+    assert_eq!(args[0].as_ref(), "subject VARCHAR(256) NOT NULL");
+    assert_eq!(args[1].as_ref(), "body TEXT CHECK(length(body)<10240)");
     Ok(())
 }
 
@@ -215,7 +212,7 @@ fn values() {
     parse_cmd(b"SELECT * FROM (VALUES (1), (2))");
     expect_parser_err(
         b"SELECT * FROM (VALUES (1), VALUES (2))",
-        ParserError::SyntaxError("VALUES".to_owned()),
+        ParserError::SyntaxError("VALUES".into()),
     );
 }
 

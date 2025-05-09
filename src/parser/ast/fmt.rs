@@ -76,6 +76,11 @@ impl ToTokens for String {
         s.append(TK_ANY, Some(self.as_ref()))
     }
 }
+impl ToTokens for Box<str> {
+    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_ANY, Some(self.as_ref()))
+    }
+}
 
 /* FIXME: does not work, find why
 impl Display for dyn ToTokens {
@@ -1137,7 +1142,7 @@ impl ToTokens for Id {
 
 impl ToTokens for Name {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        double_quote(self.0.as_str(), s)
+        double_quote(self.0.as_ref(), s)
     }
 }
 
