@@ -27,7 +27,7 @@ default = ["YYNOERRORRECOVERY", "NDEBUG"]
 extra_checks = []
 
 [dependencies]
-phf = { version = "0.12", features = ["uncased"] }
+phf = { version = "0.12.1", features = ["uncased"] }
 log = "0.4.22"
 memchr = "2.0"
 fallible-iterator = "0.3"
@@ -40,6 +40,6 @@ env_logger = { version = "0.11", default-features = false }
 
 [build-dependencies]
 cc = "1.0"
-phf_shared = { version = "0.12", features = ["uncased"] }
-phf_codegen = "0.12"
+phf_shared = { version = "0.12.1", features = ["uncased"] }
+phf_codegen = "0.12.1"
 uncased = "0.9.10"
