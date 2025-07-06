@@ -511,7 +511,7 @@ fn blob_literal(data: &[u8]) -> Result<(Option<Token<'_>>, usize), Error> {
         .skip(2)
         .find(|&(_, &b)| !b.is_ascii_hexdigit())
     {
-        if *b != b'\'' || i % 2 != 0 {
+        if *b != b'\'' || !i.is_multiple_of(2) {
             return Err(Error::MalformedBlobLiteral(None));
         }
         Ok((Some((&data[2..i], TK_BLOB)), i + 1))

@@ -33,7 +33,7 @@ fn main() {
                     //TK_ID => debug_assert!(),
                     //TK_VARIABLE => debug_assert!(),
                     TK_BLOB => debug_assert!(
-                        token.len() % 2 == 0 && token.iter().all(u8::is_ascii_hexdigit)
+                        token.len().is_multiple_of(2) && token.iter().all(u8::is_ascii_hexdigit)
                     ),
                     TK_INTEGER => {
                         if token.len() > 2
