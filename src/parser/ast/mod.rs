@@ -1358,7 +1358,40 @@ impl QualifiedName {
     }
 }
 
-/// Ordered set of distinct column names
+/// Ordered vector of column names
+/// Similar to DistictNames but allows repeated names
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Names(Vec<Name>);
+
+impl Names {
+    /// Initialize
+    pub fn new(name: Name) -> Self {
+        let mut dn = Self(Vec::new());
+        dn.0.push(name);
+        dn
+    }
+    /// Single column name
+    pub fn single(name: Name) -> Self {
+        let mut dn = Self(Vec::with_capacity(1));
+        dn.0.push(name);
+        dn
+    }
+    /// Push name
+    pub fn insert(&mut self, name: Name) -> Result<(), ParserError> {
+        self.0.push(name);
+        Ok(())
+    }
+}
+
+impl Deref for Names {
+    type Target = Vec<Name>;
+
+    fn deref(&self) -> &Vec<Name> {
+        &self.0
+    }
+}
+
+/// [`DistinctNames`]! Ordered set of distinct column names
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DistinctNames(IndexSet<Name>);
 
@@ -1384,6 +1417,7 @@ impl DistinctNames {
         Ok(())
     }
 }
+
 impl Deref for DistinctNames {
     type Target = IndexSet<Name>;
 
@@ -1953,7 +1987,7 @@ pub enum InsertBody {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Set {
     /// column name(s)
-    pub col_names: DistinctNames,
+    pub col_names: Names,
     /// expression
     pub expr: Expr,
 }

@@ -812,22 +812,28 @@ cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from
 }
 %endif
 
+/* Repeatable id list */
+%type reidlist {Names}
 
+reidlist(A) ::= reidlist(A) COMMA nm(Y).
+    {let id = Y; A.insert(id)?;}
+reidlist(A) ::= nm(Y).
+    { A = Names::new(Y); }
 
 %type setlist {Vec<Set>}
 
 setlist(A) ::= setlist(A) COMMA nm(X) EQ expr(Y). {
-  let s = Set{ col_names: DistinctNames::single(X), expr: Y };
+  let s = Set{ col_names: Names::single(X), expr: Y };
   A.push(s);
 }
-setlist(A) ::= setlist(A) COMMA LP idlist(X) RP EQ expr(Y). {
+setlist(A) ::= setlist(A) COMMA LP reidlist(X) RP EQ expr(Y). {
   let s = Set{ col_names: X, expr: Y };
   A.push(s);
 }
 setlist(A) ::= nm(X) EQ expr(Y). {
-  A = vec![Set{ col_names: DistinctNames::single(X), expr: Y }];
+  A = vec![Set{ col_names: Names::single(X), expr: Y }];
 }
-setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
+setlist(A) ::= LP reidlist(X) RP EQ expr(Y). {
   A = vec![Set{ col_names: X, expr: Y }];
 }
 
