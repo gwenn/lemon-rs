@@ -72,7 +72,11 @@ alternative but it does not support fallback/streaming
 (see [this](https://github.com/nikomatsakis/lalrpop/issues/156) issue)
 and compilation/generation is slow.
 
+## Alternatives
+
+* [turso_parser](https://github.com/tursodatabase/turso/tree/main/parser)
+* [sqlparser](https://github.com/apache/datafusion-sqlparser-rs)
+
 ## Minimum supported Rust version (MSRV)
 
 Latest stable Rust version at the time of release. It might compile with older versions.
-
