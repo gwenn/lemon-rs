@@ -24,6 +24,8 @@ jobs:
         run: |
           cargo test
           cargo test --features extra_checks
+      - name: Clippy
+        run: cargo clippy --workspace --no-deps -- -D warnings
 
   direct-minimal-versions:
     name: Test min versions
