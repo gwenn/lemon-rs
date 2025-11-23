@@ -43,3 +43,8 @@ cc = "1.0"
 phf_shared = { version = "0.13.1", features = ["uncased"] }
 phf_codegen = "0.13.1"
 uncased = "0.9.10"
+
+[profile.dev]
+# to avoid stack overflow in yy_reduce
+opt-level = 1
+debug = true
