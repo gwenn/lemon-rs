@@ -1313,19 +1313,19 @@ impl ToTokens for ColumnConstraint {
                 s.append(TK_DEFAULT, None)?;
                 expr.to_tokens(s)
             }
-            Self::Defer(deref_clause) => deref_clause.to_tokens(s),
+            Self::Defer(defer_clause) => defer_clause.to_tokens(s),
             Self::Collate { collation_name } => {
                 s.append(TK_COLLATE, None)?;
                 collation_name.to_tokens(s)
             }
             Self::ForeignKey {
                 clause,
-                deref_clause,
+                defer_clause,
             } => {
                 s.append(TK_REFERENCES, None)?;
                 clause.to_tokens(s)?;
-                if let Some(deref_clause) = deref_clause {
-                    deref_clause.to_tokens(s)?;
+                if let Some(defer_clause) = defer_clause {
+                    defer_clause.to_tokens(s)?;
                 }
                 Ok(())
             }
@@ -1400,7 +1400,7 @@ impl ToTokens for TableConstraint {
             Self::ForeignKey {
                 columns,
                 clause,
-                deref_clause,
+                defer_clause,
             } => {
                 s.append(TK_FOREIGN, None)?;
                 s.append(TK_KEY, None)?;
@@ -1409,8 +1409,8 @@ impl ToTokens for TableConstraint {
                 s.append(TK_RP, None)?;
                 s.append(TK_REFERENCES, None)?;
                 clause.to_tokens(s)?;
-                if let Some(deref_clause) = deref_clause {
-                    deref_clause.to_tokens(s)?;
+                if let Some(defer_clause) = defer_clause {
+                    defer_clause.to_tokens(s)?;
                 }
                 Ok(())
             }

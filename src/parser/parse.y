@@ -352,7 +352,7 @@ ccons(A) ::= CHECK LP expr(X) RP.   {
 ccons(A) ::= REFERENCES nm(T) eidlist_opt(TA) refargs(R). {
   let name = self.ctx.constraint_name();
   let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
-  let constraint = ColumnConstraint::ForeignKey{ clause, deref_clause: None }; // FIXME deref_clause
+  let constraint = ColumnConstraint::ForeignKey{ clause, defer_clause: None }; // FIXME defer_clause
   A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= defer_subclause(D).    {
@@ -443,7 +443,7 @@ tcons(A) ::= FOREIGN KEY LP eidlist(FA) RP
           REFERENCES nm(T) eidlist_opt(TA) refargs(R) defer_subclause_opt(D). {
   let name = self.ctx.constraint_name();
   let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
-  let constraint = TableConstraint::ForeignKey{ columns: FA, clause, deref_clause: D };
+  let constraint = TableConstraint::ForeignKey{ columns: FA, clause, defer_clause: D };
   A = NamedTableConstraint{ name, constraint };
 }
 %type defer_subclause_opt {Option<DeferSubclause>}
