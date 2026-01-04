@@ -525,12 +525,10 @@ fn unknown_table_option() {
 
 #[test]
 fn qualified_table_name_within_triggers() {
-    expect_parser_err_msg(
+    parse_cmd(
         b"CREATE TRIGGER tr1 AFTER INSERT ON t1 BEGIN
             DELETE FROM main.t2;
           END;",
-        "qualified table names are not allowed on INSERT, UPDATE, and DELETE statements \
-          within triggers",
     );
 }
 

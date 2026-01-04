@@ -1400,6 +1400,10 @@ pub enum AlterTableBody {
     RenameTo(Name),
     /// `ADD COLUMN`
     AddColumn(ColumnDefinition), // TODO distinction between ADD and ADD COLUMN
+    /// `ALTER COLUMN _ DROP NOT NULL`
+    DropColumnNotNull(Name), // TODO distinction between ALTER and ALTER COLUMN
+    /// `ALTER COLUMN _ SET NOT NULL`
+    SetColumnNotNull(Name, Option<ResolveType>), // TODO distinction between ALTER and ALTER COLUMN
     /// `RENAME COLUMN`
     RenameColumn {
         /// old name
@@ -1409,6 +1413,10 @@ pub enum AlterTableBody {
     },
     /// `DROP COLUMN`
     DropColumn(Name), // TODO distinction between DROP and DROP COLUMN
+    /// `ADD CONSTRAINT`
+    AddConstraint(NamedTableConstraint), // TODO only CHECK constraint supported
+    /// `DROP CONSTRAINT`
+    DropConstraint(Name),
 }
 
 bitflags::bitflags! {
@@ -1752,7 +1760,7 @@ pub enum TableConstraint {
         conflict_clause: Option<ResolveType>,
     },
     /// `CHECK`
-    Check(Expr),
+    Check(Expr, Option<ResolveType>),
     /// `FOREIGN KEY`
     ForeignKey {
         /// columns
@@ -2006,7 +2014,7 @@ pub enum TriggerCmd {
         /// `OR`
         or_conflict: Option<ResolveType>,
         /// table name
-        tbl_name: Name,
+        tbl_name: QualifiedName,
         /// `SET` assignments
         sets: Vec<Set>, // FIXME unique
         /// `FROM`
@@ -2019,7 +2027,7 @@ pub enum TriggerCmd {
         /// `OR`
         or_conflict: Option<ResolveType>,
         /// table name
-        tbl_name: Name,
+        tbl_name: QualifiedName,
         /// `COLUMNS`
         col_names: Option<DistinctNames>,
         /// `SELECT` or `VALUES`
@@ -2030,7 +2038,7 @@ pub enum TriggerCmd {
     /// `DELETE`
     Delete {
         /// table name
-        tbl_name: Name,
+        tbl_name: QualifiedName,
         /// `WHERE` clause
         where_clause: Option<Expr>,
     },

@@ -1186,6 +1186,28 @@ impl ToTokens for AlterTableBody {
                 s.append(TK_COLUMNKW, None)?;
                 def.to_tokens(s)
             }
+            Self::DropColumnNotNull(name) => {
+                s.append(TK_ALTER, None)?;
+                s.append(TK_COLUMNKW, None)?;
+                name.to_tokens(s)?;
+                s.append(TK_DROP, None)?;
+                s.append(TK_NOT, None)?;
+                s.append(TK_NULL, None)
+            }
+            Self::SetColumnNotNull(name, conflict_clause) => {
+                s.append(TK_ALTER, None)?;
+                s.append(TK_COLUMNKW, None)?;
+                name.to_tokens(s)?;
+                s.append(TK_SET, None)?;
+                s.append(TK_NOT, None)?;
+                s.append(TK_NULL, None)?;
+                if let Some(conflict_clause) = conflict_clause {
+                    s.append(TK_ON, None)?;
+                    s.append(TK_CONFLICT, None)?;
+                    conflict_clause.to_tokens(s)?;
+                }
+                Ok(())
+            }
             Self::RenameColumn { old, new } => {
                 s.append(TK_RENAME, None)?;
                 old.to_tokens(s)?;
@@ -1195,6 +1217,15 @@ impl ToTokens for AlterTableBody {
             Self::DropColumn(name) => {
                 s.append(TK_DROP, None)?;
                 s.append(TK_COLUMNKW, None)?;
+                name.to_tokens(s)
+            }
+            Self::AddConstraint(cons) => {
+                s.append(TK_ADD, None)?;
+                cons.to_tokens(s)
+            }
+            Self::DropConstraint(name) => {
+                s.append(TK_DROP, None)?;
+                s.append(TK_CONSTRAINT, None)?;
                 name.to_tokens(s)
             }
         }
@@ -1391,11 +1422,17 @@ impl ToTokens for TableConstraint {
                 }
                 Ok(())
             }
-            Self::Check(expr) => {
+            Self::Check(expr, conflict_clause) => {
                 s.append(TK_CHECK, None)?;
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
-                s.append(TK_RP, None)
+                s.append(TK_RP, None)?;
+                if let Some(conflict_clause) = conflict_clause {
+                    s.append(TK_ON, None)?;
+                    s.append(TK_CONFLICT, None)?;
+                    conflict_clause.to_tokens(s)?;
+                }
+                Ok(())
             }
             Self::ForeignKey {
                 columns,

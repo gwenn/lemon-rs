@@ -434,9 +434,9 @@ tcons(A) ::= UNIQUE LP sortlist(X) RP onconf(R). {
   let constraint = TableConstraint::unique(X, R)?;
   A = NamedTableConstraint{ name, constraint };
 }
-tcons(A) ::= CHECK LP expr(E) RP onconf. {
+tcons(A) ::= CHECK LP expr(E) RP onconf(R). {
   let name = self.ctx.constraint_name();
-  let constraint = TableConstraint::Check(E);
+  let constraint = TableConstraint::Check(E, R);
   A = NamedTableConstraint{ name, constraint };
 }
 tcons(A) ::= FOREIGN KEY LP eidlist(FA) RP
@@ -652,15 +652,17 @@ fullname(A) ::= nm(X) DOT nm(Y). {
 }
 
 %type xfullname {QualifiedName}
-xfullname(A) ::= nm(X).
-   {A = QualifiedName::single(X); /*A-overwrites-X*/}
-xfullname(A) ::= nm(X) DOT nm(Y).
-   {A = QualifiedName::fullname(X, Y); /*A-overwrites-X*/}
-xfullname(A) ::= nm(X) DOT nm(Y) AS nm(Z).  {
-  A = QualifiedName::xfullname(X, Y, Z); /*A-overwrites-X*/
+xfullname(A) ::= nm(X).  {
+  A = QualifiedName::single(X);
 }
-xfullname(A) ::= nm(X) AS nm(Z). {
-  A = QualifiedName::alias(X, Z); /*A-overwrites-X*/
+xfullname(A) ::= nm(X) DOT nm(Y). {
+  A = QualifiedName::fullname(X, Y);
+}
+xfullname(A) ::= nm(X) AS nm(Z).  {
+  A = QualifiedName::alias(X, Z);
+}
+xfullname(A) ::= nm(X) DOT nm(Y) AS nm(Z). {
+  A = QualifiedName::xfullname(X, Y, Z);
 }
 
 %type joinop {JoinOperator}
@@ -994,17 +996,14 @@ expr(A) ::= expr(X) likeop(OP) expr(Y) ESCAPE expr(E).  [LIKE_KW]  {
   A=Expr::like(X,op.0,op.1,Y,Some(E)); /*A-overwrites-X*/
 }
 
-expr(A) ::= expr(X) ISNULL|NOTNULL(E).   {A = Expr::not_null(X, @E); /*A-overwrites-X*/}
-expr(A) ::= expr(X) NOT NULL.    {A = Expr::not_null(X, TokenType::TK_NOTNULL as YYCODETYPE); /*A-overwrites-X*/}
-
 %include {
 }
 
-//    expr1 IS expr2
-//    expr1 IS NOT expr2
-//
-// If expr2 is NULL then code as TK_ISNULL or TK_NOTNULL.  If expr2
-// is any other expression, code as TK_IS or TK_ISNOT.
+expr(A) ::= expr(X) ISNULL|NOTNULL(E).   {A = Expr::not_null(X, @E); /*A-overwrites-X*/}
+expr(A) ::= expr(X) NOT NULL.    {A = Expr::not_null(X, TokenType::TK_NOTNULL as YYCODETYPE); /*A-overwrites-X*/}
+
+//    expr1 IS expr2       same as    expr1 IS NOT DISTICT FROM expr2
+//    expr1 IS NOT expr2   same as    expr1 IS DISTINCT FROM expr2
 //
 expr(A) ::= expr(X) IS(OP) expr(Y).     {
   A = Expr::binary(X, @OP, Y); /*A-overwrites-X*/
@@ -1225,18 +1224,6 @@ trigger_cmd_list(A) ::= trigger_cmd(X) SEMI. {
   A = vec![X];
 }
 
-// Disallow qualified table names on INSERT, UPDATE, and DELETE statements
-// within a trigger.  The table to INSERT, UPDATE, or DELETE is always in
-// the same database as the table that the trigger fires on.
-//
-%type trnm {Name}
-trnm(A) ::= nm(A).
-trnm(A) ::= nm DOT nm(X). {
-  A = X;
-  return Err(custom_err!("qualified table names are not allowed on INSERT, UPDATE, and DELETE \
-         statements within triggers"));
-}
-
 // Disallow the INDEX BY and NOT INDEXED clauses on UPDATE and DELETE
 // statements within triggers.  We make a specific error message for this
 // since it is an exception to the default grammar rules.
@@ -1258,12 +1245,12 @@ tridxby ::= NOT INDEXED. {
 %type trigger_cmd {TriggerCmd}
 // UPDATE
 trigger_cmd(A) ::=
-   UPDATE orconf(R) trnm(X) tridxby SET setlist(Y) from(F) where_opt(Z).
+   UPDATE orconf(R) xfullname(X) tridxby SET setlist(Y) from(F) where_opt(Z).
    {A = TriggerCmd::Update{ or_conflict: R, tbl_name: X, sets: Y, from: F, where_clause: Z };}
 
 // INSERT
 trigger_cmd(A) ::= insert_cmd(R) INTO
-                      trnm(X) idlist_opt(F) select(S) upsert(U). {
+                      xfullname(X) idlist_opt(F) select(S) upsert(U). {
   let (upsert, returning) = U;
   if returning.is_some() {
     return Err(custom_err!("cannot use RETURNING in a trigger"));
@@ -1271,7 +1258,7 @@ trigger_cmd(A) ::= insert_cmd(R) INTO
   A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert: upsert.map(Box::new) };/*A-overwrites-R*/
 }
 // DELETE
-trigger_cmd(A) ::= DELETE FROM trnm(X) tridxby where_opt(Y).
+trigger_cmd(A) ::= DELETE FROM xfullname(X) tridxby where_opt(Y).
    {A = TriggerCmd::Delete{ tbl_name: X, where_clause: Y };}
 
 // SELECT
@@ -1334,10 +1321,8 @@ cmd ::= ANALYZE fullname(X).  {self.ctx.stmt = Some(Stmt::Analyze(Some(X)));}
 cmd ::= ALTER TABLE fullname(X) RENAME TO nm(Z). {
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameTo(Z)));
 }
-cmd ::= ALTER TABLE fullname(X)
-        ADD kwcolumn_opt columnname(Y) carglist(C). {
-  let (col_name, col_type) = Y;
-  let cd = ColumnDefinition::new(col_name, col_type, C)?;
+cmd ::= ALTER TABLE fullname(X) ADD kwcolumn_opt nm(Y) typetoken(Z) carglist(C). {
+  let cd = ColumnDefinition::new(Y, Z, C)?;
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::AddColumn(cd)));
 }
 cmd ::= ALTER TABLE fullname(X) DROP kwcolumn_opt nm(Y). {
@@ -1345,6 +1330,23 @@ cmd ::= ALTER TABLE fullname(X) DROP kwcolumn_opt nm(Y). {
 }
 cmd ::= ALTER TABLE fullname(X) RENAME kwcolumn_opt nm(Y) TO nm(Z). {
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameColumn{ old: Y, new: Z }));
+}
+cmd ::= ALTER TABLE fullname(X) DROP CONSTRAINT nm(Y). {
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::DropConstraint(Y)));
+}
+cmd ::= ALTER TABLE fullname(X) ALTER kwcolumn_opt nm(Y) DROP NOT NULL. {
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::DropColumnNotNull(Y)));
+}
+cmd ::= ALTER TABLE fullname(X) ALTER kwcolumn_opt nm(Y) SET NOT NULL onconf(R). {
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::SetColumnNotNull(Y, R)));
+}
+cmd ::= ALTER TABLE fullname(X) ADD CONSTRAINT nm(Z) CHECK LP expr(E) RP onconf(R). {
+  let constraint = TableConstraint::Check(E, R);
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::AddConstraint(NamedTableConstraint{ name: Some(Z), constraint })));
+}
+cmd ::= ALTER TABLE fullname(X) ADD CHECK LP expr(E) RP onconf(R). {
+  let constraint = TableConstraint::Check(E, R);
+  self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::AddConstraint(NamedTableConstraint{ name: None, constraint })));
 }
 
 kwcolumn_opt ::= .
