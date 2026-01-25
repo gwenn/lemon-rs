@@ -3,6 +3,7 @@ use std::{
     io::{stdin, IsTerminal, Read},
 };
 
+use bumpalo::Bump;
 use fallible_iterator::FallibleIterator;
 use sqlite3_parser::lexer::sql::Parser;
 
@@ -22,7 +23,8 @@ fn main() {
 }
 
 fn parse(arg: String) {
-    let mut parser = Parser::new(arg.as_bytes());
+    let bump = Bump::new();
+    let mut parser = Parser::new(&bump, arg.as_bytes());
     loop {
         match parser.next() {
             Ok(None) => break,

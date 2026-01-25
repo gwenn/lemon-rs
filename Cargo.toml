@@ -34,6 +34,7 @@ fallible-iterator = "0.3"
 bitflags = "2.0"
 uncased = "0.9.10"
 indexmap = "2.0"
+bumpalo = { version = "3.19", features = ["boxed", "collections"] }
 
 [dev-dependencies]
 env_logger = { version = "0.11", default-features = false }

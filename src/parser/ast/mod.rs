@@ -7,10 +7,16 @@ use std::num::ParseIntError;
 use std::ops::Deref;
 use std::str::{self, Bytes, FromStr};
 
+use bumpalo::{
+    boxed::Box,
+    collections::{String, Vec},
+    Bump,
+};
+use indexmap::{IndexMap, IndexSet};
+
 #[cfg(feature = "extra_checks")]
 use check::ColumnCount;
 use fmt::TokenStream;
-use indexmap::{IndexMap, IndexSet};
 
 use crate::custom_err;
 use crate::dialect::TokenType::{self, *};
@@ -23,7 +29,7 @@ pub struct ParameterInfo {
     /// Number of SQL parameters in a prepared statement, like `sqlite3_bind_parameter_count`
     pub count: u16,
     /// Parameter name(s) if any
-    pub names: IndexSet<String>,
+    pub names: IndexSet<std::string::String>,
 }
 
 // https://sqlite.org/lang_expr.html#parameters
@@ -51,14 +57,14 @@ impl TokenStream for ParameterInfo {
 
 /// Statement or Explain statement
 // https://sqlite.org/syntax/sql-stmt.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Cmd {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Cmd<'bump> {
     /// `EXPLAIN` statement
-    Explain(Stmt),
+    Explain(Stmt<'bump>),
     /// `EXPLAIN QUERY PLAN` statement
-    ExplainQueryPlan(Stmt),
+    ExplainQueryPlan(Stmt<'bump>),
     /// statement
-    Stmt(Stmt),
+    Stmt(Stmt<'bump>),
 }
 
 pub(crate) enum ExplainKind {
@@ -68,26 +74,26 @@ pub(crate) enum ExplainKind {
 
 /// SQL statement
 // https://sqlite.org/syntax/sql-stmt.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Stmt {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Stmt<'bump> {
     /// `ALTER TABLE`: table name, body
-    AlterTable(QualifiedName, AlterTableBody),
+    AlterTable(QualifiedName<'bump>, AlterTableBody<'bump>),
     /// `ANALYSE`: object name
-    Analyze(Option<QualifiedName>),
+    Analyze(Option<QualifiedName<'bump>>),
     /// `ATTACH DATABASE`
     Attach {
         /// filename
         // TODO distinction between ATTACH and ATTACH DATABASE
-        expr: Expr,
+        expr: Expr<'bump>,
         /// schema name
-        db_name: Expr,
+        db_name: Expr<'bump>,
         /// password
-        key: Option<Expr>,
+        key: Option<Expr<'bump>>,
     },
     /// `BEGIN`: tx type, tx name
-    Begin(Option<TransactionType>, Option<Name>),
+    Begin(Option<TransactionType>, Option<Name<'bump>>),
     /// `COMMIT`/`END`: tx name
-    Commit(Option<Name>), // TODO distinction between COMMIT and END
+    Commit(Option<Name<'bump>>), // TODO distinction between COMMIT and END
     /// `CREATE INDEX`
     CreateIndex {
         /// `UNIQUE`
@@ -95,13 +101,13 @@ pub enum Stmt {
         /// `IF NOT EXISTS`
         if_not_exists: bool,
         /// index name
-        idx_name: QualifiedName,
+        idx_name: QualifiedName<'bump>,
         /// table name
-        tbl_name: Name,
+        tbl_name: Name<'bump>,
         /// indexed columns or expressions
-        columns: Vec<SortedColumn>,
+        columns: Vec<'bump, SortedColumn<'bump>>,
         /// partial index
-        where_clause: Option<Expr>,
+        where_clause: Option<Expr<'bump>>,
     },
     /// `CREATE TABLE`
     CreateTable {
@@ -110,9 +116,9 @@ pub enum Stmt {
         /// `IF NOT EXISTS`
         if_not_exists: bool,
         /// table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
         /// table body
-        body: CreateTableBody,
+        body: CreateTableBody<'bump>,
     },
     /// `CREATE TRIGGER`
     CreateTrigger {
@@ -121,19 +127,19 @@ pub enum Stmt {
         /// `IF NOT EXISTS`
         if_not_exists: bool,
         /// trigger name
-        trigger_name: QualifiedName,
+        trigger_name: QualifiedName<'bump>,
         /// `BEFORE`/`AFTER`/`INSTEAD OF`
         time: Option<TriggerTime>,
         /// `DELETE`/`INSERT`/`UPDATE`
-        event: TriggerEvent,
+        event: TriggerEvent<'bump>,
         /// table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
         /// `FOR EACH ROW`
         for_each_row: bool,
         /// `WHEN`
-        when_clause: Option<Expr>,
+        when_clause: Option<Expr<'bump>>,
         /// statements
-        commands: Vec<TriggerCmd>,
+        commands: Vec<'bump, TriggerCmd<'bump>>,
     },
     /// `CREATE VIEW`
     CreateView {
@@ -142,141 +148,141 @@ pub enum Stmt {
         /// `IF NOT EXISTS`
         if_not_exists: bool,
         /// view name
-        view_name: QualifiedName,
+        view_name: QualifiedName<'bump>,
         /// columns
-        columns: Option<Vec<IndexedColumn>>, // TODO check no duplicate directly
+        columns: Option<Vec<'bump, IndexedColumn<'bump>>>, // TODO check no duplicate directly
         /// query
-        select: Box<Select>,
+        select: Box<'bump, Select<'bump>>,
     },
     /// `CREATE VIRTUAL TABLE`
     CreateVirtualTable {
         /// `IF NOT EXISTS`
         if_not_exists: bool,
         /// table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
         /// module
-        module_name: Name,
+        module_name: Name<'bump>,
         /// args
-        args: Option<Vec<Box<str>>>,
+        args: Option<Vec<'bump, String<'bump>>>,
     },
     /// `DELETE`
     Delete {
         /// CTE
-        with: Option<With>, // TODO check usages in where_clause
+        with: Option<With<'bump>>, // TODO check usages in where_clause
         /// `FROM` table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
         /// `INDEXED`
-        indexed: Option<Indexed>,
+        indexed: Option<Indexed<'bump>>,
         /// `WHERE` clause
-        where_clause: Option<Expr>,
+        where_clause: Option<Expr<'bump>>,
         /// `RETURNING`
-        returning: Option<Vec<ResultColumn>>,
+        returning: Option<Vec<'bump, ResultColumn<'bump>>>,
         /// `ORDER BY`
-        order_by: Option<Vec<SortedColumn>>,
+        order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
         /// `LIMIT`
-        limit: Option<Limit>,
+        limit: Option<Limit<'bump>>,
     },
     /// `DETACH DATABASE`: db name
-    Detach(Expr), // TODO distinction between DETACH and DETACH DATABASE
+    Detach(Expr<'bump>), // TODO distinction between DETACH and DETACH DATABASE
     /// `DROP INDEX`
     DropIndex {
         /// `IF EXISTS`
         if_exists: bool,
         /// index name
-        idx_name: QualifiedName,
+        idx_name: QualifiedName<'bump>,
     },
     /// `DROP TABLE`
     DropTable {
         /// `IF EXISTS`
         if_exists: bool,
         /// table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
     },
     /// `DROP TRIGGER`
     DropTrigger {
         /// `IF EXISTS`
         if_exists: bool,
         /// trigger name
-        trigger_name: QualifiedName,
+        trigger_name: QualifiedName<'bump>,
     },
     /// `DROP VIEW`
     DropView {
         /// `IF EXISTS`
         if_exists: bool,
         /// view name
-        view_name: QualifiedName,
+        view_name: QualifiedName<'bump>,
     },
     /// `INSERT`
     Insert {
         /// CTE
-        with: Option<With>, // TODO check usages in body
+        with: Option<With<'bump>>, // TODO check usages in body
         /// `OR`
         or_conflict: Option<ResolveType>, // TODO distinction between REPLACE and INSERT OR REPLACE
         /// table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
         /// `COLUMNS`
-        columns: Option<DistinctNames>,
+        columns: Option<DistinctNames<'bump>>,
         /// `VALUES` or `SELECT`
-        body: InsertBody,
+        body: InsertBody<'bump>,
         /// `RETURNING`
-        returning: Option<Vec<ResultColumn>>,
+        returning: Option<Vec<'bump, ResultColumn<'bump>>>,
     },
     /// `PRAGMA`: pragma name, body
-    Pragma(QualifiedName, Option<PragmaBody>),
+    Pragma(QualifiedName<'bump>, Option<PragmaBody<'bump>>),
     /// `REINDEX`
     Reindex {
         /// collation or index or table name
-        obj_name: Option<QualifiedName>,
+        obj_name: Option<QualifiedName<'bump>>,
     },
     /// `RELEASE`: savepoint name
-    Release(Name), // TODO distinction between RELEASE and RELEASE SAVEPOINT
+    Release(Name<'bump>), // TODO distinction between RELEASE and RELEASE SAVEPOINT
     /// `ROLLBACK`
     Rollback {
         /// transaction name
-        tx_name: Option<Name>,
+        tx_name: Option<Name<'bump>>,
         /// savepoint name
-        savepoint_name: Option<Name>, // TODO distinction between TO and TO SAVEPOINT
+        savepoint_name: Option<Name<'bump>>, // TODO distinction between TO and TO SAVEPOINT
     },
     /// `SAVEPOINT`: savepoint name
-    Savepoint(Name),
+    Savepoint(Name<'bump>),
     /// `SELECT`
-    Select(Box<Select>),
+    Select(Box<'bump, Select<'bump>>),
     /// `UPDATE`
     Update {
         /// CTE
-        with: Option<With>, // TODO check usages in where_clause
+        with: Option<With<'bump>>, // TODO check usages in where_clause
         /// `OR`
         or_conflict: Option<ResolveType>,
         /// table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
         /// `INDEXED`
-        indexed: Option<Indexed>,
+        indexed: Option<Indexed<'bump>>,
         /// `SET` assignments
-        sets: Vec<Set>, // FIXME unique
+        sets: Vec<'bump, Set<'bump>>, // FIXME unique
         /// `FROM`
-        from: Option<FromClause>,
+        from: Option<FromClause<'bump>>,
         /// `WHERE` clause
-        where_clause: Option<Expr>,
+        where_clause: Option<Expr<'bump>>,
         /// `RETURNING`
-        returning: Option<Vec<ResultColumn>>,
+        returning: Option<Vec<'bump, ResultColumn<'bump>>>,
         /// `ORDER BY`
-        order_by: Option<Vec<SortedColumn>>,
+        order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
         /// `LIMIT`
-        limit: Option<Limit>,
+        limit: Option<Limit<'bump>>,
     },
     /// `VACUUM`: database name, into expr
-    Vacuum(Option<Name>, Option<Expr>),
+    Vacuum(Option<Name<'bump>>, Option<Expr<'bump>>),
 }
 
-impl Stmt {
+impl<'bump> Stmt<'bump> {
     /// CREATE INDEX constructor
     pub fn create_index(
         unique: bool,
         if_not_exists: bool,
-        idx_name: QualifiedName,
-        tbl_name: Name,
-        columns: Vec<SortedColumn>,
-        where_clause: Option<Expr>,
+        idx_name: QualifiedName<'bump>,
+        tbl_name: Name<'bump>,
+        columns: Vec<'bump, SortedColumn<'bump>>,
+        where_clause: Option<Expr<'bump>>,
     ) -> Result<Self, ParserError> {
         has_explicit_nulls(&columns)?;
         Ok(Self::CreateIndex {
@@ -291,16 +297,16 @@ impl Stmt {
     /// UPDATE constructor
     #[allow(clippy::too_many_arguments)]
     pub fn update(
-        with: Option<With>,
+        with: Option<With<'bump>>,
         or_conflict: Option<ResolveType>,
-        tbl_name: QualifiedName,
-        indexed: Option<Indexed>,
-        sets: Vec<Set>, // FIXME unique
-        from: Option<FromClause>,
-        where_clause: Option<Expr>,
-        returning: Option<Vec<ResultColumn>>,
-        order_by: Option<Vec<SortedColumn>>,
-        limit: Option<Limit>,
+        tbl_name: QualifiedName<'bump>,
+        indexed: Option<Indexed<'bump>>,
+        sets: Vec<'bump, Set<'bump>>, // FIXME unique
+        from: Option<FromClause<'bump>>,
+        where_clause: Option<Expr<'bump>>,
+        returning: Option<Vec<'bump, ResultColumn<'bump>>>,
+        order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
+        limit: Option<Limit<'bump>>,
     ) -> Result<Self, ParserError> {
         #[cfg(feature = "extra_checks")]
         if let Some(FromClause {
@@ -342,249 +348,267 @@ impl Stmt {
 
 /// SQL expression
 // https://sqlite.org/syntax/expr.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Expr {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Expr<'bump> {
     /// `BETWEEN`
     Between {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<'bump, Expr<'bump>>,
         /// `NOT`
         not: bool,
         /// start
-        start: Box<Expr>,
+        start: Box<'bump, Expr<'bump>>,
         /// end
-        end: Box<Expr>,
+        end: Box<'bump, Expr<'bump>>,
     },
     /// binary expression
-    Binary(Box<Expr>, Operator, Box<Expr>),
+    Binary(Box<'bump, Expr<'bump>>, Operator, Box<'bump, Expr<'bump>>),
     /// `CASE` expression
     Case {
         /// operand
-        base: Option<Box<Expr>>,
+        base: Option<Box<'bump, Expr<'bump>>>,
         /// `WHEN` condition `THEN` result
-        when_then_pairs: Vec<(Expr, Expr)>,
+        when_then_pairs: Vec<'bump, (Expr<'bump>, Expr<'bump>)>,
         /// `ELSE` result
-        else_expr: Option<Box<Expr>>,
+        else_expr: Option<Box<'bump, Expr<'bump>>>,
     },
     /// CAST expression
     Cast {
         /// expression
-        expr: Box<Expr>,
+        expr: Box<'bump, Expr<'bump>>,
         /// `AS` type name
-        type_name: Option<Type>,
+        type_name: Option<Type<'bump>>,
     },
     /// `COLLATE`: expression
-    Collate(Box<Expr>, Box<str>),
+    Collate(Box<'bump, Expr<'bump>>, String<'bump>),
     /// schema-name.table-name.column-name
-    DoublyQualified(Name, Name, Name),
+    DoublyQualified(Name<'bump>, Name<'bump>, Name<'bump>),
     /// `EXISTS` subquery
-    Exists(Box<Select>),
+    Exists(Box<'bump, Select<'bump>>),
     /// call to a built-in function
     FunctionCall {
         /// function name
-        name: Id,
+        name: Id<'bump>,
         /// `DISTINCT`
         distinctness: Option<Distinctness>,
         /// arguments
-        args: Option<Vec<Expr>>,
+        args: Option<Vec<'bump, Expr<'bump>>>,
         /// `ORDER BY` or `WITHIN GROUP`
-        order_by: Option<FunctionCallOrder>,
+        order_by: Option<FunctionCallOrder<'bump>>,
         /// `FILTER`
-        filter_over: Option<FunctionTail>,
+        filter_over: Option<FunctionTail<'bump>>,
     },
     /// Function call expression with '*' as arg
     FunctionCallStar {
         /// function name
-        name: Id,
+        name: Id<'bump>,
         /// `FILTER`
-        filter_over: Option<FunctionTail>,
+        filter_over: Option<FunctionTail<'bump>>,
     },
     /// Identifier
-    Id(Id),
+    Id(Id<'bump>),
     /// `IN`
     InList {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<'bump, Expr<'bump>>,
         /// `NOT`
         not: bool,
         /// values
-        rhs: Option<Vec<Expr>>,
+        rhs: Option<Vec<'bump, Expr<'bump>>>,
     },
     /// `IN` subselect
     InSelect {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<'bump, Expr<'bump>>,
         /// `NOT`
         not: bool,
         /// subquery
-        rhs: Box<Select>,
+        rhs: Box<'bump, Select<'bump>>,
     },
     /// `IN` table name / function
     InTable {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<'bump, Expr<'bump>>,
         /// `NOT`
         not: bool,
         /// table name
-        rhs: QualifiedName,
+        rhs: QualifiedName<'bump>,
         /// table function arguments
-        args: Option<Vec<Expr>>,
+        args: Option<Vec<'bump, Expr<'bump>>>,
     },
     /// `IS NULL`
-    IsNull(Box<Expr>),
+    IsNull(Box<'bump, Expr<'bump>>),
     /// `LIKE`
     Like {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<'bump, Expr<'bump>>,
         /// `NOT`
         not: bool,
         /// operator
         op: LikeOperator,
         /// pattern
-        rhs: Box<Expr>,
+        rhs: Box<'bump, Expr<'bump>>,
         /// `ESCAPE` char
-        escape: Option<Box<Expr>>,
+        escape: Option<Box<'bump, Expr<'bump>>>,
     },
     /// Literal expression
-    Literal(Literal),
+    Literal(Literal<'bump>),
     /// Name
-    Name(Name),
+    Name(Name<'bump>),
     /// `NOT NULL` or `NOTNULL`
-    NotNull(Box<Expr>),
+    NotNull(Box<'bump, Expr<'bump>>),
     /// Parenthesized subexpression
-    Parenthesized(Vec<Expr>),
+    Parenthesized(Vec<'bump, Expr<'bump>>),
     /// Qualified name
-    Qualified(Name, Name),
+    Qualified(Name<'bump>, Name<'bump>),
     /// `RAISE` function call
-    Raise(ResolveType, Option<Box<Expr>>),
+    Raise(ResolveType, Option<Box<'bump, Expr<'bump>>>),
     /// Subquery expression
-    Subquery(Box<Select>),
+    Subquery(Box<'bump, Select<'bump>>),
     /// Unary expression
-    Unary(UnaryOperator, Box<Expr>),
+    Unary(UnaryOperator, Box<'bump, Expr<'bump>>),
     /// Parameters
-    Variable(Box<str>),
+    Variable(Box<'bump, str>),
 }
 
 /// Function call order
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FunctionCallOrder {
+#[derive(Debug, PartialEq, Eq)]
+pub enum FunctionCallOrder<'bump> {
     /// `ORDER BY cols`
-    SortList(Vec<SortedColumn>),
+    SortList(Vec<'bump, SortedColumn<'bump>>),
     /// `WITHIN GROUP (ORDER BY expr)`
     #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
-    WithinGroup(Box<Expr>),
+    WithinGroup(&'bump Expr<'bump>),
 }
 
-impl FunctionCallOrder {
+impl<'bump> FunctionCallOrder<'bump> {
     /// Constructor
     #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
-    pub fn within_group(expr: Expr) -> Self {
-        Self::WithinGroup(Box::new(expr))
+    pub fn within_group(expr: &'bump Expr<'bump>) -> Self {
+        Self::WithinGroup(expr)
     }
 }
 
-impl Expr {
+impl<'bump> Expr<'bump> {
     /// Constructor
-    pub fn parenthesized(x: Self) -> Self {
-        Self::Parenthesized(vec![x])
+    pub fn parenthesized(x: Self, b: &'bump Bump) -> Self {
+        Self::Parenthesized(bumpalo::vec![in b; x])
     }
     /// Constructor
-    pub fn id(xt: YYCODETYPE, x: Token) -> Self {
-        Self::Id(Id::from_token(xt, x))
+    pub fn id(xt: YYCODETYPE, x: Token, b: &'bump Bump) -> Self {
+        Self::Id(Id::from_token(xt, x, b))
     }
     /// Constructor
-    pub fn collate(x: Self, ct: YYCODETYPE, c: Token) -> Self {
-        Self::Collate(Box::new(x), from_token(ct, c))
+    pub fn collate(x: Self, ct: YYCODETYPE, c: Token, b: &'bump Bump) -> Self {
+        Self::Collate(Box::new_in(x, b), from_token(ct, c, b))
     }
     /// Constructor
-    pub fn cast(x: Self, type_name: Option<Type>) -> Self {
+    pub fn cast(x: Self, type_name: Option<Type<'bump>>, b: &'bump Bump) -> Self {
         Self::Cast {
-            expr: Box::new(x),
+            expr: Box::new_in(x, b),
             type_name,
         }
     }
     /// Constructor
-    pub fn binary(left: Self, op: YYCODETYPE, right: Self) -> Self {
-        Self::Binary(Box::new(left), Operator::from(op), Box::new(right))
+    pub fn binary(left: Self, op: YYCODETYPE, right: Self, b: &'bump Bump) -> Self {
+        Self::Binary(
+            Box::new_in(left, b),
+            Operator::from(op),
+            Box::new_in(right, b),
+        )
     }
     /// Constructor
-    pub fn ptr(left: Self, op: Token, right: Self) -> Self {
+    pub fn ptr(left: Self, op: Token, right: Self, b: &'bump Bump) -> Self {
         let mut ptr = Operator::ArrowRight;
         if op.1 == b"->>" {
             ptr = Operator::ArrowRightShift;
         }
-        Self::Binary(Box::new(left), ptr, Box::new(right))
+        Self::Binary(Box::new_in(left, b), ptr, Box::new_in(right, b))
     }
     /// Constructor
-    pub fn like(lhs: Self, not: bool, op: LikeOperator, rhs: Self, escape: Option<Self>) -> Self {
+    pub fn like(
+        lhs: Self,
+        not: bool,
+        op: LikeOperator,
+        rhs: Self,
+        escape: Option<Self>,
+        b: &'bump Bump,
+    ) -> Self {
         Self::Like {
-            lhs: Box::new(lhs),
+            lhs: Box::new_in(lhs, b),
             not,
             op,
-            rhs: Box::new(rhs),
-            escape: escape.map(Box::new),
+            rhs: Box::new_in(rhs, b),
+            escape: escape.map(|e| Box::new_in(e, b)),
         }
     }
     /// Constructor
-    pub fn not_null(x: Self, op: YYCODETYPE) -> Self {
+    pub fn not_null(x: Self, op: YYCODETYPE, b: &'bump Bump) -> Self {
         if op == TK_ISNULL as YYCODETYPE {
-            Self::IsNull(Box::new(x))
+            Self::IsNull(Box::new_in(x, b))
         } else if op == TK_NOTNULL as YYCODETYPE {
-            Self::NotNull(Box::new(x))
+            Self::NotNull(Box::new_in(x, b))
         } else {
             unreachable!()
         }
     }
     /// Constructor
-    pub fn unary(op: UnaryOperator, x: Self) -> Self {
-        Self::Unary(op, Box::new(x))
+    pub fn unary(op: UnaryOperator, x: Self, b: &'bump Bump) -> Self {
+        Self::Unary(op, Box::new_in(x, b))
     }
     /// Constructor
-    pub fn between(lhs: Self, not: bool, start: Self, end: Self) -> Self {
+    pub fn between(lhs: Self, not: bool, start: Self, end: Self, b: &'bump Bump) -> Self {
         Self::Between {
-            lhs: Box::new(lhs),
+            lhs: Box::new_in(lhs, b),
             not,
-            start: Box::new(start),
-            end: Box::new(end),
+            start: Box::new_in(start, b),
+            end: Box::new_in(end, b),
         }
     }
     /// Constructor
-    pub fn in_list(lhs: Self, not: bool, rhs: Option<Vec<Self>>) -> Self {
+    pub fn in_list(lhs: Self, not: bool, rhs: Option<Vec<'bump, Self>>, b: &'bump Bump) -> Self {
         Self::InList {
-            lhs: Box::new(lhs),
+            lhs: Box::new_in(lhs, b),
             not,
             rhs,
         }
     }
     /// Constructor
-    pub fn in_select(lhs: Self, not: bool, rhs: Select) -> Self {
+    pub fn in_select(lhs: Self, not: bool, rhs: Select<'bump>, b: &'bump Bump) -> Self {
         Self::InSelect {
-            lhs: Box::new(lhs),
+            lhs: Box::new_in(lhs, b),
             not,
-            rhs: Box::new(rhs),
+            rhs: Box::new_in(rhs, b),
         }
     }
     /// Constructor
-    pub fn in_table(lhs: Self, not: bool, rhs: QualifiedName, args: Option<Vec<Self>>) -> Self {
+    pub fn in_table(
+        lhs: Self,
+        not: bool,
+        rhs: QualifiedName<'bump>,
+        args: Option<Vec<'bump, Self>>,
+        b: &'bump Bump,
+    ) -> Self {
         Self::InTable {
-            lhs: Box::new(lhs),
+            lhs: Box::new_in(lhs, b),
             not,
             rhs,
             args,
         }
     }
     /// Constructor
-    pub fn sub_query(query: Select) -> Self {
-        Self::Subquery(Box::new(query))
+    pub fn sub_query(query: Select<'bump>, b: &'bump Bump) -> Self {
+        Self::Subquery(Box::new_in(query, b))
     }
     /// Constructor
     pub fn function_call(
         xt: YYCODETYPE,
         x: Token,
         distinctness: Option<Distinctness>,
-        args: Option<Vec<Self>>,
-        order_by: Option<FunctionCallOrder>,
-        filter_over: Option<FunctionTail>,
+        args: Option<Vec<'bump, Self>>,
+        order_by: Option<FunctionCallOrder<'bump>>,
+        filter_over: Option<FunctionTail<'bump>>,
+        b: &'bump Bump,
     ) -> Result<Self, ParserError> {
         #[cfg(feature = "extra_checks")]
         if let Some(Distinctness::Distinct) = distinctness {
@@ -595,7 +619,7 @@ impl Expr {
             }
         }
         Ok(Self::FunctionCall {
-            name: Id::from_token(xt, x),
+            name: Id::from_token(xt, x, b),
             distinctness,
             args,
             order_by,
@@ -631,18 +655,18 @@ impl Expr {
 }
 
 /// SQL literal
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Literal {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Literal<'bump> {
     /// Number
-    Numeric(Box<str>),
+    Numeric(Box<'bump, str>),
     /// String
     // TODO Check that string is already quoted and correctly escaped
-    String(Box<str>),
+    String(Box<'bump, str>),
     /// BLOB
     // TODO Check that string is valid (only hexa)
-    Blob(Box<str>),
+    Blob(Box<'bump, str>),
     /// Keyword
-    Keyword(Box<str>),
+    Keyword(Box<'bump, str>),
     /// `NULL`
     Null,
     /// `CURRENT_DATE`
@@ -653,7 +677,7 @@ pub enum Literal {
     CurrentTimestamp,
 }
 
-impl Literal {
+impl<'bump> Literal<'bump> {
     /// Constructor
     pub fn from_ctime_kw(token: Token) -> Self {
         if b"CURRENT_DATE".eq_ignore_ascii_case(token.1) {
@@ -805,25 +829,25 @@ impl From<YYCODETYPE> for UnaryOperator {
 /// `SELECT` statement
 // https://sqlite.org/lang_select.html
 // https://sqlite.org/syntax/factored-select-stmt.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Select {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Select<'bump> {
     /// CTE
-    pub with: Option<With>, // TODO check usages in body
+    pub with: Option<With<'bump>>, // TODO check usages in body
     /// body
-    pub body: SelectBody,
+    pub body: SelectBody<'bump>,
     /// `ORDER BY`
-    pub order_by: Option<Vec<SortedColumn>>, // TODO: ORDER BY term does not match any column in the result set
+    pub order_by: Option<Vec<'bump, SortedColumn<'bump>>>, // TODO: ORDER BY term does not match any column in the result set
     /// `LIMIT`
-    pub limit: Option<Limit>,
+    pub limit: Option<Limit<'bump>>,
 }
 
-impl Select {
+impl<'bump> Select<'bump> {
     /// Constructor
     pub fn new(
-        with: Option<With>,
-        body: SelectBody,
-        order_by: Option<Vec<SortedColumn>>,
-        limit: Option<Limit>,
+        with: Option<With<'bump>>,
+        body: SelectBody<'bump>,
+        order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
+        limit: Option<Limit<'bump>>,
     ) -> Result<Self, ParserError> {
         let select = Self {
             with,
@@ -848,16 +872,20 @@ impl Select {
 }
 
 /// `SELECT` body
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SelectBody {
+#[derive(Debug, PartialEq, Eq)]
+pub struct SelectBody<'bump> {
     /// first select
-    pub select: OneSelect,
+    pub select: OneSelect<'bump>,
     /// compounds
-    pub compounds: Option<Vec<CompoundSelect>>,
+    pub compounds: Option<Vec<'bump, CompoundSelect<'bump>>>,
 }
 
-impl SelectBody {
-    pub(crate) fn push(&mut self, cs: CompoundSelect) -> Result<(), ParserError> {
+impl<'bump> SelectBody<'bump> {
+    pub(crate) fn push(
+        &mut self,
+        cs: CompoundSelect<'bump>,
+        b: &'bump Bump,
+    ) -> Result<(), ParserError> {
         #[cfg(feature = "extra_checks")]
         if let ColumnCount::Fixed(n) = self.select.column_count() {
             if let ColumnCount::Fixed(m) = cs.select.column_count() {
@@ -872,19 +900,19 @@ impl SelectBody {
         if let Some(ref mut v) = self.compounds {
             v.push(cs);
         } else {
-            self.compounds = Some(vec![cs]);
+            self.compounds = Some(bumpalo::vec![in b; cs]);
         }
         Ok(())
     }
 }
 
 /// Compound select
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CompoundSelect {
+#[derive(Debug, PartialEq, Eq)]
+pub struct CompoundSelect<'bump> {
     /// operator
     pub operator: CompoundOperator,
     /// select
-    pub select: OneSelect,
+    pub select: OneSelect<'bump>,
 }
 
 /// Compound operators
@@ -903,39 +931,40 @@ pub enum CompoundOperator {
 
 /// `SELECT` core
 // https://sqlite.org/syntax/select-core.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum OneSelect {
+#[derive(Debug, PartialEq, Eq)]
+pub enum OneSelect<'bump> {
     /// `SELECT`
     Select {
         /// `DISTINCT`
         distinctness: Option<Distinctness>,
         /// columns
-        columns: Vec<ResultColumn>,
+        columns: Vec<'bump, ResultColumn<'bump>>,
         /// `FROM` clause
-        from: Option<FromClause>,
+        from: Option<FromClause<'bump>>,
         /// `WHERE` clause
-        where_clause: Option<Box<Expr>>,
+        where_clause: Option<Box<'bump, Expr<'bump>>>,
         /// `GROUP BY`
-        group_by: Option<Vec<Expr>>,
+        group_by: Option<Vec<'bump, Expr<'bump>>>,
         /// `HAVING`
-        having: Option<Box<Expr>>, // TODO: HAVING clause on a non-aggregate query
+        having: Option<Box<'bump, Expr<'bump>>>, // TODO: HAVING clause on a non-aggregate query
         /// `WINDOW` definition
-        window_clause: Option<Vec<WindowDef>>,
+        window_clause: Option<Vec<'bump, WindowDef<'bump>>>,
     },
     /// `VALUES`
-    Values(Vec<Vec<Expr>>),
+    Values(Vec<'bump, Vec<'bump, Expr<'bump>>>),
 }
 
-impl OneSelect {
+impl<'bump> OneSelect<'bump> {
     /// Constructor
     pub fn new(
         distinctness: Option<Distinctness>,
-        columns: Vec<ResultColumn>,
-        from: Option<FromClause>,
-        where_clause: Option<Expr>,
-        group_by: Option<Vec<Expr>>,
-        having: Option<Expr>,
-        window_clause: Option<Vec<WindowDef>>,
+        columns: Vec<'bump, ResultColumn<'bump>>,
+        from: Option<FromClause<'bump>>,
+        where_clause: Option<Expr<'bump>>,
+        group_by: Option<Vec<'bump, Expr<'bump>>>,
+        having: Option<Expr<'bump>>,
+        window_clause: Option<Vec<'bump, WindowDef<'bump>>>,
+        b: &'bump Bump,
     ) -> Result<Self, ParserError> {
         #[cfg(feature = "extra_checks")]
         if from.is_none()
@@ -949,9 +978,9 @@ impl OneSelect {
             distinctness,
             columns,
             from,
-            where_clause: where_clause.map(Box::new),
+            where_clause: where_clause.map(|wc| Box::new_in(wc, b)),
             group_by,
-            having: having.map(Box::new),
+            having: having.map(|h| Box::new_in(h, b)),
             window_clause,
         };
         #[cfg(feature = "extra_checks")]
@@ -969,7 +998,10 @@ impl OneSelect {
         Ok(select)
     }
     /// Check all VALUES have the same number of terms
-    pub fn push(values: &mut Vec<Vec<Expr>>, v: Vec<Expr>) -> Result<(), ParserError> {
+    pub fn push(
+        values: &mut Vec<'bump, Vec<'bump, Expr<'bump>>>,
+        v: Vec<'bump, Expr<'bump>>,
+    ) -> Result<(), ParserError> {
         #[cfg(feature = "extra_checks")]
         if values[0].len() != v.len() {
             return Err(custom_err!("all VALUES must have the same number of terms"));
@@ -981,15 +1013,15 @@ impl OneSelect {
 
 /// `SELECT` ... `FROM` clause
 // https://sqlite.org/syntax/join-clause.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FromClause {
+#[derive(Debug, PartialEq, Eq)]
+pub struct FromClause<'bump> {
     /// table
-    pub select: Option<Box<SelectTable>>, // FIXME mandatory
+    pub select: Option<Box<'bump, SelectTable<'bump>>>, // FIXME mandatory
     /// `JOIN`ed tabled
-    pub joins: Option<Vec<JoinedSelectTable>>,
+    pub joins: Option<Vec<'bump, JoinedSelectTable<'bump>>>,
     op: Option<JoinOperator>, // FIXME transient
 }
-impl FromClause {
+impl<'bump> FromClause<'bump> {
     pub(crate) fn empty() -> Self {
         Self {
             select: None,
@@ -1000,8 +1032,9 @@ impl FromClause {
 
     pub(crate) fn push(
         &mut self,
-        table: SelectTable,
-        jc: Option<JoinConstraint>,
+        table: SelectTable<'bump>,
+        jc: Option<JoinConstraint<'bump>>,
+        b: &'bump Bump,
     ) -> Result<(), ParserError> {
         let op = self.op.take();
         if let Some(op) = op {
@@ -1018,7 +1051,7 @@ impl FromClause {
             if let Some(ref mut joins) = self.joins {
                 joins.push(jst);
             } else {
-                self.joins = Some(vec![jst]);
+                self.joins = Some(bumpalo::vec![in b; jst]);
             }
         } else {
             if jc.is_some() {
@@ -1026,7 +1059,7 @@ impl FromClause {
             }
             debug_assert!(self.select.is_none());
             debug_assert!(self.joins.is_none());
-            self.select = Some(Box::new(table));
+            self.select = Some(Box::new_in(table, b));
         }
         Ok(())
     }
@@ -1047,49 +1080,57 @@ pub enum Distinctness {
 
 /// `SELECT` or `RETURNING` result column
 // https://sqlite.org/syntax/result-column.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ResultColumn {
+#[derive(Debug, PartialEq, Eq)]
+pub enum ResultColumn<'bump> {
     /// expression
-    Expr(Expr, Option<As>),
+    Expr(Expr<'bump>, Option<As<'bump>>),
     /// `*`
     Star,
     /// table name.`*`
-    TableStar(Name),
+    TableStar(Name<'bump>),
 }
 
 /// Alias
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum As {
+#[derive(Debug, PartialEq, Eq)]
+pub enum As<'bump> {
     /// `AS`
-    As(Name),
+    As(Name<'bump>),
     /// no `AS`
-    Elided(Name), // FIXME Ids
+    Elided(Name<'bump>), // FIXME Ids
 }
 
 /// `JOIN` clause
 // https://sqlite.org/syntax/join-clause.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct JoinedSelectTable {
+#[derive(Debug, PartialEq, Eq)]
+pub struct JoinedSelectTable<'bump> {
     /// operator
     pub operator: JoinOperator,
     /// table
-    pub table: SelectTable,
+    pub table: SelectTable<'bump>,
     /// constraint
-    pub constraint: Option<JoinConstraint>,
+    pub constraint: Option<JoinConstraint<'bump>>,
 }
 
 /// Table or subquery
 // https://sqlite.org/syntax/table-or-subquery.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SelectTable {
+#[derive(Debug, PartialEq, Eq)]
+pub enum SelectTable<'bump> {
     /// table
-    Table(QualifiedName, Option<As>, Option<Indexed>),
+    Table(
+        QualifiedName<'bump>,
+        Option<As<'bump>>,
+        Option<Indexed<'bump>>,
+    ),
     /// table function call
-    TableCall(QualifiedName, Option<Vec<Expr>>, Option<As>),
+    TableCall(
+        QualifiedName<'bump>,
+        Option<Vec<'bump, Expr<'bump>>>,
+        Option<As<'bump>>,
+    ),
     /// `SELECT` subquery
-    Select(Box<Select>, Option<As>),
+    Select(Box<'bump, Select<'bump>>, Option<As<'bump>>),
     /// subquery
-    Sub(FromClause, Option<As>),
+    Sub(FromClause<'bump>, Option<As<'bump>>),
 }
 
 /// Join operators
@@ -1111,7 +1152,7 @@ impl JoinOperator {
         Ok({
             let mut jt = JoinType::try_from(token.1)?;
             for n in [&n1, &n2].into_iter().flatten() {
-                jt |= JoinType::try_from(n.0.as_ref().as_bytes())?;
+                jt |= JoinType::try_from(n.0.as_str().as_bytes())?;
             }
             if (jt & (JoinType::INNER | JoinType::OUTER)) == (JoinType::INNER | JoinType::OUTER)
                 || (jt & (JoinType::OUTER | JoinType::LEFT | JoinType::RIGHT)) == JoinType::OUTER
@@ -1181,22 +1222,22 @@ impl TryFrom<&[u8]> for JoinType {
 }
 
 /// `JOIN` constraint
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum JoinConstraint {
+#[derive(Debug, PartialEq, Eq)]
+pub enum JoinConstraint<'bump> {
     /// `ON`
-    On(Expr),
+    On(Expr<'bump>),
     /// `USING`: col names
-    Using(DistinctNames),
+    Using(DistinctNames<'bump>),
 }
 
 /// identifier or one of several keywords or `INDEXED`
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Id(pub Box<str>);
+pub struct Id<'bump>(pub String<'bump>);
 
-impl Id {
+impl<'bump> Id<'bump> {
     /// Constructor
-    pub fn from_token(ty: YYCODETYPE, token: Token) -> Self {
-        Self(from_token(ty, token))
+    pub fn from_token(ty: YYCODETYPE, token: Token, b: &'bump Bump) -> Self {
+        Self(from_token(ty, token, b))
     }
 }
 
@@ -1204,7 +1245,7 @@ impl Id {
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
 #[derive(Clone, Debug, Eq)]
-pub struct Name(pub Box<str>); // TODO distinction between Name and "Name"/[Name]/`Name`
+pub struct Name<'bump>(pub String<'bump>); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 pub(crate) fn unquote(s: &str) -> (&str, u8) {
     if s.is_empty() {
@@ -1227,10 +1268,10 @@ pub(crate) fn unquote(s: &str) -> (&str, u8) {
     }
 }
 
-impl Name {
+impl<'bump> Name<'bump> {
     /// Constructor
-    pub fn from_token(ty: YYCODETYPE, token: Token) -> Self {
-        Self(from_token(ty, token))
+    pub fn from_token(ty: YYCODETYPE, token: Token, b: &'bump Bump) -> Self {
+        Self(from_token(ty, token, b))
     }
 
     fn as_bytes(&self) -> QuotedIterator<'_> {
@@ -1287,45 +1328,45 @@ fn eq_ignore_case_and_quote(mut it: QuotedIterator<'_>, mut other: QuotedIterato
 }
 
 /// Ignore case and quote
-impl std::hash::Hash for Name {
+impl<'bump> std::hash::Hash for Name<'bump> {
     fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
         self.as_bytes()
             .for_each(|b| hasher.write_u8(b.to_ascii_lowercase()));
     }
 }
 /// Ignore case and quote
-impl PartialEq for Name {
+impl<'bump> PartialEq for Name<'bump> {
     fn eq(&self, other: &Self) -> bool {
         eq_ignore_case_and_quote(self.as_bytes(), other.as_bytes())
     }
 }
 /// Ignore case and quote
-impl PartialEq<str> for Name {
+impl<'bump> PartialEq<str> for Name<'bump> {
     fn eq(&self, other: &str) -> bool {
         eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
     }
 }
 /// Ignore case and quote
-impl PartialEq<&str> for Name {
+impl<'bump> PartialEq<&str> for Name<'bump> {
     fn eq(&self, other: &&str) -> bool {
         eq_ignore_case_and_quote(self.as_bytes(), QuotedIterator(other.bytes(), 0u8))
     }
 }
 
 /// Qualified name
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct QualifiedName {
+#[derive(Debug, PartialEq, Eq)]
+pub struct QualifiedName<'bump> {
     /// schema
-    pub db_name: Option<Name>,
+    pub db_name: Option<Name<'bump>>,
     /// object name
-    pub name: Name,
+    pub name: Name<'bump>,
     /// alias
-    pub alias: Option<Name>, // FIXME restrict alias usage (fullname vs xfullname)
+    pub alias: Option<Name<'bump>>, // FIXME restrict alias usage (fullname vs xfullname)
 }
 
-impl QualifiedName {
+impl<'bump> QualifiedName<'bump> {
     /// Constructor
-    pub fn single(name: Name) -> Self {
+    pub fn single(name: Name<'bump>) -> Self {
         Self {
             db_name: None,
             name,
@@ -1333,7 +1374,7 @@ impl QualifiedName {
         }
     }
     /// Constructor
-    pub fn fullname(db_name: Name, name: Name) -> Self {
+    pub fn fullname(db_name: Name<'bump>, name: Name<'bump>) -> Self {
         Self {
             db_name: Some(db_name),
             name,
@@ -1341,7 +1382,7 @@ impl QualifiedName {
         }
     }
     /// Constructor
-    pub fn xfullname(db_name: Name, name: Name, alias: Name) -> Self {
+    pub fn xfullname(db_name: Name<'bump>, name: Name<'bump>, alias: Name<'bump>) -> Self {
         Self {
             db_name: Some(db_name),
             name,
@@ -1349,7 +1390,7 @@ impl QualifiedName {
         }
     }
     /// Constructor
-    pub fn alias(name: Name, alias: Name) -> Self {
+    pub fn alias(name: Name<'bump>, alias: Name<'bump>) -> Self {
         Self {
             db_name: None,
             name,
@@ -1359,24 +1400,24 @@ impl QualifiedName {
 }
 
 /// Ordered set of distinct column names
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DistinctNames(IndexSet<Name>);
+#[derive(Debug, PartialEq, Eq)]
+pub struct DistinctNames<'bump>(IndexSet<Name<'bump>>);
 
-impl DistinctNames {
+impl<'bump> DistinctNames<'bump> {
     /// Initialize
-    pub fn new(name: Name) -> Self {
+    pub fn new(name: Name<'bump>) -> Self {
         let mut dn = Self(IndexSet::new());
         dn.0.insert(name);
         dn
     }
     /// Single column name
-    pub fn single(name: Name) -> Self {
+    pub fn single(name: Name<'bump>) -> Self {
         let mut dn = Self(IndexSet::with_capacity(1));
         dn.0.insert(name);
         dn
     }
     /// Push a distinct name or fail
-    pub fn insert(&mut self, name: Name) -> Result<(), ParserError> {
+    pub fn insert(&mut self, name: Name<'bump>) -> Result<(), ParserError> {
         if self.0.contains(&name) {
             return Err(custom_err!("column \"{}\" specified more than once", name));
         }
@@ -1384,39 +1425,39 @@ impl DistinctNames {
         Ok(())
     }
 }
-impl Deref for DistinctNames {
-    type Target = IndexSet<Name>;
+impl<'bump> Deref for DistinctNames<'bump> {
+    type Target = IndexSet<Name<'bump>>;
 
-    fn deref(&self) -> &IndexSet<Name> {
+    fn deref(&self) -> &IndexSet<Name<'bump>> {
         &self.0
     }
 }
 
 /// `ALTER TABLE` body
 // https://sqlite.org/lang_altertable.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum AlterTableBody {
+#[derive(Debug, PartialEq, Eq)]
+pub enum AlterTableBody<'bump> {
     /// `RENAME TO`: new table name
-    RenameTo(Name),
+    RenameTo(Name<'bump>),
     /// `ADD COLUMN`
-    AddColumn(ColumnDefinition), // TODO distinction between ADD and ADD COLUMN
+    AddColumn(ColumnDefinition<'bump>), // TODO distinction between ADD and ADD COLUMN
     /// `ALTER COLUMN _ DROP NOT NULL`
-    DropColumnNotNull(Name), // TODO distinction between ALTER and ALTER COLUMN
+    DropColumnNotNull(Name<'bump>), // TODO distinction between ALTER and ALTER COLUMN
     /// `ALTER COLUMN _ SET NOT NULL`
-    SetColumnNotNull(Name, Option<ResolveType>), // TODO distinction between ALTER and ALTER COLUMN
+    SetColumnNotNull(Name<'bump>, Option<ResolveType>), // TODO distinction between ALTER and ALTER COLUMN
     /// `RENAME COLUMN`
     RenameColumn {
         /// old name
-        old: Name,
+        old: Name<'bump>,
         /// new name
-        new: Name,
+        new: Name<'bump>,
     },
     /// `DROP COLUMN`
-    DropColumn(Name), // TODO distinction between DROP and DROP COLUMN
+    DropColumn(Name<'bump>), // TODO distinction between DROP and DROP COLUMN
     /// `ADD CONSTRAINT`
-    AddConstraint(NamedTableConstraint), // TODO only CHECK constraint supported
+    AddConstraint(NamedTableConstraint<'bump>), // TODO only CHECK constraint supported
     /// `DROP CONSTRAINT`
-    DropConstraint(Name),
+    DropConstraint(Name<'bump>),
 }
 
 bitflags::bitflags! {
@@ -1458,26 +1499,26 @@ bitflags::bitflags! {
 /// `CREATE TABLE` body
 // https://sqlite.org/lang_createtable.html
 // https://sqlite.org/syntax/create-table-stmt.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CreateTableBody {
+#[derive(Debug, PartialEq, Eq)]
+pub enum CreateTableBody<'bump> {
     /// columns and constraints
     ColumnsAndConstraints {
         /// table column definitions
-        columns: IndexMap<Name, ColumnDefinition>,
+        columns: IndexMap<Name<'bump>, ColumnDefinition<'bump>>,
         /// table constraints
-        constraints: Option<Vec<NamedTableConstraint>>,
+        constraints: Option<Vec<'bump, NamedTableConstraint<'bump>>>,
         /// table flags
         flags: TabFlags,
     },
     /// `AS` select
-    AsSelect(Box<Select>),
+    AsSelect(Box<'bump, Select<'bump>>),
 }
 
-impl CreateTableBody {
+impl<'bump> CreateTableBody<'bump> {
     /// Constructor
     pub fn columns_and_constraints(
-        columns: IndexMap<Name, ColumnDefinition>,
-        constraints: Option<Vec<NamedTableConstraint>>,
+        columns: IndexMap<Name<'bump>, ColumnDefinition<'bump>>,
+        constraints: Option<Vec<'bump, NamedTableConstraint<'bump>>>,
         mut flags: TabFlags,
     ) -> Result<Self, ParserError> {
         for col in columns.values() {
@@ -1541,24 +1582,25 @@ bitflags::bitflags! {
 
 /// Table column definition
 // https://sqlite.org/syntax/column-def.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ColumnDefinition {
+#[derive(Debug, PartialEq, Eq)]
+pub struct ColumnDefinition<'bump> {
     /// column name
-    pub col_name: Name,
+    pub col_name: Name<'bump>,
     /// column type
-    pub col_type: Option<Type>,
+    pub col_type: Option<Type<'bump>>,
     /// column constraints
-    pub constraints: Vec<NamedColumnConstraint>,
+    pub constraints: Vec<'bump, NamedColumnConstraint<'bump>>,
     /// column flags
     pub flags: ColFlags,
 }
 
-impl ColumnDefinition {
+impl<'bump> ColumnDefinition<'bump> {
     /// Constructor
     pub fn new(
-        col_name: Name,
-        mut col_type: Option<Type>,
-        constraints: Vec<NamedColumnConstraint>,
+        col_name: Name<'bump>,
+        mut col_type: Option<Type<'bump>>,
+        constraints: Vec<'bump, NamedColumnConstraint<'bump>>,
+        b: &'bump Bump,
     ) -> Result<Self, ParserError> {
         let mut flags = ColFlags::empty();
         #[allow(unused_variables)]
@@ -1637,8 +1679,14 @@ impl ColumnDefinition {
                         .is_some_and(|s| s.eq_ignore_ascii_case("GENERATED"))
                 {
                     // str_split_whitespace_remainder
-                    let new_type: Vec<&str> = split.collect();
-                    col_type.name = new_type.join(" ");
+                    let mut new_type = String::new_in(b);
+                    for (i, item) in split.enumerate() {
+                        if i > 0 {
+                            new_type.push(' ');
+                        }
+                        new_type.push_str(item);
+                    }
+                    col_type.name = new_type;
                 }
             }
         }
@@ -1653,7 +1701,10 @@ impl ColumnDefinition {
         })
     }
     /// Collector
-    pub fn add_column(columns: &mut IndexMap<Name, Self>, cd: Self) -> Result<(), ParserError> {
+    pub fn add_column(
+        columns: &mut IndexMap<Name<'bump>, Self>,
+        cd: Self,
+    ) -> Result<(), ParserError> {
         let col_name = &cd.col_name;
         if columns.contains_key(col_name) {
             return Err(custom_err!("duplicate column name: {}", col_name));
@@ -1672,18 +1723,18 @@ impl ColumnDefinition {
 
 /// Named column constraint
 // https://sqlite.org/syntax/column-constraint.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NamedColumnConstraint {
+#[derive(Debug, PartialEq, Eq)]
+pub struct NamedColumnConstraint<'bump> {
     /// constraint name
-    pub name: Option<Name>,
+    pub name: Option<Name<'bump>>,
     /// constraint
-    pub constraint: ColumnConstraint,
+    pub constraint: ColumnConstraint<'bump>,
 }
 
 /// Column constraint
 // https://sqlite.org/syntax/column-constraint.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ColumnConstraint {
+#[derive(Debug, PartialEq, Eq)]
+pub enum ColumnConstraint<'bump> {
     /// `PRIMARY KEY`
     PrimaryKey {
         /// `ASC` / `DESC`
@@ -1703,50 +1754,50 @@ pub enum ColumnConstraint {
     /// `UNIQUE`
     Unique(Option<ResolveType>),
     /// `CHECK`
-    Check(Expr),
+    Check(Expr<'bump>),
     /// `DEFAULT`
-    Default(Expr),
+    Default(Expr<'bump>),
     /// `DEFERRABLE`
     Defer(DeferSubclause), // FIXME
     /// `COLLATE`
     Collate {
         /// collation name
-        collation_name: Name, // FIXME Ids
+        collation_name: Name<'bump>, // FIXME Ids
     },
     /// `REFERENCES` foreign-key clause
     ForeignKey {
         /// clause
-        clause: ForeignKeyClause,
+        clause: ForeignKeyClause<'bump>,
         /// `DEFERRABLE`
         defer_clause: Option<DeferSubclause>,
     },
     /// `GENERATED`
     Generated {
         /// expression
-        expr: Expr,
+        expr: Expr<'bump>,
         /// `STORED` / `VIRTUAL`
-        typ: Option<Id>,
+        typ: Option<Id<'bump>>,
     },
 }
 
 /// Named table constraint
 // https://sqlite.org/syntax/table-constraint.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NamedTableConstraint {
+#[derive(Debug, PartialEq, Eq)]
+pub struct NamedTableConstraint<'bump> {
     /// constraint name
-    pub name: Option<Name>,
+    pub name: Option<Name<'bump>>,
     /// constraint
-    pub constraint: TableConstraint,
+    pub constraint: TableConstraint<'bump>,
 }
 
 /// Table constraint
 // https://sqlite.org/syntax/table-constraint.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TableConstraint {
+#[derive(Debug, PartialEq, Eq)]
+pub enum TableConstraint<'bump> {
     /// `PRIMARY KEY`
     PrimaryKey {
         /// columns
-        columns: Vec<SortedColumn>,
+        columns: Vec<'bump, SortedColumn<'bump>>,
         /// `AUTOINCREMENT`
         auto_increment: bool,
         /// `ON CONFLICT` clause
@@ -1755,27 +1806,27 @@ pub enum TableConstraint {
     /// `UNIQUE`
     Unique {
         /// columns
-        columns: Vec<SortedColumn>,
+        columns: Vec<'bump, SortedColumn<'bump>>,
         /// `ON CONFLICT` clause
         conflict_clause: Option<ResolveType>,
     },
     /// `CHECK`
-    Check(Expr, Option<ResolveType>),
+    Check(Expr<'bump>, Option<ResolveType>),
     /// `FOREIGN KEY`
     ForeignKey {
         /// columns
-        columns: Vec<IndexedColumn>,
+        columns: Vec<'bump, IndexedColumn<'bump>>,
         /// `REFERENCES`
-        clause: ForeignKeyClause,
+        clause: ForeignKeyClause<'bump>,
         /// `DEFERRABLE`
         defer_clause: Option<DeferSubclause>,
     },
 }
 
-impl TableConstraint {
+impl<'bump> TableConstraint<'bump> {
     /// PK constructor
     pub fn primary_key(
-        columns: Vec<SortedColumn>,
+        columns: Vec<'bump, SortedColumn<'bump>>,
         auto_increment: bool,
         conflict_clause: Option<ResolveType>,
     ) -> Result<Self, ParserError> {
@@ -1789,7 +1840,7 @@ impl TableConstraint {
     }
     /// UNIQUE constructor
     pub fn unique(
-        columns: Vec<SortedColumn>,
+        columns: Vec<'bump, SortedColumn<'bump>>,
         conflict_clause: Option<ResolveType>,
     ) -> Result<Self, ParserError> {
         has_expression(&columns)?;
@@ -1821,19 +1872,19 @@ pub enum NullsOrder {
 
 /// `REFERENCES` clause
 // https://sqlite.org/syntax/foreign-key-clause.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ForeignKeyClause {
+#[derive(Debug, PartialEq, Eq)]
+pub struct ForeignKeyClause<'bump> {
     /// foreign table name
-    pub tbl_name: Name,
+    pub tbl_name: Name<'bump>,
     /// foreign table columns
-    pub columns: Option<Vec<IndexedColumn>>,
+    pub columns: Option<Vec<'bump, IndexedColumn<'bump>>>,
     /// referential action(s) / deferrable option(s)
-    pub args: Vec<RefArg>,
+    pub args: Vec<'bump, RefArg<'bump>>,
 }
 
 /// foreign-key reference args
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RefArg {
+#[derive(Debug, PartialEq, Eq)]
+pub enum RefArg<'bump> {
     /// `ON DELETE`
     OnDelete(RefAct),
     /// `ON INSERT`
@@ -1841,7 +1892,7 @@ pub enum RefArg {
     /// `ON UPDATE`
     OnUpdate(RefAct),
     /// `MATCH`
-    Match(Name),
+    Match(Name<'bump>),
 }
 
 /// foreign-key reference actions
@@ -1879,30 +1930,30 @@ pub enum InitDeferredPred {
 
 /// Indexed column
 // https://sqlite.org/syntax/indexed-column.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IndexedColumn {
+#[derive(Debug, PartialEq, Eq)]
+pub struct IndexedColumn<'bump> {
     /// column name
-    pub col_name: Name,
+    pub col_name: Name<'bump>,
     /// `COLLATE`
-    pub collation_name: Option<Name>, // FIXME Ids
+    pub collation_name: Option<Name<'bump>>, // FIXME Ids
     /// `ORDER BY`
     pub order: Option<SortOrder>,
 }
 
 /// `INDEXED BY` / `NOT INDEXED`
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Indexed {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Indexed<'bump> {
     /// `INDEXED BY`: idx name
-    IndexedBy(Name),
+    IndexedBy(Name<'bump>),
     /// `NOT INDEXED`
     NotIndexed,
 }
 
 /// Sorted column
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SortedColumn {
+#[derive(Debug, PartialEq, Eq)]
+pub struct SortedColumn<'bump> {
     /// expression
-    pub expr: Expr,
+    pub expr: Expr<'bump>,
     /// `ASC` / `DESC`
     pub order: Option<SortOrder>,
     /// `NULLS FIRST` / `NULLS LAST`
@@ -1938,47 +1989,47 @@ fn has_explicit_nulls(columns: &[SortedColumn]) -> Result<(), ParserError> {
 }
 
 /// `LIMIT`
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Limit {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Limit<'bump> {
     /// count
-    pub expr: Expr,
+    pub expr: Expr<'bump>,
     /// `OFFSET`
-    pub offset: Option<Expr>, // TODO distinction between LIMIT offset, count and LIMIT count OFFSET offset
+    pub offset: Option<Expr<'bump>>, // TODO distinction between LIMIT offset, count and LIMIT count OFFSET offset
 }
 
 /// `INSERT` body
 // https://sqlite.org/lang_insert.html
 // https://sqlite.org/syntax/insert-stmt.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum InsertBody {
+#[derive(Debug, PartialEq, Eq)]
+pub enum InsertBody<'bump> {
     /// `SELECT` or `VALUES`
-    Select(Box<Select>, Option<Box<Upsert>>),
+    Select(Box<'bump, Select<'bump>>, Option<Box<'bump, Upsert<'bump>>>),
     /// `DEFAULT VALUES`
     DefaultValues,
 }
 
 /// `UPDATE ... SET`
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Set {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Set<'bump> {
     /// column name(s)
-    pub col_names: DistinctNames,
+    pub col_names: DistinctNames<'bump>,
     /// expression
-    pub expr: Expr,
+    pub expr: Expr<'bump>,
 }
 
 /// `PRAGMA` body
 // https://sqlite.org/syntax/pragma-stmt.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PragmaBody {
+#[derive(Debug, PartialEq, Eq)]
+pub enum PragmaBody<'bump> {
     /// `=`
-    Equals(PragmaValue),
+    Equals(PragmaValue<'bump>),
     /// function call
-    Call(PragmaValue),
+    Call(PragmaValue<'bump>),
 }
 
 /// `PRAGMA` value
 // https://sqlite.org/syntax/pragma-value.html
-pub type PragmaValue = Expr; // TODO
+pub type PragmaValue<'bump> = Expr<'bump>; // TODO
 
 /// `CREATE TRIGGER` time
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -1992,8 +2043,8 @@ pub enum TriggerTime {
 }
 
 /// `CREATE TRIGGER` event
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TriggerEvent {
+#[derive(Debug, PartialEq, Eq)]
+pub enum TriggerEvent<'bump> {
     /// `DELETE`
     Delete,
     /// `INSERT`
@@ -2001,49 +2052,49 @@ pub enum TriggerEvent {
     /// `UPDATE`
     Update,
     /// `UPDATE OF`: col names
-    UpdateOf(DistinctNames),
+    UpdateOf(DistinctNames<'bump>),
 }
 
 /// `CREATE TRIGGER` command
 // https://sqlite.org/lang_createtrigger.html
 // https://sqlite.org/syntax/create-trigger-stmt.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TriggerCmd {
+#[derive(Debug, PartialEq, Eq)]
+pub enum TriggerCmd<'bump> {
     /// `UPDATE`
     Update {
         /// `OR`
         or_conflict: Option<ResolveType>,
         /// table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
         /// `SET` assignments
-        sets: Vec<Set>, // FIXME unique
+        sets: Vec<'bump, Set<'bump>>, // FIXME unique
         /// `FROM`
-        from: Option<FromClause>,
+        from: Option<FromClause<'bump>>,
         /// `WHERE` clause
-        where_clause: Option<Expr>,
+        where_clause: Option<Expr<'bump>>,
     },
     /// `INSERT`
     Insert {
         /// `OR`
         or_conflict: Option<ResolveType>,
         /// table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
         /// `COLUMNS`
-        col_names: Option<DistinctNames>,
+        col_names: Option<DistinctNames<'bump>>,
         /// `SELECT` or `VALUES`
-        select: Box<Select>,
+        select: Box<'bump, Select<'bump>>,
         /// `ON CONFLICT` clause
-        upsert: Option<Box<Upsert>>,
+        upsert: Option<Box<'bump, Upsert<'bump>>>,
     },
     /// `DELETE`
     Delete {
         /// table name
-        tbl_name: QualifiedName,
+        tbl_name: QualifiedName<'bump>,
         /// `WHERE` clause
-        where_clause: Option<Expr>,
+        where_clause: Option<Expr<'bump>>,
     },
     /// `SELECT`
-    Select(Box<Select>),
+    Select(Box<'bump, Select<'bump>>),
 }
 
 /// Conflict resolution types
@@ -2064,12 +2115,12 @@ pub enum ResolveType {
 /// `WITH` clause
 // https://sqlite.org/lang_with.html
 // https://sqlite.org/syntax/with-clause.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct With {
+#[derive(Debug, PartialEq, Eq)]
+pub struct With<'bump> {
     /// `RECURSIVE`
     pub recursive: bool,
     /// CTEs
-    pub ctes: Vec<CommonTableExpr>,
+    pub ctes: Vec<'bump, CommonTableExpr<'bump>>,
 }
 
 /// CTE materialization
@@ -2085,25 +2136,26 @@ pub enum Materialized {
 
 /// CTE
 // https://sqlite.org/syntax/common-table-expression.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CommonTableExpr {
+#[derive(Debug, PartialEq, Eq)]
+pub struct CommonTableExpr<'bump> {
     /// table name
-    pub tbl_name: Name,
+    pub tbl_name: Name<'bump>,
     /// table columns
-    pub columns: Option<Vec<IndexedColumn>>, // TODO: check no duplicate (eidlist_opt)
+    pub columns: Option<Vec<'bump, IndexedColumn<'bump>>>, // TODO: check no duplicate (eidlist_opt)
     /// `MATERIALIZED`
     pub materialized: Materialized,
     /// query
-    pub select: Box<Select>,
+    pub select: Box<'bump, Select<'bump>>,
 }
 
-impl CommonTableExpr {
+impl<'bump> CommonTableExpr<'bump> {
     /// Constructor
     pub fn new(
-        tbl_name: Name,
-        columns: Option<Vec<IndexedColumn>>,
+        tbl_name: Name<'bump>,
+        columns: Option<Vec<'bump, IndexedColumn<'bump>>>,
         materialized: Materialized,
-        select: Select,
+        select: Select<'bump>,
+        b: &'bump Bump,
     ) -> Result<Self, ParserError> {
         #[cfg(feature = "extra_checks")]
         if let Some(ref columns) = columns {
@@ -2122,7 +2174,7 @@ impl CommonTableExpr {
             tbl_name,
             columns,
             materialized,
-            select: Box::new(select),
+            select: Box::new_in(select, b),
         })
     }
     /// Constructor
@@ -2138,22 +2190,22 @@ impl CommonTableExpr {
 
 /// Column type
 // https://sqlite.org/syntax/type-name.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Type {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Type<'bump> {
     /// type name
-    pub name: String, // TODO Validate: Ids+
+    pub name: String<'bump>, // TODO Validate: Ids+
     /// type size
-    pub size: Option<TypeSize>,
+    pub size: Option<TypeSize<'bump>>,
 }
 
 /// Column type size limit(s)
 // https://sqlite.org/syntax/type-name.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TypeSize {
+#[derive(Debug, PartialEq, Eq)]
+pub enum TypeSize<'bump> {
     /// maximum size
-    MaxSize(Box<Expr>),
+    MaxSize(Box<'bump, Expr<'bump>>),
     /// precision
-    TypeSize(Box<Expr>, Box<Expr>),
+    TypeSize(Box<'bump, Expr<'bump>>, Box<'bump, Expr<'bump>>),
 }
 
 /// Transaction types
@@ -2170,30 +2222,30 @@ pub enum TransactionType {
 /// Upsert clause
 // https://sqlite.org/lang_upsert.html
 // https://sqlite.org/syntax/upsert-clause.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Upsert {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Upsert<'bump> {
     /// conflict targets
-    pub index: Option<UpsertIndex>,
+    pub index: Option<UpsertIndex<'bump>>,
     /// `DO` clause
-    pub do_clause: UpsertDo,
+    pub do_clause: UpsertDo<'bump>,
     /// next upsert
-    pub next: Option<Box<Upsert>>,
+    pub next: Option<Box<'bump, Upsert<'bump>>>,
 }
 
 /// Upsert conflict targets
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpsertIndex {
+#[derive(Debug, PartialEq, Eq)]
+pub struct UpsertIndex<'bump> {
     /// columns
-    pub targets: Vec<SortedColumn>,
+    pub targets: Vec<'bump, SortedColumn<'bump>>,
     /// `WHERE` clause
-    pub where_clause: Option<Expr>,
+    pub where_clause: Option<Expr<'bump>>,
 }
 
-impl UpsertIndex {
+impl<'bump> UpsertIndex<'bump> {
     /// constructor
     pub fn new(
-        targets: Vec<SortedColumn>,
-        where_clause: Option<Expr>,
+        targets: Vec<'bump, SortedColumn<'bump>>,
+        where_clause: Option<Expr<'bump>>,
     ) -> Result<Self, ParserError> {
         has_explicit_nulls(&targets)?;
         Ok(Self {
@@ -2204,71 +2256,71 @@ impl UpsertIndex {
 }
 
 /// Upsert `DO` action
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum UpsertDo {
+#[derive(Debug, PartialEq, Eq)]
+pub enum UpsertDo<'bump> {
     /// `SET`
     Set {
         /// assignments
-        sets: Vec<Set>,
+        sets: Vec<'bump, Set<'bump>>,
         /// `WHERE` clause
-        where_clause: Option<Expr>,
+        where_clause: Option<Expr<'bump>>,
     },
     /// `NOTHING`
     Nothing,
 }
 
 /// Function call tail
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FunctionTail {
+#[derive(Debug, PartialEq, Eq)]
+pub struct FunctionTail<'bump> {
     /// `FILTER` clause
-    pub filter_clause: Option<Box<Expr>>,
+    pub filter_clause: Option<Box<'bump, Expr<'bump>>>,
     /// `OVER` clause
-    pub over_clause: Option<Box<Over>>,
+    pub over_clause: Option<Box<'bump, Over<'bump>>>,
 }
 
 /// Function call `OVER` clause
 // https://sqlite.org/syntax/over-clause.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Over {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Over<'bump> {
     /// Window definition
-    Window(Box<Window>),
+    Window(Box<'bump, Window<'bump>>),
     /// Window name
-    Name(Name),
+    Name(Name<'bump>),
 }
 
 /// `OVER` window definition
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct WindowDef {
+#[derive(Debug, PartialEq, Eq)]
+pub struct WindowDef<'bump> {
     /// window name
-    pub name: Name,
+    pub name: Name<'bump>,
     /// window definition
-    pub window: Window,
+    pub window: Window<'bump>,
 }
 
 /// Window definition
 // https://sqlite.org/syntax/window-defn.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Window {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Window<'bump> {
     /// base window name
-    pub base: Option<Name>,
+    pub base: Option<Name<'bump>>,
     /// `PARTITION BY`
-    pub partition_by: Option<Vec<Expr>>,
+    pub partition_by: Option<Vec<'bump, Expr<'bump>>>,
     /// `ORDER BY`
-    pub order_by: Option<Vec<SortedColumn>>,
+    pub order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
     /// frame spec
-    pub frame_clause: Option<FrameClause>,
+    pub frame_clause: Option<FrameClause<'bump>>,
 }
 
 /// Frame specification
 // https://sqlite.org/syntax/frame-spec.html
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FrameClause {
+#[derive(Debug, PartialEq, Eq)]
+pub struct FrameClause<'bump> {
     /// unit
     pub mode: FrameMode,
     /// start bound
-    pub start: FrameBound,
+    pub start: FrameBound<'bump>,
     /// end bound
-    pub end: Option<FrameBound>,
+    pub end: Option<FrameBound<'bump>>,
     /// `EXCLUDE`
     pub exclude: Option<FrameExclude>,
 }
@@ -2285,14 +2337,14 @@ pub enum FrameMode {
 }
 
 /// Frame bounds
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FrameBound {
+#[derive(Debug, PartialEq, Eq)]
+pub enum FrameBound<'bump> {
     /// `CURRENT ROW`
     CurrentRow,
     /// `FOLLOWING`
-    Following(Expr),
+    Following(Expr<'bump>),
     /// `PRECEDING`
-    Preceding(Expr),
+    Preceding(Expr<'bump>),
     /// `UNBOUNDED FOLLOWING`
     UnboundedFollowing,
     /// `UNBOUNDED PRECEDING`
@@ -2318,15 +2370,16 @@ mod test {
 
     #[test]
     fn test_dequote() {
-        assert_eq!(name("x"), "x");
-        assert_eq!(name("`x`"), "x");
-        assert_eq!(name("`x``y`"), "x`y");
-        assert_eq!(name(r#""x""#), "x");
-        assert_eq!(name(r#""x""y""#), "x\"y");
-        assert_eq!(name("[x]"), "x");
+        let b = bumpalo::Bump::new();
+        assert_eq!(name("x", &b), "x");
+        assert_eq!(name("`x`", &b), "x");
+        assert_eq!(name("`x``y`", &b), "x`y");
+        assert_eq!(name(r#""x""#, &b), "x");
+        assert_eq!(name(r#""x""y""#, &b), "x\"y");
+        assert_eq!(name("[x]", &b), "x");
     }
 
-    fn name(s: &'static str) -> Name {
-        Name(s.into())
+    fn name<'bump>(s: &'static str, b: &'bump bumpalo::Bump) -> Name<'bump> {
+        Name(bumpalo::collections::String::from_str_in(s, b))
     }
 }

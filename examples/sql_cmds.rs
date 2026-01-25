@@ -1,3 +1,4 @@
+use bumpalo::Bump;
 use fallible_iterator::FallibleIterator;
 use std::env;
 use std::fs::read;
@@ -15,7 +16,8 @@ fn main() {
         println!("{arg}");
         let result = panic::catch_unwind(|| {
             let input = read(arg.clone()).unwrap();
-            let mut parser = Parser::new(input.as_ref());
+            let bump = Bump::new();
+            let mut parser = Parser::new(&bump, input.as_ref());
             loop {
                 match parser.next() {
                     Ok(None) => break,
