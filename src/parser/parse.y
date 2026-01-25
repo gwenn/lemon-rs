@@ -54,12 +54,18 @@
 // code file that implements the parser.
 //
 %include {
+use bumpalo::{
+    boxed::Box,
+    collections::{String, Vec},
+    Bump,
+};
+use indexmap::IndexMap;
+use log::error;
+
 use crate::custom_err;
 use crate::parser::ast::*;
 use crate::parser::{Context, ParserError};
 use crate::dialect::{from_bytes, from_token, Token, TokenType};
-use indexmap::IndexMap;
-use log::error;
 
 #[expect(non_camel_case_types)]
 type sqlite3ParserError = crate::parser::ParserError;
@@ -82,7 +88,7 @@ cmdx ::= cmd.           { self.ctx.sqlite3_finish_coding(); }
 //
 
 cmd ::= BEGIN transtype(Y) trans_opt(X).  {self.ctx.stmt = Some(Stmt::Begin(Y, X));}
-%type trans_opt {Option<Name>}
+%type trans_opt "Option<Name<'input>>"
 trans_opt(A) ::= .               {A = None;}
 trans_opt(A) ::= TRANSACTION.    {A = None;}
 trans_opt(A) ::= TRANSACTION nm(X). {A = Some(X);}
@@ -122,7 +128,7 @@ temp(A) ::= TEMP.  {A = true;}
 %endif  SQLITE_OMIT_TEMPDB
 temp(A) ::= .      {A = false;}
 
-%type create_table_args {CreateTableBody}
+%type create_table_args "CreateTableBody<'input>"
 create_table_args(A) ::= LP columnlist(C) conslist_opt(X) RP table_option_set(F). {
   A = CreateTableBody::columns_and_constraints(C, X, F)?;
 }
@@ -150,7 +156,7 @@ table_option(A) ::= nm(X). {
     return Err(custom_err!("unknown table option: {}", option));
   }
 }
-%type columnlist {IndexMap<Name,ColumnDefinition>}
+%type columnlist "IndexMap<Name<'input>,ColumnDefinition<'input>>"
 columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
   let col = X;
   let cd = ColumnDefinition::new(col.0, col.1, Y)?;
@@ -163,7 +169,7 @@ columnlist(A) ::= columnname(X) carglist(Y). {
   ColumnDefinition::add_column(&mut map, cd)?;
   A = map;
 }
-%type columnname {(Name, Option<Type>)}
+%type columnname "(Name<'input>, Option<Type<'input>>)"
 columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 
 // Declare some tokens early in order to influence their values, to
@@ -249,7 +255,7 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 
 // The name of a column or table can be any of the following:
 //
-%type nm {Name}
+%type nm "Name<'input>"
 nm(A) ::= idj(X). { A = Name::from_token(@X, X); }
 nm(A) ::= STRING(X). { A = Name::from_token(@X, X); }
 
@@ -257,7 +263,7 @@ nm(A) ::= STRING(X). { A = Name::from_token(@X, X); }
 // as can be found after the column name in a CREATE TABLE statement.
 // Multiple tokens are concatenated to form the value of the typetoken.
 //
-%type typetoken {Option<Type>}
+%type typetoken "Option<Type<'input>>"
 typetoken(A) ::= .   {A = None;}
 typetoken(A) ::= typename(X). {A = Some(Type{ name: X, size: None });}
 typetoken(A) ::= typename(X) LP signed(Y) RP. {
@@ -269,7 +275,7 @@ typetoken(A) ::= typename(X) LP signed(Y) COMMA signed(Z) RP. {
 %type typename {String}
 typename(A) ::= ids(X). {A=from_token(@X, X).into();}
 typename(A) ::= typename(A) ids(Y). {let ids=from_token(@Y, Y); A.push(' '); A.push_str(&ids);}
-%type signed {Expr}
+%type signed "Expr<'input>"
 signed ::= plus_num.
 signed ::= minus_num.
 
@@ -290,10 +296,10 @@ signed ::= minus_num.
 // "carglist" is a list of additional constraints that come after the
 // column name and column type in a CREATE TABLE statement.
 //
-%type carglist {Vec<NamedColumnConstraint>}
+%type carglist "Vec<'input, NamedColumnConstraint<'input>>"
 carglist(A) ::= carglist(A) ccons(X). {if self.ctx.no_constraint_name() { let cc = X; A.push(cc); }}
 carglist(A) ::= .                     {A = vec![];}
-%type ccons {NamedColumnConstraint}
+%type ccons "NamedColumnConstraint<'input>"
 ccons ::= CONSTRAINT nm(X).           { self.ctx.constraint_name = Some(X);}
 ccons(A) ::= DEFAULT term(X). {
   let name = self.ctx.constraint_name();
@@ -374,7 +380,7 @@ ccons(A) ::= AS generated(X). {
   let constraint = X;
   A = NamedColumnConstraint{ name, constraint };
 }
-%type generated {ColumnConstraint}
+%type generated "ColumnConstraint<'input>"
 generated(X) ::= LP expr(E) RP. {
   X = ColumnConstraint::Generated{ expr: E, typ: None };
 }
@@ -392,15 +398,15 @@ autoinc(X) ::= AUTOINCR.  {X = true;}
 // or immediate and which determine what action to take if a ref-integ
 // check fails.
 //
-%type refargs {Vec<RefArg>}
+%type refargs "Vec<'input, RefArg<'input>>"
 refargs(A) ::= .                  { A = vec![]; /* EV: R-19803-45884 */}
 refargs(A) ::= refargs(A) refarg(Y). { let ra = Y; A.push(ra); }
-%type refarg {RefArg}
+%type refarg "RefArg<'input>"
 refarg(A) ::= MATCH nm(X).              { A = RefArg::Match(X); }
 refarg(A) ::= ON INSERT refact(X).      { A = RefArg::OnInsert(X); }
 refarg(A) ::= ON DELETE refact(X).   { A = RefArg::OnDelete(X); }
 refarg(A) ::= ON UPDATE refact(X).   { A = RefArg::OnUpdate(X); }
-%type refact {RefAct}
+%type refact "RefAct<'input>"
 refact(A) ::= SET NULL.              { A = RefAct::SetNull;  /* EV: R-33326-45252 */}
 refact(A) ::= SET DEFAULT.           { A = RefAct::SetDefault;  /* EV: R-33326-45252 */}
 refact(A) ::= CASCADE.               { A = RefAct::Cascade;  /* EV: R-33326-45252 */}
@@ -414,15 +420,15 @@ init_deferred_pred_opt(A) ::= .                       {A = None;}
 init_deferred_pred_opt(A) ::= INITIALLY DEFERRED.     {A = Some(InitDeferredPred::InitiallyDeferred);}
 init_deferred_pred_opt(A) ::= INITIALLY IMMEDIATE.    {A = Some(InitDeferredPred::InitiallyImmediate);}
 
-%type conslist_opt {Option<Vec<NamedTableConstraint>>}
+%type conslist_opt "Option<Vec<'input, NamedTableConstraint<'input>>>"
 conslist_opt(A) ::= .                         {A = None;}
 conslist_opt(A) ::= COMMA conslist(X).        {A = Some(X);}
-%type conslist {Vec<NamedTableConstraint>}
+%type conslist "Vec<'input, NamedTableConstraint<'input>>"
 conslist(A) ::= conslist(A) tconscomma tcons(X). {if self.ctx.no_constraint_name() { let tc = X; A.push(tc); }}
 conslist(A) ::= tcons(X).                        {if self.ctx.no_constraint_name() { let tc = X; A = vec![tc]; } else { A = vec![]; }}
 tconscomma ::= COMMA.            { self.ctx.constraint_name = None;} // TODO Validate: useful ?
 tconscomma ::= .
-%type tcons {NamedTableConstraint}
+%type tcons "NamedTableConstraint<'input>"
 tcons ::= CONSTRAINT nm(X).      { self.ctx.constraint_name = Some(X)}
 tcons(A) ::= PRIMARY KEY LP sortlist(X) autoinc(I) RP onconf(R). {
   let name = self.ctx.constraint_name();
@@ -492,9 +498,9 @@ cmd ::= select(X).  {
   self.ctx.stmt = Some(Stmt::Select(Box::new(X)));
 }
 
-%type select {Select}
-%type selectnowith {SelectBody}
-%type oneselect {OneSelect}
+%type select "Select<'input>"
+%type selectnowith "SelectBody<'input>"
+%type oneselect "OneSelect<'input>"
 
 %include {
 }
@@ -540,7 +546,7 @@ oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
 
 // Single row VALUES clause.
 //
-%type values {Vec<Vec<Expr>>}
+%type values "Vec<'input, Vec<'input, Expr<'input>>>"
 oneselect(A) ::= values(X). { A = OneSelect::Values(X); }
 
 values(A) ::= VALUES LP nexprlist(X) RP. {
@@ -549,7 +555,7 @@ values(A) ::= VALUES LP nexprlist(X) RP. {
 
 // Multiple row VALUES clause.
 //
-%type mvalues {Vec<Vec<Expr>>}
+%type mvalues "Vec<'input, Vec<'input, Expr<'input>>>"
 oneselect(A) ::= mvalues(X). {
   A = OneSelect::Values(X);
 }
@@ -575,8 +581,8 @@ distinct(A) ::= .           {A = None;}
 // "SELECT * FROM ..." is encoded as a special expression with an
 // opcode of TK_ASTERISK.
 //
-%type selcollist {Vec<ResultColumn>}
-%type sclp {Vec<ResultColumn>}
+%type selcollist "Vec<'input, ResultColumn<'input>>"
+%type sclp "Vec<'input, ResultColumn<'input>>"
 sclp(A) ::= selcollist(A) COMMA.
 sclp(A) ::= .                                {A = Vec::<ResultColumn>::new();}
 selcollist(A) ::= sclp(A) expr(X) as(Y).     {
@@ -595,15 +601,15 @@ selcollist(A) ::= sclp(A) nm(X) DOT STAR. {
 // An option "AS <id>" phrase that can follow one of the expressions that
 // define the result set, or one of the tables in the FROM clause.
 //
-%type as {Option<As>}
+%type as "Option<As<'input>>"
 as(X) ::= AS nm(Y).    {X = Some(As::As(Y));}
 as(X) ::= ids(Y).      {X = Some(As::Elided(Name::from_token(@Y, Y)));}
 as(X) ::= .            {X = None;}
 
 
-%type seltablist {FromClause}
-%type stl_prefix {FromClause}
-%type from {Option<FromClause>}
+%type seltablist "FromClause<'input>"
+%type stl_prefix "FromClause<'input>"
+%type from "Option<FromClause<'input>>"
 
 // A complete FROM clause.
 //
@@ -643,7 +649,7 @@ seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z) on_using(N).
   }
 %endif  SQLITE_OMIT_SUBQUERY
 
-%type fullname {QualifiedName}
+%type fullname "QualifiedName<'input>"
 fullname(A) ::= nm(X).  {
   A = QualifiedName::single(X);
 }
@@ -651,7 +657,7 @@ fullname(A) ::= nm(X) DOT nm(Y). {
   A = QualifiedName::fullname(X, Y);
 }
 
-%type xfullname {QualifiedName}
+%type xfullname "QualifiedName<'input>"
 xfullname(A) ::= nm(X).  {
   A = QualifiedName::single(X);
 }
@@ -692,7 +698,7 @@ joinop(X) ::= JOIN_KW(A) nm(B) nm(C) JOIN.
 // The [AND] and [OR] precedence marks in the rules for on_using cause the
 // ON in this context to always be interpreted as belonging to the JOIN.
 //
-%type on_using {Option<JoinConstraint>}
+%type on_using "Option<JoinConstraint<'input>>"
 on_using(N) ::= ON expr(E).            {N = Some(JoinConstraint::On(E));}
 on_using(N) ::= USING LP idlist(L) RP. {N = Some(JoinConstraint::Using(L));}
 on_using(N) ::= .                 [OR] {N = None;}
@@ -707,18 +713,18 @@ on_using(N) ::= .                 [OR] {N = None;}
 // normally illegal. The sqlite3SrcListIndexedBy() function
 // recognizes and interprets this as a special case.
 //
-%type indexed_opt {Option<Indexed>}
+%type indexed_opt "Option<Indexed<'input>>"
 indexed_opt(A) ::= .                 {A = None;}
 indexed_opt(A) ::= INDEXED BY nm(X). {A = Some(Indexed::IndexedBy(X));}
 indexed_opt(A) ::= NOT INDEXED.      {A = Some(Indexed::NotIndexed);}
 
-%type orderby_opt {Option<Vec<SortedColumn>>}
+%type orderby_opt "Option<Vec<'input, SortedColumn<'input>>>"
 
 // the sortlist non-terminal stores a list of expression where each
 // expression is optionally followed by ASC or DESC to indicate the
 // sort order.
 //
-%type sortlist {Vec<SortedColumn>}
+%type sortlist "Vec<'input, SortedColumn<'input>>"
 
 orderby_opt(A) ::= .                          {A = None;}
 orderby_opt(A) ::= ORDER BY sortlist(X).      {A = Some(X);}
@@ -741,15 +747,15 @@ nulls(A) ::= NULLS FIRST.       {A = Some(NullsOrder::First);}
 nulls(A) ::= NULLS LAST.        {A = Some(NullsOrder::Last);}
 nulls(A) ::= .                  {A = None;}
 
-%type groupby_opt {Option<Vec<Expr>>}
+%type groupby_opt "Option<Vec<'input, Expr<'input>>>"
 groupby_opt(A) ::= .                      {A = None;}
 groupby_opt(A) ::= GROUP BY nexprlist(X). {A = Some(X);}
 
-%type having_opt {Option<Expr>}
+%type having_opt "Option<Expr<'input>>"
 having_opt(A) ::= .                {A = None;}
 having_opt(A) ::= HAVING expr(X).  {A = Some(X);}
 
-%type limit_opt {Option<Limit>}
+%type limit_opt "Option<Limit<'input>>"
 
 // The destructor for limit_opt will never fire in the current grammar.
 // The limit_opt non-terminal only occurs at the end of a single production
@@ -784,8 +790,8 @@ cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt_ret(W). {
 }
 %endif
 
-%type where_opt {Option<Expr>}
-%type where_opt_ret {(Option<Expr>, Option<Vec<ResultColumn>>)}
+%type where_opt "Option<Expr<'input>>"
+%type where_opt_ret "(Option<Expr<'input>>, Option<Vec<'input, ResultColumn<'input>>>)"
 
 where_opt(A) ::= .                    {A = None;}
 where_opt(A) ::= WHERE expr(X).       {A = Some(X);}
@@ -816,7 +822,7 @@ cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from
 
 
 
-%type setlist {Vec<Set>}
+%type setlist "Vec<'input, Set<'input>>"
 
 setlist(A) ::= setlist(A) COMMA nm(X) EQ expr(Y). {
   let s = Set{ col_names: DistinctNames::single(X), expr: Y };
@@ -849,7 +855,7 @@ cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) DEFAULT VALUES ret
                                      body, returning: Y });
 }
 
-%type upsert {(Option<Upsert>, Option<Vec<ResultColumn>>)}
+%type upsert "(Option<Upsert<'input>>, Option<Vec<'input, ResultColumn<'input>>>)"
 
 // Because upsert only occurs at the tip end of the INSERT rule for cmd,
 // there is never a case where the value of the upsert pointer will not
@@ -874,7 +880,7 @@ upsert(A) ::= ON CONFLICT DO UPDATE SET setlist(Z) where_opt(W) returning(R).
               { let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
                 A = (Some(Upsert{ index: None, do_clause, next: None }), R);}
 
-%type returning {Option<Vec<ResultColumn>>}
+%type returning "Option<Vec<'input, ResultColumn<'input>>>"
 returning(A) ::= RETURNING selcollist(X).  {A = Some(X);}
 returning(A) ::= . {A = None;}
 
@@ -882,8 +888,8 @@ returning(A) ::= . {A = None;}
 insert_cmd(A) ::= INSERT orconf(R).   {A = R;}
 insert_cmd(A) ::= REPLACE.            {A = Some(ResolveType::Replace);}
 
-%type idlist_opt {Option<DistinctNames>}
-%type idlist {DistinctNames}
+%type idlist_opt "Option<DistinctNames<'input>>"
+%type idlist "DistinctNames<'input>"
 idlist_opt(A) ::= .                       {A = None;}
 idlist_opt(A) ::= LP idlist(X) RP.    {A = Some(X);}
 idlist(A) ::= idlist(A) COMMA nm(Y).
@@ -894,8 +900,8 @@ idlist(A) ::= nm(Y).
 /////////////////////////// Expression Processing /////////////////////////////
 //
 
-%type expr {Expr}
-%type term {Expr}
+%type expr "Expr<'input>"
+%type term "Expr<'input>"
 
 %include {
 }
@@ -1061,7 +1067,7 @@ expr(A) ::= expr(B) between_op(N) expr(X) AND expr(Y). [BETWEEN] {
 expr(A) ::= CASE case_operand(X) case_exprlist(Y) case_else(Z) END. {
   A = Expr::Case{ base: X.map(Box::new), when_then_pairs: Y, else_expr: Z.map(Box::new)};
 }
-%type case_exprlist {Vec<(Expr, Expr)>}
+%type case_exprlist "Vec<'input, (Expr<'input>, Expr<'input>)>"
 case_exprlist(A) ::= case_exprlist(A) WHEN expr(Y) THEN expr(Z). {
   let pair = (Y, Z);
   A.push(pair);
@@ -1069,15 +1075,15 @@ case_exprlist(A) ::= case_exprlist(A) WHEN expr(Y) THEN expr(Z). {
 case_exprlist(A) ::= WHEN expr(Y) THEN expr(Z). {
   A = vec![(Y, Z)];
 }
-%type case_else {Option<Expr>}
+%type case_else "Option<Expr<'input>>"
 case_else(A) ::=  ELSE expr(X).         {A = Some(X);}
 case_else(A) ::=  .                     {A = None;}
-%type case_operand {Option<Expr>}
+%type case_operand "Option<Expr<'input>>"
 case_operand(A) ::= expr(X).            {A = Some(X); /*A-overwrites-X*/}
 case_operand(A) ::= .                   {A = None;}
 
-%type exprlist {Option<Vec<Expr>>}
-%type nexprlist {Vec<Expr>}
+%type exprlist "Option<Vec<'input, Expr<'input>>>"
+%type nexprlist "Vec<'input, Expr<'input>>"
 
 exprlist(A) ::= nexprlist(X).                {A = Some(X);}
 exprlist(A) ::= .                            {A = None;}
@@ -1089,7 +1095,7 @@ nexprlist(A) ::= expr(Y).
 %ifndef SQLITE_OMIT_SUBQUERY
 /* A paren_exprlist is an optional expression list contained inside
 ** of parenthesis */
-%type paren_exprlist {Option<Vec<Expr>>}
+%type paren_exprlist "Option<Vec<'input, Expr<'input>>>"
 paren_exprlist(A) ::= .   {A = None;}
 paren_exprlist(A) ::= LP exprlist(X) RP.  {A = X;}
 %endif SQLITE_OMIT_SUBQUERY
@@ -1122,8 +1128,8 @@ uniqueflag(A) ::= .        {A = false;}
 // (busted) old databases, we need to continue parsing them when loading
 // historical schemas.
 //
-%type eidlist {Vec<IndexedColumn>}
-%type eidlist_opt {Option<Vec<IndexedColumn>>}
+%type eidlist "Vec<'input, IndexedColumn<'input>>"
+%type eidlist_opt "Option<Vec<'input, IndexedColumn<'input>>>"
 
 %include {
 } // end %include
@@ -1140,7 +1146,7 @@ eidlist(A) ::= nm(Y) collate(C) sortorder(Z). {
   A = vec![IndexedColumn{ col_name: Y, collation_name: C, order: Z }]; /*A-overwrites-Y*/
 }
 
-%type collate {Option<Name>}
+%type collate "Option<Name<'input>>"
 collate(C) ::= .              {C = None;}
 collate(C) ::= COLLATE ids(X).   {C = Some(Name::from_token(@X, X));}
 
@@ -1152,7 +1158,7 @@ cmd ::= DROP INDEX ifexists(E) fullname(X).   {self.ctx.stmt = Some(Stmt::DropIn
 ///////////////////////////// The VACUUM command /////////////////////////////
 //
 %if !SQLITE_OMIT_VACUUM && !SQLITE_OMIT_ATTACH
-%type vinto {Option<Expr>}
+%type vinto "Option<Expr<'input>>"
 cmd ::= VACUUM vinto(Y).                {self.ctx.stmt = Some(Stmt::Vacuum(None, Y));}
 cmd ::= VACUUM nm(X) vinto(Y).          {self.ctx.stmt = Some(Stmt::Vacuum(Some(X), Y));}
 vinto(A) ::= INTO expr(X).              {A = Some(X);}
@@ -1170,7 +1176,7 @@ cmd ::= PRAGMA fullname(X) EQ minus_num(Y).
 cmd ::= PRAGMA fullname(X) LP minus_num(Y) RP.
                                              {self.ctx.stmt = Some(Stmt::Pragma(X, Some(PragmaBody::Call(Y))));}
 
-%type nmnum {Expr}
+%type nmnum "Expr<'input>"
 nmnum(A) ::= plus_num(A).
 nmnum(A) ::= nm(X). {A = Expr::Name(X);}
 nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
@@ -1178,10 +1184,10 @@ nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));
 nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
 %endif SQLITE_OMIT_PRAGMA
 %token_class number INTEGER|FLOAT.
-%type plus_num {Expr}
+%type plus_num "Expr<'input>"
 plus_num(A) ::= PLUS number(X).       {A = Expr::unary(UnaryOperator::Positive, Expr::Literal(Literal::Numeric(X.unwrap())));}
 plus_num(A) ::= number(X).            {A = Expr::Literal(Literal::Numeric(X.unwrap()));}
-%type minus_num {Expr}
+%type minus_num "Expr<'input>"
 minus_num(A) ::= MINUS number(X).     {A = Expr::unary(UnaryOperator::Negative, Expr::Literal(Literal::Numeric(X.unwrap())));}
 //////////////////////////// The CREATE TRIGGER command /////////////////////
 
@@ -1201,7 +1207,7 @@ trigger_time(A) ::= AFTER.  { A = Some(TriggerTime::After); }
 trigger_time(A) ::= INSTEAD OF.  { A = Some(TriggerTime::InsteadOf);}
 trigger_time(A) ::= .            { A = None; }
 
-%type trigger_event {TriggerEvent}
+%type trigger_event "TriggerEvent<'input>"
 trigger_event(A) ::= DELETE.   {A = TriggerEvent::Delete;}
 trigger_event(A) ::= INSERT.   {A = TriggerEvent::Insert;}
 trigger_event(A) ::= UPDATE.          {A = TriggerEvent::Update;}
@@ -1211,11 +1217,11 @@ trigger_event(A) ::= UPDATE OF idlist(X).{A = TriggerEvent::UpdateOf(X);}
 foreach_clause(A) ::= .             { A = false; }
 foreach_clause(A) ::= FOR EACH ROW. { A = true;  }
 
-%type when_clause {Option<Expr>}
+%type when_clause "Option<Expr<'input>>"
 when_clause(A) ::= .             { A = None; }
 when_clause(A) ::= WHEN expr(X). { A = Some(X); }
 
-%type trigger_cmd_list {Vec<TriggerCmd>}
+%type trigger_cmd_list "Vec<'input, TriggerCmd<'input>>"
 trigger_cmd_list(A) ::= trigger_cmd_list(A) trigger_cmd(X) SEMI. {
   let tc = X;
   A.push(tc);
@@ -1242,7 +1248,7 @@ tridxby ::= NOT INDEXED. {
 
 
 
-%type trigger_cmd {TriggerCmd}
+%type trigger_cmd "TriggerCmd<'input>"
 // UPDATE
 trigger_cmd(A) ::=
    UPDATE orconf(R) xfullname(X) tridxby SET setlist(Y) from(F) where_opt(Z).
@@ -1296,7 +1302,7 @@ cmd ::= DETACH database_kw_opt expr(D). {
   self.ctx.stmt = Some(Stmt::Detach(D));
 }
 
-%type key_opt {Option<Expr>}
+%type key_opt "Option<Expr<'input>>"
 key_opt(A) ::= .                     { A = None; }
 key_opt(A) ::= KEY expr(X).          { A = Some(X); }
 
@@ -1363,7 +1369,7 @@ cmd ::= create_vtab(X) LP vtabarglist RP.  {
   }
   self.ctx.stmt = Some(stmt);
 }
-%type create_vtab {Stmt}
+%type create_vtab "Stmt<'input>"
 create_vtab(A) ::= createkw VIRTUAL TABLE ifnotexists(E)
                 fullname(X) USING nm(Z). {
     A = Stmt::CreateVirtualTable{ if_not_exists: E, tbl_name: X, module_name: Z, args: None };
@@ -1382,9 +1388,9 @@ anylist ::= anylist ANY.
 
 
 //////////////////////// COMMON TABLE EXPRESSIONS ////////////////////////////
-%type with {Option<With>}
-%type wqlist {Vec<CommonTableExpr>}
-%type wqitem {CommonTableExpr}
+%type with "Option<With<'input>>"
+%type wqlist "Vec<'input, CommonTableExpr<'input>>"
+%type wqitem "CommonTableExpr<'input>"
 // %destructor wqitem {sqlite3CteDelete(pParse->db, $$);} // not reachable
 
 with(A) ::= . { A = None; }
@@ -1416,33 +1422,33 @@ wqlist(A) ::= wqlist(A) COMMA wqitem(X). {
 // and TK_ILLEGAL.
 //
 %ifndef SQLITE_OMIT_WINDOWFUNC
-%type windowdefn_list {Vec<WindowDef>}
+%type windowdefn_list "Vec<'input, WindowDef<'input>>"
 windowdefn_list(A) ::= windowdefn(Z). { A = vec![Z]; }
 windowdefn_list(A) ::= windowdefn_list(A) COMMA windowdefn(Z). {
   let w = Z;
   A.push(w);
 }
 
-%type windowdefn {WindowDef}
+%type windowdefn "WindowDef<'input>"
 windowdefn(A) ::= nm(X) AS LP window(Y) RP. {
   A = WindowDef { name: X, window: Y};
 }
 
-%type window {Window}
+%type window "Window<'input>"
 
-%type frame_opt {Option<FrameClause>}
+%type frame_opt "Option<FrameClause<'input>>"
 
-%type filter_clause {Expr}
+%type filter_clause "Expr<'input>"
 
-%type over_clause {Over}
+%type over_clause "Over<'input>"
 
-%type filter_over {FunctionTail}
+%type filter_over "FunctionTail<'input>"
 
 %type range_or_rows {FrameMode}
 
-%type frame_bound {FrameBound}
-%type frame_bound_s {FrameBound}
-%type frame_bound_e {FrameBound}
+%type frame_bound "FrameBound<'input>"
+%type frame_bound_s "FrameBound<'input>"
+%type frame_bound_e "FrameBound<'input>"
 
 window(A) ::= PARTITION BY nexprlist(X) orderby_opt(Y) frame_opt(Z). {
   A = Window{ base: None,  partition_by: Some(X), order_by: Y, frame_clause: Z};
@@ -1498,7 +1504,7 @@ frame_exclude(A) ::= CURRENT ROW. { A = FrameExclude::CurrentRow; }
 frame_exclude(A) ::= GROUP.       { A = FrameExclude::Group; }
 frame_exclude(A) ::= TIES.        { A = FrameExclude::Ties; }
 
-%type window_clause {Vec<WindowDef>}
+%type window_clause "Vec<'input, WindowDef<'input>>"
 window_clause(A) ::= WINDOW windowdefn_list(B). { A = B; }
 
 filter_over(A) ::= filter_clause(F) over_clause(O). {

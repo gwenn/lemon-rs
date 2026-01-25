@@ -1,5 +1,6 @@
 //! SQLite dialect
 
+use bumpalo::Bump;
 use std::fmt::Formatter;
 use std::str;
 use uncased::UncasedStr;
@@ -17,8 +18,8 @@ pub(crate) fn sentinel(start: usize) -> Token<'static> {
 
 impl Token<'_> {
     /// Access token value
-    pub fn unwrap(self) -> Box<str> {
-        from_bytes(self.1)
+    pub fn unwrap<'bump>(self, b: &'bump Bump) -> bumpalo::collections::String<'bump> {
+        from_bytes(self.1, b)
     }
 }
 
@@ -37,8 +38,11 @@ impl TokenType {
     }
 }
 
-pub(crate) fn from_bytes(bytes: &[u8]) -> Box<str> {
-    String::from_utf8_lossy(bytes).into()
+pub(crate) fn from_bytes<'bump>(
+    bytes: &[u8],
+    b: &'bump Bump,
+) -> bumpalo::collections::String<'bump> {
+    bumpalo::collections::String::from_utf8_lossy_in(bytes, b)
 }
 
 include!(concat!(env!("OUT_DIR"), "/keywords.rs"));
@@ -75,8 +79,12 @@ pub(crate) fn is_identifier_continue(b: u8) -> bool {
 
 // keyword may become an identifier
 // see %fallback in parse.y
-pub(crate) fn from_token(_ty: u16, value: Token) -> Box<str> {
-    from_bytes(value.1)
+pub(crate) fn from_token<'bump>(
+    _ty: u16,
+    value: Token,
+    b: &'bump Bump,
+) -> bumpalo::collections::String<'bump> {
+    from_bytes(value.1, b)
 }
 
 impl TokenType {

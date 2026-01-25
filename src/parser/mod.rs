@@ -1,4 +1,5 @@
 //! SQLite parser
+use bumpalo::Bump;
 
 pub mod ast;
 pub mod parse {
@@ -56,19 +57,21 @@ macro_rules! custom_err {
 
 /// Parser context
 pub struct Context<'input> {
+    bump: &'input Bump,
     input: &'input [u8],
     explain: Option<ExplainKind>,
-    stmt: Option<Stmt>,
-    constraint_name: Option<Name>,      // transient
-    module_arg: Option<(usize, usize)>, // Complete text of a module argument
-    module_args: Option<Vec<Box<str>>>, // CREATE VIRTUAL TABLE args
+    stmt: Option<Stmt<'input>>,
+    constraint_name: Option<Name<'input>>, // transient
+    module_arg: Option<(usize, usize)>,    // Complete text of a module argument
+    module_args: Option<Vec<Box<str>>>,    // CREATE VIRTUAL TABLE args
     done: bool,
     error: Option<ParserError>,
 }
 
 impl<'input> Context<'input> {
-    pub fn new(input: &'input [u8]) -> Self {
+    pub fn new(bump: &'input Bump, input: &'input [u8]) -> Self {
         Context {
+            bump,
             input,
             explain: None,
             stmt: None,
@@ -81,7 +84,7 @@ impl<'input> Context<'input> {
     }
 
     /// Consume parsed command
-    pub fn cmd(&mut self) -> Option<Cmd> {
+    pub fn cmd(&mut self) -> Option<Cmd<'input>> {
         if let Some(stmt) = self.stmt.take() {
             match self.explain.take() {
                 Some(ExplainKind::Explain) => Some(Cmd::Explain(stmt)),
