@@ -58,7 +58,7 @@ fn main() {
                         let raw = str::from_utf8(token).unwrap();
                         let res = raw.parse::<f64>();
                         if let Err(err) = res {
-                            eprintln!("Err: {} in {}", err, arg);
+                            eprintln!("Err: {err} in {arg}");
                         }
                         //debug_assert!(str::from_utf8(token).unwrap().parse::<f64>().is_ok())
                     }
