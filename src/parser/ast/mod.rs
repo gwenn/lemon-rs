@@ -347,34 +347,34 @@ pub enum Expr {
     /// `BETWEEN`
     Between {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<Self>,
         /// `NOT`
         not: bool,
         /// start
-        start: Box<Expr>,
+        start: Box<Self>,
         /// end
-        end: Box<Expr>,
+        end: Box<Self>,
     },
     /// binary expression
-    Binary(Box<Expr>, Operator, Box<Expr>),
+    Binary(Box<Self>, Operator, Box<Self>),
     /// `CASE` expression
     Case {
         /// operand
-        base: Option<Box<Expr>>,
+        base: Option<Box<Self>>,
         /// `WHEN` condition `THEN` result
-        when_then_pairs: Vec<(Expr, Expr)>,
+        when_then_pairs: Vec<(Self, Self)>,
         /// `ELSE` result
-        else_expr: Option<Box<Expr>>,
+        else_expr: Option<Box<Self>>,
     },
     /// CAST expression
     Cast {
         /// expression
-        expr: Box<Expr>,
+        expr: Box<Self>,
         /// `AS` type name
         type_name: Option<Type>,
     },
     /// `COLLATE`: expression
-    Collate(Box<Expr>, Box<str>),
+    Collate(Box<Self>, Box<str>),
     /// schema-name.table-name.column-name
     DoublyQualified(Name, Name, Name),
     /// `EXISTS` subquery
@@ -386,7 +386,7 @@ pub enum Expr {
         /// `DISTINCT`
         distinctness: Option<Distinctness>,
         /// arguments
-        args: Option<Vec<Expr>>,
+        args: Option<Vec<Self>>,
         /// `ORDER BY` or `WITHIN GROUP`
         order_by: Option<FunctionCallOrder>,
         /// `FILTER`
@@ -404,16 +404,16 @@ pub enum Expr {
     /// `IN`
     InList {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<Self>,
         /// `NOT`
         not: bool,
         /// values
-        rhs: Option<Vec<Expr>>,
+        rhs: Option<Vec<Self>>,
     },
     /// `IN` subselect
     InSelect {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<Self>,
         /// `NOT`
         not: bool,
         /// subquery
@@ -422,45 +422,45 @@ pub enum Expr {
     /// `IN` table name / function
     InTable {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<Self>,
         /// `NOT`
         not: bool,
         /// table name
         rhs: QualifiedName,
         /// table function arguments
-        args: Option<Vec<Expr>>,
+        args: Option<Vec<Self>>,
     },
     /// `IS NULL`
-    IsNull(Box<Expr>),
+    IsNull(Box<Self>),
     /// `LIKE`
     Like {
         /// expression
-        lhs: Box<Expr>,
+        lhs: Box<Self>,
         /// `NOT`
         not: bool,
         /// operator
         op: LikeOperator,
         /// pattern
-        rhs: Box<Expr>,
+        rhs: Box<Self>,
         /// `ESCAPE` char
-        escape: Option<Box<Expr>>,
+        escape: Option<Box<Self>>,
     },
     /// Literal expression
     Literal(Literal),
     /// Name
     Name(Name),
     /// `NOT NULL` or `NOTNULL`
-    NotNull(Box<Expr>),
+    NotNull(Box<Self>),
     /// Parenthesized subexpression
-    Parenthesized(Vec<Expr>),
+    Parenthesized(Vec<Self>),
     /// Qualified name
     Qualified(Name, Name),
     /// `RAISE` function call
-    Raise(ResolveType, Option<Box<Expr>>),
+    Raise(ResolveType, Option<Box<Self>>),
     /// Subquery expression
     Subquery(Box<Select>),
     /// Unary expression
-    Unary(UnaryOperator, Box<Expr>),
+    Unary(UnaryOperator, Box<Self>),
     /// Parameters
     Variable(Box<str>),
 }
@@ -2177,7 +2177,7 @@ pub struct Upsert {
     /// `DO` clause
     pub do_clause: UpsertDo,
     /// next upsert
-    pub next: Option<Box<Upsert>>,
+    pub next: Option<Box<Self>>,
 }
 
 /// Upsert conflict targets
