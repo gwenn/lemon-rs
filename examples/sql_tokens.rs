@@ -51,7 +51,7 @@ fn main() {
                             if res.is_err() {
                                 eprintln!("Err: {} in {}", res.unwrap_err(), arg);
                             }*/
-                            debug_assert!(token.iter().all(|b| b.is_ascii_digit() || *b == b'_'))
+                            debug_assert!(token.iter().all(|b| b.is_ascii_digit() || *b == b'_'));
                         }
                     }
                     TK_FLOAT => {
@@ -83,7 +83,7 @@ fn main() {
                     ),
                     _ => match token_type.as_str() {
                         Some(str) => {
-                            debug_assert!(str.eq_ignore_ascii_case(str::from_utf8(token).unwrap()))
+                            debug_assert!(str.eq_ignore_ascii_case(str::from_utf8(token).unwrap()));
                         }
                         _ => {
                             println!("'{}', {:?}", str::from_utf8(token).unwrap(), token_type);

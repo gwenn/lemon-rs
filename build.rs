@@ -1,6 +1,6 @@
 use std::env;
 use std::fs::File;
-use std::io::{BufWriter, Result, Write};
+use std::io::{BufWriter, Result, Write as _};
 use std::path::Path;
 use std::process::Command;
 

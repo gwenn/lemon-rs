@@ -1,4 +1,4 @@
-use fallible_iterator::FallibleIterator;
+use fallible_iterator::FallibleIterator as _;
 use sqlite3_parser::lexer::sql::Parser;
 
 // RUST_LOG=sqlite3Parser=debug

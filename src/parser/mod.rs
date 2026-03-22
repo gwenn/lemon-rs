@@ -106,9 +106,9 @@ impl<'input> Context<'input> {
     }
     fn vtab_arg_extend(&mut self, any: Token) {
         if let Some((_, ref mut n)) = self.module_arg {
-            *n = any.2
+            *n = any.2;
         } else {
-            self.module_arg = Some((any.0, any.2))
+            self.module_arg = Some((any.0, any.2));
         }
     }
     fn add_module_arg(&mut self) {

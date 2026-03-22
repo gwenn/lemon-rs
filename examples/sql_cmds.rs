@@ -1,4 +1,4 @@
-use fallible_iterator::FallibleIterator;
+use fallible_iterator::FallibleIterator as _;
 use std::env;
 use std::fs::read;
 use std::panic;

@@ -188,7 +188,7 @@ pub struct yyParser<'input> {
 }
 
 use std::cmp::Ordering;
-use std::ops::Neg;
+use std::ops::Neg as _;
 impl<'input> yyParser<'input> {
     fn shift(&self, shift: i8) -> usize {
         assert!(shift <= 1);
@@ -587,7 +587,7 @@ impl yyParser<'_> {
 /********** Begin reduce actions **********************************************/
 %%
 /********** End reduce actions ************************************************/
-        };
+        }
         let yygoto: YYCODETYPE = yyRuleInfoLhs[yyruleno as usize]; /* The next state */
         let yysize: i8 = yyRuleInfoNRhs[yyruleno as usize];  /* Amount to pop the stack */
         let yyact: YYACTIONTYPE = yy_find_reduce_action(self[yysize].stateno, yygoto); /* The next action */

@@ -48,3 +48,12 @@ uncased = "0.9.10"
 # to avoid stack overflow in yy_reduce
 opt-level = 1
 debug = true
+
+[workspace.lints.clippy]
+ref_option = "warn"
+semicolon_if_nothing_returned = "warn"
+unnecessary_semicolon = "warn"
+unused_trait_names = "warn"
+
+[lints]
+workspace = true
