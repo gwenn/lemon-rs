@@ -5,7 +5,7 @@ pub mod fmt;
 
 use std::num::ParseIntError;
 use std::ops::Deref;
-use std::str::{self, Bytes, FromStr};
+use std::str::{self, Bytes, FromStr as _};
 
 #[cfg(feature = "extra_checks")]
 use check::ColumnCount;

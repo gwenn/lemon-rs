@@ -15,7 +15,7 @@ mod error;
 #[cfg(test)]
 mod test;
 
-use crate::lexer::scan::{Pos, ScanError, Splitter};
+use crate::lexer::scan::{Pos, ScanError as _, Splitter};
 use crate::lexer::Scanner;
 pub use crate::parser::ParserError;
 pub use error::Error;
@@ -116,11 +116,11 @@ fn analyze_window_keyword(
     let t = get_token(scanner, input)?;
     if t != TK_ID {
         return Ok(TK_ID);
-    };
+    }
     let t = get_token(scanner, input)?;
     if t != TK_AS {
         return Ok(TK_ID);
-    };
+    }
     Ok(TK_WINDOW)
 }
 fn analyze_over_keyword(

@@ -147,7 +147,7 @@ static VALUES: [&[u8]; 136] = [
 fn bench_keyword_token(b: &mut Bencher) {
     b.iter(|| {
         for value in &VALUES {
-            assert!(keyword_token(value).is_some())
+            assert!(keyword_token(value).is_some());
         }
     });
 }

@@ -1,7 +1,7 @@
-use fallible_iterator::FallibleIterator;
+use fallible_iterator::FallibleIterator as _;
 
 use super::{Error, Parser};
-use crate::parser::ast::fmt::ToTokens;
+use crate::parser::ast::fmt::ToTokens as _;
 use crate::parser::{
     ast::{Cmd, Name, ParameterInfo, QualifiedName, Stmt},
     ParserError,
@@ -363,7 +363,7 @@ fn column_specified_more_than_once() {
     expect_parser_err_msg(
         b"INSERT INTO t (n, n, m) VALUES (1, 0, 2)",
         "column \"n\" specified more than once",
-    )
+    );
 }
 
 #[test]
@@ -460,7 +460,7 @@ fn unknown_join_type() {
     expect_parser_err_msg(
         b"SELECT * FROM t1 LEFT BOGUS JOIN t2;",
         "unknown join type: BOGUS",
-    )
+    );
 }
 
 #[test]
@@ -582,7 +582,7 @@ fn reserved_name() {
 }
 
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
-    expect_parser_err(input, ParserError::Custom(error_msg.to_owned()))
+    expect_parser_err(input, ParserError::Custom(error_msg.to_owned()));
 }
 fn expect_parser_err(input: &[u8], err: ParserError) {
     let r = parse(input);
@@ -590,7 +590,7 @@ fn expect_parser_err(input: &[u8], err: ParserError) {
         assert_eq!(e, err);
     } else {
         panic!("unexpected error type")
-    };
+    }
 }
 fn parse_cmd(input: &[u8]) -> Cmd {
     parse(input).unwrap().unwrap()
