@@ -1008,7 +1008,7 @@ expr(A) ::= expr(X) likeop(OP) expr(Y) ESCAPE expr(E).  [LIKE_KW]  {
 expr(A) ::= expr(X) ISNULL|NOTNULL(E).   {A = Expr::not_null(X, @E); /*A-overwrites-X*/}
 expr(A) ::= expr(X) NOT NULL.    {A = Expr::not_null(X, TokenType::TK_NOTNULL as YYCODETYPE); /*A-overwrites-X*/}
 
-//    expr1 IS expr2       same as    expr1 IS NOT DISTICT FROM expr2
+//    expr1 IS expr2       same as    expr1 IS NOT DISTINCT FROM expr2
 //    expr1 IS NOT expr2   same as    expr1 IS DISTINCT FROM expr2
 //
 expr(A) ::= expr(X) IS(OP) expr(Y).     {

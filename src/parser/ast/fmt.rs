@@ -1,5 +1,5 @@
 //! AST node format
-use std::fmt::{self, Display, Formatter, Write};
+use std::fmt::{self, Display, Formatter, Write as _};
 
 use crate::ast::*;
 use crate::dialect::TokenType::*;
@@ -20,7 +20,7 @@ impl TokenStream for FmtTokenStream<'_, '_> {
                     self.f.write_char(' ')?;
                     self.spaced = true;
                 }
-            };
+            }
         }
         if ty == TK_BLOB {
             self.f.write_char('X')?;
@@ -1817,7 +1817,7 @@ impl ToTokens for CommonTableExpr<'_> {
                 s.append(TK_NOT, None)?;
                 s.append(TK_MATERIALIZED, None)?;
             }
-        };
+        }
         s.append(TK_LP, None)?;
         self.select.to_tokens(s)?;
         s.append(TK_RP, None)

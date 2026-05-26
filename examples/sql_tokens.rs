@@ -51,14 +51,14 @@ fn main() {
                             if res.is_err() {
                                 eprintln!("Err: {} in {}", res.unwrap_err(), arg);
                             }*/
-                            debug_assert!(token.iter().all(|b| b.is_ascii_digit() || *b == b'_'))
+                            debug_assert!(token.iter().all(|b| b.is_ascii_digit() || *b == b'_'));
                         }
                     }
                     TK_FLOAT => {
                         let raw = str::from_utf8(token).unwrap();
                         let res = raw.parse::<f64>();
                         if let Err(err) = res {
-                            eprintln!("Err: {} in {}", err, arg);
+                            eprintln!("Err: {err} in {arg}");
                         }
                         //debug_assert!(str::from_utf8(token).unwrap().parse::<f64>().is_ok())
                     }
@@ -83,7 +83,7 @@ fn main() {
                     ),
                     _ => match token_type.as_str() {
                         Some(str) => {
-                            debug_assert!(str.eq_ignore_ascii_case(str::from_utf8(token).unwrap()))
+                            debug_assert!(str.eq_ignore_ascii_case(str::from_utf8(token).unwrap()));
                         }
                         _ => {
                             println!("'{}', {:?}", str::from_utf8(token).unwrap(), token_type);

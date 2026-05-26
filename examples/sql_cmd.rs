@@ -1,10 +1,10 @@
 use std::{
     env,
-    io::{stdin, IsTerminal, Read},
+    io::{stdin, IsTerminal as _, Read as _},
 };
 
 use bumpalo::Bump;
-use fallible_iterator::FallibleIterator;
+use fallible_iterator::FallibleIterator as _;
 use sqlite3_parser::lexer::sql::Parser;
 
 /// Parse args.
