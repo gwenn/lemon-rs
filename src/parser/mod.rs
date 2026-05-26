@@ -1,5 +1,5 @@
 //! SQLite parser
-use bumpalo::Bump;
+use bumpalo::{collections::Vec, Bump};
 
 pub mod ast;
 pub mod parse {
@@ -20,7 +20,7 @@ use ast::{Cmd, ExplainKind, Name, Stmt};
 #[derive(Debug, PartialEq)]
 pub enum ParserError {
     /// Syntax error
-    SyntaxError(Box<str>),
+    SyntaxError(String),
     /// Unexpected EOF
     UnexpectedEof,
     /// Custom error
@@ -63,7 +63,7 @@ pub struct Context<'input> {
     stmt: Option<Stmt<'input>>,
     constraint_name: Option<Name<'input>>, // transient
     module_arg: Option<(usize, usize)>,    // Complete text of a module argument
-    module_args: Option<Vec<Box<str>>>,    // CREATE VIRTUAL TABLE args
+    module_args: Option<Vec<'input, bumpalo::collections::String<'input>>>, // CREATE VIRTUAL TABLE args
     done: bool,
     error: Option<ParserError>,
 }
@@ -81,6 +81,12 @@ impl<'input> Context<'input> {
             done: false,
             error: None,
         }
+    }
+
+    pub fn new_vec<T>(&mut self, e: T) -> Vec<'input, T> {
+        let mut vec = Vec::new_in(self.bump);
+        vec.push(e);
+        vec
     }
 
     /// Consume parsed command
@@ -116,12 +122,18 @@ impl<'input> Context<'input> {
     }
     fn add_module_arg(&mut self) {
         if let Some((start, end)) = self.module_arg.take() {
-            if let Ok(arg) = std::str::from_utf8(&self.input[start..end]) {
-                self.module_args.get_or_insert(vec![]).push(arg.into());
+            let arg = bumpalo::collections::String::from_utf8_lossy_in(
+                &self.input[start..end],
+                self.bump,
+            );
+            {
+                self.module_args
+                    .get_or_insert(Vec::new_in(self.bump))
+                    .push(arg);
             } // FIXME error handling
         }
     }
-    fn module_args(&mut self) -> Option<Vec<Box<str>>> {
+    fn module_args(&mut self) -> Option<Vec<'input, bumpalo::collections::String<'input>>> {
         self.add_module_arg();
         self.module_args.take()
     }

@@ -468,7 +468,7 @@ pub enum Expr<'bump> {
     /// Unary expression
     Unary(UnaryOperator, Box<'bump, Expr<'bump>>),
     /// Parameters
-    Variable(Box<'bump, str>),
+    Variable(String<'bump>),
 }
 
 /// Function call order
@@ -658,15 +658,15 @@ impl<'bump> Expr<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Literal<'bump> {
     /// Number
-    Numeric(Box<'bump, str>),
+    Numeric(String<'bump>),
     /// String
     // TODO Check that string is already quoted and correctly escaped
-    String(Box<'bump, str>),
+    String(String<'bump>),
     /// BLOB
     // TODO Check that string is valid (only hexa)
-    Blob(Box<'bump, str>),
+    Blob(String<'bump>),
     /// Keyword
-    Keyword(Box<'bump, str>),
+    Keyword(String<'bump>),
     /// `NULL`
     Null,
     /// `CURRENT_DATE`

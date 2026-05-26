@@ -184,7 +184,7 @@ pub struct yyParser<'input> {
     //#[cfg(not(feature = "YYNOERRORRECOVERY"))]
     yyerrcnt: i32, /* Shifts left before out of the error */
 %%                               /* A place to hold %extra_context */
-    yystack: Vec<yyStackEntry<'input>>, /* The parser's stack */
+    yystack: std::vec::Vec<yyStackEntry<'input>>, /* The parser's stack */
 }
 
 use std::cmp::Ordering;
@@ -285,7 +285,7 @@ impl yyParser<'_> {
             yyidx: 0,
             #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
             yyhwm: 0,
-            yystack: Vec::with_capacity(YYSTACKDEPTH),
+            yystack: std::vec::Vec::with_capacity(YYSTACKDEPTH),
             //#[cfg(not(feature = "YYNOERRORRECOVERY"))]
             yyerrcnt: -1,
 %%               /* Optional %extra_context store */
