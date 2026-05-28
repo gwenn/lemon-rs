@@ -3,7 +3,6 @@
 pub mod ast;
 pub mod parse {
     #![expect(unused_braces)]
-    #![expect(clippy::if_same_then_else)]
     #![expect(clippy::absurd_extreme_comparisons)] // FIXME
     #![expect(clippy::needless_return)]
     #![expect(clippy::upper_case_acronyms)]
@@ -11,6 +10,7 @@ pub mod parse {
 
     include!(concat!(env!("OUT_DIR"), "/parse.rs"));
 }
+mod stack;
 
 use crate::dialect::Token;
 use ast::{Cmd, ExplainKind, Name, Stmt};
