@@ -2,9 +2,9 @@
 use crate::ast::*;
 use crate::custom_err;
 
-impl Cmd {
+impl<'bump> Cmd<'bump> {
     /// Statement accessor
-    pub fn stmt(&self) -> &Stmt {
+    pub fn stmt(&self) -> &Stmt<'bump> {
         match self {
             Self::Explain(stmt) => stmt,
             Self::ExplainQueryPlan(stmt) => stmt,
@@ -52,7 +52,7 @@ impl ColumnCount {
     }
 }
 
-impl Stmt {
+impl Stmt<'_> {
     /// Like `sqlite3_column_count` but more limited
     pub fn column_count(&self) -> ColumnCount {
         match self {
@@ -190,7 +190,7 @@ fn check_reserved_name(name: &QualifiedName) -> Result<(), ParserError> {
     Ok(())
 }
 
-impl CreateTableBody {
+impl CreateTableBody<'_> {
     /// check for extra rules
     pub fn check(&self, tbl_name: &QualifiedName) -> Result<(), ParserError> {
         if let Self::ColumnsAndConstraints {
@@ -261,11 +261,11 @@ impl CreateTableBody {
     }
 }
 
-impl<'a> IntoIterator for &'a ColumnDefinition {
-    type Item = &'a ColumnConstraint;
+impl<'a, 'bump> IntoIterator for &'a ColumnDefinition<'bump> {
+    type Item = &'a ColumnConstraint<'bump>;
     type IntoIter = std::iter::Map<
-        std::slice::Iter<'a, NamedColumnConstraint>,
-        fn(&'a NamedColumnConstraint) -> &'a ColumnConstraint,
+        std::slice::Iter<'a, NamedColumnConstraint<'bump>>,
+        fn(&'a NamedColumnConstraint<'bump>) -> &'a ColumnConstraint<'bump>,
     >;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -273,14 +273,14 @@ impl<'a> IntoIterator for &'a ColumnDefinition {
     }
 }
 
-impl Select {
+impl Select<'_> {
     /// Like `sqlite3_column_count` but more limited
     pub fn column_count(&self) -> ColumnCount {
         self.body.select.column_count()
     }
 }
 
-impl OneSelect {
+impl OneSelect<'_> {
     /// Like `sqlite3_column_count` but more limited
     pub fn column_count(&self) -> ColumnCount {
         match self {
@@ -293,7 +293,7 @@ impl OneSelect {
     }
 }
 
-impl ResultColumn {
+impl ResultColumn<'_> {
     fn column_count(&self) -> ColumnCount {
         match self {
             Self::Expr(..) => ColumnCount::Fixed(1),

@@ -45,7 +45,7 @@ fn main() {
                                     eprintln!("{cmd:?}\n<>\n{check:?}");
                                 }
                             }
-                        }
+                        };
                     }
                 }
             }

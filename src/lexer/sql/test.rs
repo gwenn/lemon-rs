@@ -93,7 +93,7 @@ fn generated() {
     expect_parser_err_msg(
         b"CREATE TABLE x(a AS ('id') DEFAULT '')",
         "cannot use DEFAULT on a generated column",
-    )
+    );
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn has_explicit_nulls() {
     expect_parser_err_msg(
         b"CREATE INDEX i ON x(a ASC NULLS LAST)",
         "unsupported use of NULLS LAST",
-    )
+    );
 }
 
 #[test]
@@ -315,7 +315,8 @@ fn create_strict_table_unknown_datatype() {
         b"CREATE TABLE t (c1 INT(10)) STRICT",
         "unknown datatype for t.c1: \"INT(...)\"",
     );
-    parse_cmd(b"CREATE TABLE t(c1 \"INT\", c2 [TEXT], c3 `INTEGER`)");
+    let b = Bump::new();
+    parse_cmd(b"CREATE TABLE t(c1 \"INT\", c2 [TEXT], c3 `INTEGER`)", &b);
 }
 
 #[test]
@@ -457,7 +458,7 @@ fn cte_column_count() {
         b"WITH i(x, y) AS ( VALUES(1) )
       SELECT * FROM i;",
         "table i has 1 values for 2 columns",
-    )
+    );
 }
 #[test]
 #[cfg(feature = "extra_checks")]
@@ -467,7 +468,7 @@ fn duplicate_cte() {
       i(y) AS (SELECT 2)
       SELECT * FROM i;",
         "duplicate WITH table name: i",
-    )
+    );
 }
 
 #[test]

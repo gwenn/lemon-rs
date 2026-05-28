@@ -956,6 +956,7 @@ pub enum OneSelect<'bump> {
 
 impl<'bump> OneSelect<'bump> {
     /// Constructor
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         distinctness: Option<Distinctness>,
         columns: Vec<'bump, ResultColumn<'bump>>,

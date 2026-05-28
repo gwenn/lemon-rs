@@ -2,7 +2,7 @@ use std::ops::{Index, IndexMut};
 
 pub struct Stack<T> {
     pub yyidx: usize, /* Index to top element of the stack */
-    vec: Vec<T>,      /* The parser's stack */
+    pub vec: Vec<T>,  /* The parser's stack */
 }
 use std::cmp::Ordering;
 use std::ops::Neg as _;

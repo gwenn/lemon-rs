@@ -102,7 +102,7 @@ impl<'input> Context<'input> {
         }
     }
 
-    fn constraint_name(&mut self) -> Option<Name> {
+    fn constraint_name(&mut self) -> Option<Name<'input>> {
         self.constraint_name.take()
     }
     fn no_constraint_name(&self) -> bool {

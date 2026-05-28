@@ -426,29 +426,27 @@ fn yy_find_reduce_action(
 /*
 ** Print tracing information for a SHIFT action
 */
-impl yyParser<'_> {
-    #[expect(non_snake_case)]
-    #[cfg(feature = "NDEBUG")]
-    fn yyTraceShift(&self, _: YYACTIONTYPE, _: &str) {
-    }
-    #[expect(non_snake_case)]
-    #[cfg(not(feature = "NDEBUG"))]
-    fn yyTraceShift(&self, yyNewState: YYACTIONTYPE, zTag: &str) {
-        let yytos = &self.yystack[0];
-        if yyNewState < YYNSTATE {
-            debug!(
-                target: TARGET,
-                "{} '{}', go to state {}", zTag, yyTokenName[yytos.major as usize], yyNewState
-            );
-        } else {
-            debug!(
-                target: TARGET,
-                "{} '{}', pending reduce {:?}",
-                zTag,
-                yyTokenName[yytos.major as usize],
-                yyNewState.checked_sub(YY_MIN_REDUCE)
-            );
-        }
+#[expect(non_snake_case)]
+#[cfg(feature = "NDEBUG")]
+fn yyTraceShift(_yystack: &Stack<yyStackEntry>, _: YYACTIONTYPE, _: &str) {
+}
+#[expect(non_snake_case)]
+#[cfg(not(feature = "NDEBUG"))]
+fn yyTraceShift(yystack: &Stack<yyStackEntry>, yyNewState: YYACTIONTYPE, zTag: &str) {
+    let yytos = &yystack[0];
+    if yyNewState < YYNSTATE {
+        debug!(
+            target: TARGET,
+            "{} '{}', go to state {}", zTag, yyTokenName[yytos.major as usize], yyNewState
+        );
+    } else {
+        debug!(
+            target: TARGET,
+            "{} '{}', pending reduce {:?}",
+            zTag,
+            yyTokenName[yytos.major as usize],
+            yyNewState.checked_sub(YY_MIN_REDUCE)
+        );
     }
 }
 
@@ -477,7 +475,7 @@ impl<'input> yyParser<'input> {
             minor: YYMINORTYPE::yy0(yyMinor),
         };
         self.yystack.push(yytos);
-        self.yyTraceShift(yyNewState, "Shift");
+        yyTraceShift(&self.yystack, yyNewState, "Shift");
     }
 }
 
@@ -546,7 +544,7 @@ impl yyParser<'_> {
             yymsp.stateno = yyact;
             yymsp.major = yygoto;
         }
-        self.yyTraceShift(yyact, "... then shift");
+        yyTraceShift(&self.yystack, yyact, "... then shift");
         Ok(yyact)
     }
 }
@@ -819,10 +817,10 @@ impl<'input> yyParser<'input> {
         #[cfg(not(feature = "NDEBUG"))]
         {
             if log_enabled!(target: TARGET, Debug) {
-                let msg = self.yystack[1..=self.yystack.yyidx]
+                let msg = self.yystack.vec[1..=self.yystack.yyidx]
                     .iter()
                     .map(|entry| yyTokenName[entry.major as usize])
-                    .collect::<Vec<&str>>()
+                    .collect::<std::vec::Vec<&str>>()
                     .join(" ");
                 debug!(target: TARGET, "Return. Stack=[{}]", msg);
             }
