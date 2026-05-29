@@ -61,9 +61,9 @@ pub struct Context<'input> {
     input: &'input [u8],
     explain: Option<ExplainKind>,
     stmt: Option<Stmt<'input>>,
-    constraint_name: Option<Name<'input>>, // transient
-    module_arg: Option<(usize, usize)>,    // Complete text of a module argument
-    module_args: Option<Vec<'input, bumpalo::collections::String<'input>>>, // CREATE VIRTUAL TABLE args
+    constraint_name: Option<Name<'input>>,         // transient
+    module_arg: Option<(usize, usize)>,            // Complete text of a module argument
+    module_args: Option<Vec<'input, &'input str>>, // CREATE VIRTUAL TABLE args
     done: bool,
     error: Option<ParserError>,
 }
@@ -122,18 +122,14 @@ impl<'input> Context<'input> {
     }
     fn add_module_arg(&mut self) {
         if let Some((start, end)) = self.module_arg.take() {
-            let arg = bumpalo::collections::String::from_utf8_lossy_in(
-                &self.input[start..end],
-                self.bump,
-            );
-            {
+            if let Ok(arg) = std::str::from_utf8(&self.input[start..end]) {
                 self.module_args
                     .get_or_insert(Vec::new_in(self.bump))
-                    .push(arg);
+                    .push(self.bump.alloc_str(arg));
             } // FIXME error handling
         }
     }
-    fn module_args(&mut self) -> Option<Vec<'input, bumpalo::collections::String<'input>>> {
+    fn module_args(&mut self) -> Option<Vec<'input, &'input str>> {
         self.add_module_arg();
         self.module_args.take()
     }

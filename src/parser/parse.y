@@ -42,7 +42,7 @@
     self.ctx.error = Some(ParserError::UnexpectedEof);
   } else {
     error!(target: TARGET, "near \"{}\": syntax error", std::str::from_utf8(yyminor.1).unwrap_or(""));
-    self.ctx.error = Some(ParserError::SyntaxError(std::string::String::from_utf8_lossy(yyminor.1).to_string()));
+    self.ctx.error = Some(ParserError::SyntaxError(String::from_utf8_lossy(yyminor.1).to_string()));
   }
 }
 
@@ -54,7 +54,7 @@
 // code file that implements the parser.
 //
 %include {
-use bumpalo::collections::{String, Vec};
+use bumpalo::collections::Vec;
 use indexmap::IndexMap;
 use log::error;
 
@@ -268,9 +268,14 @@ typetoken(A) ::= typename(X) LP signed(Y) RP. {
 typetoken(A) ::= typename(X) LP signed(Y) COMMA signed(Z) RP. {
   A = Some(Type{ name: X, size: Some(TypeSize::TypeSize(self.ctx.bump.alloc(Y), self.ctx.bump.alloc(Z))) });
 }
-%type typename "String<'i>"
+%type typename "&'i str"
 typename(A) ::= ids(X). {A=from_token(@X, X, self.ctx.bump);}
-typename(A) ::= typename(A) ids(Y). {let ids=from_token(@Y, Y, self.ctx.bump); A.push(' '); A.push_str(&ids);}
+typename(A) ::= typename(X) ids(Y). {
+  let ids = from_token(@Y, Y, self.ctx.bump);
+  let mut s = bumpalo::collections::String::from_str_in(X, self.ctx.bump);
+  s.push(' '); s.push_str(ids);
+  A = s.into_bump_str();
+}
 %type signed "Expr<'i>"
 signed ::= plus_num.
 signed ::= minus_num.

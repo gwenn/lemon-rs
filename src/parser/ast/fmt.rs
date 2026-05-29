@@ -71,9 +71,9 @@ impl<T: ?Sized + ToTokens> ToTokens for &T {
     }
 }
 
-impl ToTokens for String<'_> {
+impl ToTokens for str {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_ANY, Some(self.as_ref()))
+        s.append(TK_ANY, Some(self))
     }
 }
 
@@ -770,10 +770,10 @@ impl Display for Expr<'_> {
 impl ToTokens for Literal<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::Numeric(ref num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
-            Self::String(ref str) => s.append(TK_STRING, Some(str)),
-            Self::Blob(ref blob) => s.append(TK_BLOB, Some(blob)),
-            Self::Keyword(ref str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
+            Self::Numeric(num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
+            Self::String(str) => s.append(TK_STRING, Some(str)),
+            Self::Blob(blob) => s.append(TK_BLOB, Some(blob)),
+            Self::Keyword(str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
             Self::Null => s.append(TK_NULL, None),
             Self::CurrentDate => s.append(TK_CTIME_KW, Some("CURRENT_DATE")),
             Self::CurrentTime => s.append(TK_CTIME_KW, Some("CURRENT_TIME")),
@@ -1131,13 +1131,13 @@ impl ToTokens for JoinConstraint<'_> {
 
 impl ToTokens for Id<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        double_quote(&self.0, s)
+        double_quote(self.0, s)
     }
 }
 
 impl ToTokens for Name<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        double_quote(self.0.as_ref(), s)
+        double_quote(self.0, s)
     }
 }
 
@@ -1822,9 +1822,9 @@ impl ToTokens for CommonTableExpr<'_> {
 impl ToTokens for Type<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self.size {
-            None => s.append(TK_ID, Some(&self.name)),
+            None => s.append(TK_ID, Some(self.name)),
             Some(ref size) => {
-                s.append(TK_ID, Some(&self.name))?; // TODO check there is no forbidden chars
+                s.append(TK_ID, Some(self.name))?; // TODO check there is no forbidden chars
                 s.append(TK_LP, None)?;
                 size.to_tokens(s)?;
                 s.append(TK_RP, None)

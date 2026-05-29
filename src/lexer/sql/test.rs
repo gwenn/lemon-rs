@@ -155,11 +155,11 @@ fn vtab_args() -> Result<(), Error> {
     else {
         panic!("unexpected AST")
     };
-    assert_eq!(tbl_name.as_str(), "mail");
-    assert_eq!(module_name.as_str(), "fts3");
+    assert_eq!(tbl_name, "mail");
+    assert_eq!(module_name, "fts3");
     assert_eq!(args.len(), 2);
-    assert_eq!(args[0].as_str(), "subject VARCHAR(256) NOT NULL");
-    assert_eq!(args[1].as_str(), "body TEXT CHECK(length(body)<10240)");
+    assert_eq!(args[0], "subject VARCHAR(256) NOT NULL");
+    assert_eq!(args[1], "body TEXT CHECK(length(body)<10240)");
     Ok(())
 }
 

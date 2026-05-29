@@ -7,10 +7,7 @@ use std::num::ParseIntError;
 use std::ops::Deref;
 use std::str::{self, Bytes, FromStr as _};
 
-use bumpalo::{
-    collections::{String, Vec},
-    Bump,
-};
+use bumpalo::{collections::Vec, Bump};
 use indexmap::{IndexMap, IndexSet};
 
 #[cfg(feature = "extra_checks")]
@@ -28,7 +25,7 @@ pub struct ParameterInfo {
     /// Number of SQL parameters in a prepared statement, like `sqlite3_bind_parameter_count`
     pub count: u16,
     /// Parameter name(s) if any
-    pub names: IndexSet<std::string::String>,
+    pub names: IndexSet<String>,
 }
 
 // https://sqlite.org/lang_expr.html#parameters
@@ -162,7 +159,7 @@ pub enum Stmt<'bump> {
         /// module
         module_name: Name<'bump>,
         /// args
-        args: Option<Vec<'bump, String<'bump>>>,
+        args: Option<Vec<'bump, &'bump str>>,
     },
     /// `DELETE`
     Delete {
@@ -379,7 +376,7 @@ pub enum Expr<'bump> {
         type_name: Option<Type<'bump>>,
     },
     /// `COLLATE`: expression
-    Collate(&'bump Expr<'bump>, String<'bump>),
+    Collate(&'bump Expr<'bump>, &'bump str),
     /// schema-name.table-name.column-name
     DoublyQualified(Name<'bump>, Name<'bump>, Name<'bump>),
     /// `EXISTS` subquery
@@ -467,7 +464,7 @@ pub enum Expr<'bump> {
     /// Unary expression
     Unary(UnaryOperator, &'bump Expr<'bump>),
     /// Parameters
-    Variable(String<'bump>),
+    Variable(&'bump str),
 }
 
 /// Function call order
@@ -653,15 +650,15 @@ impl<'bump> Expr<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Literal<'bump> {
     /// Number
-    Numeric(String<'bump>),
+    Numeric(&'bump str),
     /// String
     // TODO Check that string is already quoted and correctly escaped
-    String(String<'bump>),
+    String(&'bump str),
     /// BLOB
     // TODO Check that string is valid (only hexa)
-    Blob(String<'bump>),
+    Blob(&'bump str),
     /// Keyword
-    Keyword(String<'bump>),
+    Keyword(&'bump str),
     /// `NULL`
     Null,
     /// `CURRENT_DATE`
@@ -1148,7 +1145,7 @@ impl JoinOperator {
         Ok({
             let mut jt = JoinType::try_from(token.1)?;
             for n in [&n1, &n2].into_iter().flatten() {
-                jt |= JoinType::try_from(n.0.as_str().as_bytes())?;
+                jt |= JoinType::try_from(n.0.as_bytes())?;
             }
             if (jt & (JoinType::INNER | JoinType::OUTER)) == (JoinType::INNER | JoinType::OUTER)
                 || (jt & (JoinType::OUTER | JoinType::LEFT | JoinType::RIGHT)) == JoinType::OUTER
@@ -1156,8 +1153,8 @@ impl JoinOperator {
                 return Err(custom_err!(
                     "unknown join type: {} {} {}",
                     str::from_utf8(token.1).unwrap_or("invalid utf8"),
-                    n1.as_ref().map_or("", |n| n.0.as_ref()),
-                    n2.as_ref().map_or("", |n| n.0.as_ref())
+                    n1.as_ref().map_or("", |n| n.0),
+                    n2.as_ref().map_or("", |n| n.0)
                 ));
             }
             Self::TypedJoin(Some(jt))
@@ -1228,7 +1225,7 @@ pub enum JoinConstraint<'bump> {
 
 /// identifier or one of several keywords or `INDEXED`
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Id<'bump>(pub String<'bump>);
+pub struct Id<'bump>(pub &'bump str);
 
 impl<'bump> Id<'bump> {
     /// Constructor
@@ -1241,7 +1238,7 @@ impl<'bump> Id<'bump> {
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
 #[derive(Clone, Debug, Eq)]
-pub struct Name<'bump>(pub String<'bump>); // TODO distinction between Name and "Name"/[Name]/`Name`
+pub struct Name<'bump>(pub &'bump str); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 pub(crate) fn unquote(s: &str) -> (&str, u8) {
     if s.is_empty() {
@@ -1271,7 +1268,7 @@ impl<'bump> Name<'bump> {
     }
 
     fn as_bytes(&self) -> QuotedIterator<'_> {
-        let (sub, quote) = unquote(self.0.as_ref());
+        let (sub, quote) = unquote(self.0);
         QuotedIterator(sub.bytes(), quote)
     }
     #[cfg(feature = "extra_checks")]
@@ -1639,9 +1636,9 @@ impl<'bump> ColumnDefinition<'bump> {
                 ColumnConstraint::PrimaryKey { auto_increment, .. } => {
                     #[cfg(feature = "extra_checks")]
                     if *auto_increment
-                        && col_type.as_ref().is_none_or(|t| {
-                            !unquote(t.name.as_str()).0.eq_ignore_ascii_case("INTEGER")
-                        })
+                        && col_type
+                            .as_ref()
+                            .is_none_or(|t| !unquote(t.name).0.eq_ignore_ascii_case("INTEGER"))
                     {
                         return Err(custom_err!(
                             "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY"
@@ -1675,14 +1672,14 @@ impl<'bump> ColumnDefinition<'bump> {
                         .is_some_and(|s| s.eq_ignore_ascii_case("GENERATED"))
                 {
                     // str_split_whitespace_remainder
-                    let mut new_type = String::new_in(b);
+                    let mut new_type = bumpalo::collections::String::new_in(b);
                     for (i, item) in split.enumerate() {
                         if i > 0 {
                             new_type.push(' ');
                         }
                         new_type.push_str(item);
                     }
-                    col_type.name = new_type;
+                    col_type.name = new_type.into_bump_str();
                 }
             }
         }
@@ -2189,7 +2186,7 @@ impl<'bump> CommonTableExpr<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Type<'bump> {
     /// type name
-    pub name: String<'bump>, // TODO Validate: Ids+
+    pub name: &'bump str, // TODO Validate: Ids+
     /// type size
     pub size: Option<TypeSize<'bump>>,
 }
@@ -2376,6 +2373,6 @@ mod test {
     }
 
     fn name<'bump>(s: &'static str, b: &'bump bumpalo::Bump) -> Name<'bump> {
-        Name(bumpalo::collections::String::from_str_in(s, b))
+        Name(b.alloc_str(s))
     }
 }
