@@ -646,6 +646,7 @@ mod tests {
     use crate::dialect::TokenType;
     use crate::lexer::sql::Error;
     use crate::lexer::Scanner;
+    use std::assert_matches;
 
     #[test]
     fn fallible_iterator() -> Result<(), Error> {
@@ -664,7 +665,7 @@ mod tests {
         let mut s = Scanner::new(tokenizer);
         expect_token(&mut s, input, b"SELECT", TokenType::TK_SELECT)?;
         let err = s.scan(input).unwrap_err();
-        assert!(matches!(err, Error::BadNumber(_)));
+        assert_matches!(err, Error::BadNumber(_));
         Ok(())
     }
 

@@ -1,4 +1,5 @@
 use fallible_iterator::FallibleIterator as _;
+use std::assert_matches;
 
 use super::{Error, Parser};
 use crate::parser::ast::fmt::ToTokens as _;
@@ -172,14 +173,8 @@ fn extra_semicolons_between_statements() {
     ];
     for sql in &sqls {
         let mut parser = Parser::new(sql.as_bytes());
-        assert!(matches!(
-            parser.next().unwrap(),
-            Some(Cmd::Stmt(Stmt::Select { .. }))
-        ));
-        assert!(matches!(
-            parser.next().unwrap(),
-            Some(Cmd::Stmt(Stmt::Select { .. }))
-        ));
+        assert_matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. })));
+        assert_matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. })));
         assert_eq!(parser.next().unwrap(), None);
     }
 }
@@ -194,14 +189,8 @@ fn extra_comments_between_statements() {
     ];
     for sql in &sqls {
         let mut parser = Parser::new(sql.as_bytes());
-        assert!(matches!(
-            parser.next().unwrap(),
-            Some(Cmd::Stmt(Stmt::Select { .. }))
-        ));
-        assert!(matches!(
-            parser.next().unwrap(),
-            Some(Cmd::Stmt(Stmt::Select { .. }))
-        ));
+        assert_matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. })));
+        assert_matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. })));
         assert_eq!(parser.next().unwrap(), None);
     }
 }
