@@ -8,7 +8,6 @@ use std::ops::Deref;
 use std::str::{self, Bytes, FromStr as _};
 
 use bumpalo::{
-    boxed::Box,
     collections::{String, Vec},
     Bump,
 };
@@ -152,7 +151,7 @@ pub enum Stmt<'bump> {
         /// columns
         columns: Option<Vec<'bump, IndexedColumn<'bump>>>, // TODO check no duplicate directly
         /// query
-        select: Box<'bump, Select<'bump>>,
+        select: &'bump Select<'bump>,
     },
     /// `CREATE VIRTUAL TABLE`
     CreateVirtualTable {
@@ -246,7 +245,7 @@ pub enum Stmt<'bump> {
     /// `SAVEPOINT`: savepoint name
     Savepoint(Name<'bump>),
     /// `SELECT`
-    Select(Box<'bump, Select<'bump>>),
+    Select(&'bump Select<'bump>),
     /// `UPDATE`
     Update {
         /// CTE
@@ -315,7 +314,7 @@ impl<'bump> Stmt<'bump> {
             ..
         }) = from
         {
-            if matches!(select.as_ref(),
+            if matches!(select,
                 SelectTable::Table(qn, _, _) | SelectTable::TableCall(qn, _, _)
                     if *qn == tbl_name)
                 || joins.as_ref().is_some_and(|js| js.iter().any(|j|
@@ -353,38 +352,38 @@ pub enum Expr<'bump> {
     /// `BETWEEN`
     Between {
         /// expression
-        lhs: Box<'bump, Expr<'bump>>,
+        lhs: &'bump Expr<'bump>,
         /// `NOT`
         not: bool,
         /// start
-        start: Box<'bump, Expr<'bump>>,
+        start: &'bump Expr<'bump>,
         /// end
-        end: Box<'bump, Expr<'bump>>,
+        end: &'bump Expr<'bump>,
     },
     /// binary expression
-    Binary(Box<'bump, Expr<'bump>>, Operator, Box<'bump, Expr<'bump>>),
+    Binary(&'bump Expr<'bump>, Operator, &'bump Expr<'bump>),
     /// `CASE` expression
     Case {
         /// operand
-        base: Option<Box<'bump, Expr<'bump>>>,
+        base: Option<&'bump Expr<'bump>>,
         /// `WHEN` condition `THEN` result
         when_then_pairs: Vec<'bump, (Expr<'bump>, Expr<'bump>)>,
         /// `ELSE` result
-        else_expr: Option<Box<'bump, Expr<'bump>>>,
+        else_expr: Option<&'bump Expr<'bump>>,
     },
     /// CAST expression
     Cast {
         /// expression
-        expr: Box<'bump, Expr<'bump>>,
+        expr: &'bump Expr<'bump>,
         /// `AS` type name
         type_name: Option<Type<'bump>>,
     },
     /// `COLLATE`: expression
-    Collate(Box<'bump, Expr<'bump>>, String<'bump>),
+    Collate(&'bump Expr<'bump>, String<'bump>),
     /// schema-name.table-name.column-name
     DoublyQualified(Name<'bump>, Name<'bump>, Name<'bump>),
     /// `EXISTS` subquery
-    Exists(Box<'bump, Select<'bump>>),
+    Exists(&'bump Select<'bump>),
     /// call to a built-in function
     FunctionCall {
         /// function name
@@ -410,7 +409,7 @@ pub enum Expr<'bump> {
     /// `IN`
     InList {
         /// expression
-        lhs: Box<'bump, Expr<'bump>>,
+        lhs: &'bump Expr<'bump>,
         /// `NOT`
         not: bool,
         /// values
@@ -419,16 +418,16 @@ pub enum Expr<'bump> {
     /// `IN` subselect
     InSelect {
         /// expression
-        lhs: Box<'bump, Expr<'bump>>,
+        lhs: &'bump Expr<'bump>,
         /// `NOT`
         not: bool,
         /// subquery
-        rhs: Box<'bump, Select<'bump>>,
+        rhs: &'bump Select<'bump>,
     },
     /// `IN` table name / function
     InTable {
         /// expression
-        lhs: Box<'bump, Expr<'bump>>,
+        lhs: &'bump Expr<'bump>,
         /// `NOT`
         not: bool,
         /// table name
@@ -437,36 +436,36 @@ pub enum Expr<'bump> {
         args: Option<Vec<'bump, Expr<'bump>>>,
     },
     /// `IS NULL`
-    IsNull(Box<'bump, Expr<'bump>>),
+    IsNull(&'bump Expr<'bump>),
     /// `LIKE`
     Like {
         /// expression
-        lhs: Box<'bump, Expr<'bump>>,
+        lhs: &'bump Expr<'bump>,
         /// `NOT`
         not: bool,
         /// operator
         op: LikeOperator,
         /// pattern
-        rhs: Box<'bump, Expr<'bump>>,
+        rhs: &'bump Expr<'bump>,
         /// `ESCAPE` char
-        escape: Option<Box<'bump, Expr<'bump>>>,
+        escape: Option<&'bump Expr<'bump>>,
     },
     /// Literal expression
     Literal(Literal<'bump>),
     /// Name
     Name(Name<'bump>),
     /// `NOT NULL` or `NOTNULL`
-    NotNull(Box<'bump, Expr<'bump>>),
+    NotNull(&'bump Expr<'bump>),
     /// Parenthesized subexpression
     Parenthesized(Vec<'bump, Expr<'bump>>),
     /// Qualified name
     Qualified(Name<'bump>, Name<'bump>),
     /// `RAISE` function call
-    Raise(ResolveType, Option<Box<'bump, Expr<'bump>>>),
+    Raise(ResolveType, Option<&'bump Expr<'bump>>),
     /// Subquery expression
-    Subquery(Box<'bump, Select<'bump>>),
+    Subquery(&'bump Select<'bump>),
     /// Unary expression
-    Unary(UnaryOperator, Box<'bump, Expr<'bump>>),
+    Unary(UnaryOperator, &'bump Expr<'bump>),
     /// Parameters
     Variable(String<'bump>),
 }
@@ -500,22 +499,18 @@ impl<'bump> Expr<'bump> {
     }
     /// Constructor
     pub fn collate(x: Self, ct: YYCODETYPE, c: Token, b: &'bump Bump) -> Self {
-        Self::Collate(Box::new_in(x, b), from_token(ct, c, b))
+        Self::Collate(b.alloc(x), from_token(ct, c, b))
     }
     /// Constructor
     pub fn cast(x: Self, type_name: Option<Type<'bump>>, b: &'bump Bump) -> Self {
         Self::Cast {
-            expr: Box::new_in(x, b),
+            expr: b.alloc(x),
             type_name,
         }
     }
     /// Constructor
     pub fn binary(left: Self, op: YYCODETYPE, right: Self, b: &'bump Bump) -> Self {
-        Self::Binary(
-            Box::new_in(left, b),
-            Operator::from(op),
-            Box::new_in(right, b),
-        )
+        Self::Binary(b.alloc(left), Operator::from(op), b.alloc(right))
     }
     /// Constructor
     pub fn ptr(left: Self, op: Token, right: Self, b: &'bump Bump) -> Self {
@@ -523,7 +518,7 @@ impl<'bump> Expr<'bump> {
         if op.1 == b"->>" {
             ptr = Operator::ArrowRightShift;
         }
-        Self::Binary(Box::new_in(left, b), ptr, Box::new_in(right, b))
+        Self::Binary(b.alloc(left), ptr, b.alloc(right))
     }
     /// Constructor
     pub fn like(
@@ -535,40 +530,40 @@ impl<'bump> Expr<'bump> {
         b: &'bump Bump,
     ) -> Self {
         Self::Like {
-            lhs: Box::new_in(lhs, b),
+            lhs: b.alloc(lhs),
             not,
             op,
-            rhs: Box::new_in(rhs, b),
-            escape: escape.map(|e| Box::new_in(e, b)),
+            rhs: b.alloc(rhs),
+            escape: escape.map(|e| b.alloc(e) as _),
         }
     }
     /// Constructor
     pub fn not_null(x: Self, op: YYCODETYPE, b: &'bump Bump) -> Self {
         if op == TK_ISNULL as YYCODETYPE {
-            Self::IsNull(Box::new_in(x, b))
+            Self::IsNull(b.alloc(x))
         } else if op == TK_NOTNULL as YYCODETYPE {
-            Self::NotNull(Box::new_in(x, b))
+            Self::NotNull(b.alloc(x))
         } else {
             unreachable!()
         }
     }
     /// Constructor
     pub fn unary(op: UnaryOperator, x: Self, b: &'bump Bump) -> Self {
-        Self::Unary(op, Box::new_in(x, b))
+        Self::Unary(op, b.alloc(x))
     }
     /// Constructor
     pub fn between(lhs: Self, not: bool, start: Self, end: Self, b: &'bump Bump) -> Self {
         Self::Between {
-            lhs: Box::new_in(lhs, b),
+            lhs: b.alloc(lhs),
             not,
-            start: Box::new_in(start, b),
-            end: Box::new_in(end, b),
+            start: b.alloc(start),
+            end: b.alloc(end),
         }
     }
     /// Constructor
     pub fn in_list(lhs: Self, not: bool, rhs: Option<Vec<'bump, Self>>, b: &'bump Bump) -> Self {
         Self::InList {
-            lhs: Box::new_in(lhs, b),
+            lhs: b.alloc(lhs),
             not,
             rhs,
         }
@@ -576,9 +571,9 @@ impl<'bump> Expr<'bump> {
     /// Constructor
     pub fn in_select(lhs: Self, not: bool, rhs: Select<'bump>, b: &'bump Bump) -> Self {
         Self::InSelect {
-            lhs: Box::new_in(lhs, b),
+            lhs: b.alloc(lhs),
             not,
-            rhs: Box::new_in(rhs, b),
+            rhs: b.alloc(rhs),
         }
     }
     /// Constructor
@@ -590,7 +585,7 @@ impl<'bump> Expr<'bump> {
         b: &'bump Bump,
     ) -> Self {
         Self::InTable {
-            lhs: Box::new_in(lhs, b),
+            lhs: b.alloc(lhs),
             not,
             rhs,
             args,
@@ -598,7 +593,7 @@ impl<'bump> Expr<'bump> {
     }
     /// Constructor
     pub fn sub_query(query: Select<'bump>, b: &'bump Bump) -> Self {
-        Self::Subquery(Box::new_in(query, b))
+        Self::Subquery(b.alloc(query))
     }
     /// Constructor
     pub fn function_call(
@@ -942,11 +937,11 @@ pub enum OneSelect<'bump> {
         /// `FROM` clause
         from: Option<FromClause<'bump>>,
         /// `WHERE` clause
-        where_clause: Option<Box<'bump, Expr<'bump>>>,
+        where_clause: Option<&'bump Expr<'bump>>,
         /// `GROUP BY`
         group_by: Option<Vec<'bump, Expr<'bump>>>,
         /// `HAVING`
-        having: Option<Box<'bump, Expr<'bump>>>, // TODO: HAVING clause on a non-aggregate query
+        having: Option<&'bump Expr<'bump>>, // TODO: HAVING clause on a non-aggregate query
         /// `WINDOW` definition
         window_clause: Option<Vec<'bump, WindowDef<'bump>>>,
     },
@@ -979,9 +974,9 @@ impl<'bump> OneSelect<'bump> {
             distinctness,
             columns,
             from,
-            where_clause: where_clause.map(|wc| Box::new_in(wc, b)),
+            where_clause: where_clause.map(|wc| b.alloc(wc) as _),
             group_by,
-            having: having.map(|h| Box::new_in(h, b)),
+            having: having.map(|h| b.alloc(h) as _),
             window_clause,
         };
         #[cfg(feature = "extra_checks")]
@@ -1017,7 +1012,7 @@ impl<'bump> OneSelect<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct FromClause<'bump> {
     /// table
-    pub select: Option<Box<'bump, SelectTable<'bump>>>, // FIXME mandatory
+    pub select: Option<&'bump SelectTable<'bump>>, // FIXME mandatory
     /// `JOIN`ed tabled
     pub joins: Option<Vec<'bump, JoinedSelectTable<'bump>>>,
     op: Option<JoinOperator>, // FIXME transient
@@ -1060,7 +1055,7 @@ impl<'bump> FromClause<'bump> {
             }
             debug_assert!(self.select.is_none());
             debug_assert!(self.joins.is_none());
-            self.select = Some(Box::new_in(table, b));
+            self.select = Some(b.alloc(table));
         }
         Ok(())
     }
@@ -1129,7 +1124,7 @@ pub enum SelectTable<'bump> {
         Option<As<'bump>>,
     ),
     /// `SELECT` subquery
-    Select(Box<'bump, Select<'bump>>, Option<As<'bump>>),
+    Select(&'bump Select<'bump>, Option<As<'bump>>),
     /// subquery
     Sub(FromClause<'bump>, Option<As<'bump>>),
 }
@@ -1512,7 +1507,7 @@ pub enum CreateTableBody<'bump> {
         flags: TabFlags,
     },
     /// `AS` select
-    AsSelect(Box<'bump, Select<'bump>>),
+    AsSelect(&'bump Select<'bump>),
 }
 
 impl<'bump> CreateTableBody<'bump> {
@@ -2004,7 +1999,7 @@ pub struct Limit<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum InsertBody<'bump> {
     /// `SELECT` or `VALUES`
-    Select(Box<'bump, Select<'bump>>, Option<Box<'bump, Upsert<'bump>>>),
+    Select(&'bump Select<'bump>, Option<&'bump Upsert<'bump>>),
     /// `DEFAULT VALUES`
     DefaultValues,
 }
@@ -2083,9 +2078,9 @@ pub enum TriggerCmd<'bump> {
         /// `COLUMNS`
         col_names: Option<DistinctNames<'bump>>,
         /// `SELECT` or `VALUES`
-        select: Box<'bump, Select<'bump>>,
+        select: &'bump Select<'bump>,
         /// `ON CONFLICT` clause
-        upsert: Option<Box<'bump, Upsert<'bump>>>,
+        upsert: Option<&'bump Upsert<'bump>>,
     },
     /// `DELETE`
     Delete {
@@ -2095,7 +2090,7 @@ pub enum TriggerCmd<'bump> {
         where_clause: Option<Expr<'bump>>,
     },
     /// `SELECT`
-    Select(Box<'bump, Select<'bump>>),
+    Select(&'bump Select<'bump>),
 }
 
 /// Conflict resolution types
@@ -2146,7 +2141,7 @@ pub struct CommonTableExpr<'bump> {
     /// `MATERIALIZED`
     pub materialized: Materialized,
     /// query
-    pub select: Box<'bump, Select<'bump>>,
+    pub select: &'bump Select<'bump>,
 }
 
 impl<'bump> CommonTableExpr<'bump> {
@@ -2175,7 +2170,7 @@ impl<'bump> CommonTableExpr<'bump> {
             tbl_name,
             columns,
             materialized,
-            select: Box::new_in(select, b),
+            select: b.alloc(select),
         })
     }
     /// Constructor
@@ -2204,9 +2199,9 @@ pub struct Type<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum TypeSize<'bump> {
     /// maximum size
-    MaxSize(Box<'bump, Expr<'bump>>),
+    MaxSize(&'bump Expr<'bump>),
     /// precision
-    TypeSize(Box<'bump, Expr<'bump>>, Box<'bump, Expr<'bump>>),
+    TypeSize(&'bump Expr<'bump>, &'bump Expr<'bump>),
 }
 
 /// Transaction types
@@ -2230,7 +2225,7 @@ pub struct Upsert<'bump> {
     /// `DO` clause
     pub do_clause: UpsertDo<'bump>,
     /// next upsert
-    pub next: Option<Box<'bump, Upsert<'bump>>>,
+    pub next: Option<&'bump Upsert<'bump>>,
 }
 
 /// Upsert conflict targets
@@ -2274,9 +2269,9 @@ pub enum UpsertDo<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct FunctionTail<'bump> {
     /// `FILTER` clause
-    pub filter_clause: Option<Box<'bump, Expr<'bump>>>,
+    pub filter_clause: Option<&'bump Expr<'bump>>,
     /// `OVER` clause
-    pub over_clause: Option<Box<'bump, Over<'bump>>>,
+    pub over_clause: Option<&'bump Over<'bump>>,
 }
 
 /// Function call `OVER` clause
@@ -2284,7 +2279,7 @@ pub struct FunctionTail<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Over<'bump> {
     /// Window definition
-    Window(Box<'bump, Window<'bump>>),
+    Window(&'bump Window<'bump>),
     /// Window name
     Name(Name<'bump>),
 }

@@ -76,11 +76,6 @@ impl ToTokens for String<'_> {
         s.append(TK_ANY, Some(self.as_ref()))
     }
 }
-impl ToTokens for Box<'_, str> {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_ANY, Some(self.as_ref()))
-    }
-}
 
 /* FIXME: does not work, find why
 impl Display for dyn ToTokens {

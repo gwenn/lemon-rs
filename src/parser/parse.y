@@ -54,10 +54,7 @@
 // code file that implements the parser.
 //
 %include {
-use bumpalo::{
-    boxed::Box,
-    collections::{String, Vec},
-};
+use bumpalo::collections::{String, Vec};
 use indexmap::IndexMap;
 use log::error;
 
@@ -132,7 +129,7 @@ create_table_args(A) ::= LP columnlist(C) conslist_opt(X) RP table_option_set(F)
   A = CreateTableBody::columns_and_constraints(C, X, F)?;
 }
 create_table_args(A) ::= AS select(S). {
-  A = CreateTableBody::AsSelect(Box::new_in(S, self.ctx.bump));
+  A = CreateTableBody::AsSelect(self.ctx.bump.alloc(S));
 }
 %type table_option_set {TabFlags}
 %type table_option {TabFlags}
@@ -266,10 +263,10 @@ nm(A) ::= STRING(X). { A = Name::from_token(@X, X, self.ctx.bump); }
 typetoken(A) ::= .   {A = None;}
 typetoken(A) ::= typename(X). {A = Some(Type{ name: X, size: None });}
 typetoken(A) ::= typename(X) LP signed(Y) RP. {
-  A = Some(Type{ name: X, size: Some(TypeSize::MaxSize(Box::new_in(Y, self.ctx.bump))) });
+  A = Some(Type{ name: X, size: Some(TypeSize::MaxSize(self.ctx.bump.alloc(Y))) });
 }
 typetoken(A) ::= typename(X) LP signed(Y) COMMA signed(Z) RP. {
-  A = Some(Type{ name: X, size: Some(TypeSize::TypeSize(Box::new_in(Y, self.ctx.bump), Box::new_in(Z, self.ctx.bump))) });
+  A = Some(Type{ name: X, size: Some(TypeSize::TypeSize(self.ctx.bump.alloc(Y), self.ctx.bump.alloc(Z))) });
 }
 %type typename "String<'i>"
 typename(A) ::= ids(X). {A=from_token(@X, X, self.ctx.bump);}
@@ -312,12 +309,12 @@ ccons(A) ::= DEFAULT LP expr(X) RP. {
 }
 ccons(A) ::= DEFAULT PLUS term(X). {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Positive, Box::new_in(X, self.ctx.bump)));
+  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Positive, self.ctx.bump.alloc(X)));
   A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= DEFAULT MINUS term(X).      {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Negative, Box::new_in(X, self.ctx.bump)));
+  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Negative, self.ctx.bump.alloc(X)));
   A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= DEFAULT id(X).       {
@@ -484,7 +481,7 @@ ifexists(A) ::= .            {A = false;}
 cmd ::= createkw temp(T) VIEW ifnotexists(E) fullname(Y) eidlist_opt(C)
           AS select(S). {
   self.ctx.stmt = Some(Stmt::CreateView{ temporary: T, if_not_exists: E, view_name: Y, columns: C,
-                                         select: Box::new_in(S, self.ctx.bump) });
+                                         select: self.ctx.bump.alloc(S) });
 }
 cmd ::= DROP VIEW ifexists(E) fullname(X). {
   self.ctx.stmt = Some(Stmt::DropView{ if_exists: E, view_name: X });
@@ -494,7 +491,7 @@ cmd ::= DROP VIEW ifexists(E) fullname(X). {
 //////////////////////// The SELECT statement /////////////////////////////////
 //
 cmd ::= select(X).  {
-  self.ctx.stmt = Some(Stmt::Select(Box::new_in(X, self.ctx.bump)));
+  self.ctx.stmt = Some(Stmt::Select(self.ctx.bump.alloc(X)));
 }
 
 %type select "Select<'i>"
@@ -637,7 +634,7 @@ seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z) on_using(N).
 }
 %ifndef SQLITE_OMIT_SUBQUERY
   seltablist(A) ::= stl_prefix(A) LP select(S) RP as(Z) on_using(N). {
-    let st = SelectTable::Select(Box::new_in(S, self.ctx.bump), Z);
+    let st = SelectTable::Select(self.ctx.bump.alloc(S), Z);
     let jc = N;
     A.push(st, jc, self.ctx.bump)?;
   }
@@ -843,7 +840,7 @@ setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
         upsert(U). {
   let (upsert, returning) = U;
-  let body = InsertBody::Select(Box::new_in(S, self.ctx.bump), upsert.map(|u| Box::new_in(u, self.ctx.bump)));
+  let body = InsertBody::Select(self.ctx.bump.alloc(S), upsert.map(|u| self.ctx.bump.alloc(u) as _));
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
                                      body, returning });
 }
@@ -868,11 +865,11 @@ upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW)
               { let index = UpsertIndex::new(T, TW)?;
                 let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
                 let (next, returning) = N;
-                A = (Some(Upsert{ index: Some(index), do_clause, next: next.map(|n| Box::new_in(n, self.ctx.bump)) }), returning);}
+                A = (Some(Upsert{ index: Some(index), do_clause, next: next.map(|n| self.ctx.bump.alloc(n) as _) }), returning);}
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING upsert(N).
               { let index = UpsertIndex::new(T, TW)?;
                 let (next, returning) = N;
-                A = (Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing, next: next.map(|n| Box::new_in(n, self.ctx.bump)) }), returning); }
+                A = (Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing, next: next.map(|n| self.ctx.bump.alloc(n) as _) }), returning); }
 upsert(A) ::= ON CONFLICT DO NOTHING returning(R).
               { A = (Some(Upsert{ index: None, do_clause: UpsertDo::Nothing, next: None }), R); }
 upsert(A) ::= ON CONFLICT DO UPDATE SET setlist(Z) where_opt(W) returning(R).
@@ -1058,13 +1055,13 @@ expr(A) ::= expr(B) between_op(N) expr(X) AND expr(Y). [BETWEEN] {
     A = Expr::in_table(X, N, Y, E, self.ctx.bump);/*A-overwrites-X*/
   }
   expr(A) ::= EXISTS LP select(Y) RP. {
-    A = Expr::Exists(Box::new_in(Y, self.ctx.bump));
+    A = Expr::Exists(self.ctx.bump.alloc(Y));
   }
 %endif SQLITE_OMIT_SUBQUERY
 
 /* CASE expressions */
 expr(A) ::= CASE case_operand(X) case_exprlist(Y) case_else(Z) END. {
-  A = Expr::Case{ base: X.map(|x| Box::new_in(x, self.ctx.bump)), when_then_pairs: Y, else_expr: Z.map(|z| Box::new_in(z, self.ctx.bump))};
+  A = Expr::Case{ base: X.map(|x| self.ctx.bump.alloc(x) as _), when_then_pairs: Y, else_expr: Z.map(|z| self.ctx.bump.alloc(z) as _)};
 }
 %type case_exprlist "Vec<'i, (Expr<'i>, Expr<'i>)>"
 case_exprlist(A) ::= case_exprlist(A) WHEN expr(Y) THEN expr(Z). {
@@ -1260,7 +1257,7 @@ trigger_cmd(A) ::= insert_cmd(R) INTO
   if returning.is_some() {
     return Err(custom_err!("cannot use RETURNING in a trigger"));
   }
-  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new_in(S, self.ctx.bump), upsert: upsert.map(|u| Box::new_in(u, self.ctx.bump)) };/*A-overwrites-R*/
+  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: self.ctx.bump.alloc(S), upsert: upsert.map(|u| self.ctx.bump.alloc(u) as _) };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM xfullname(X) tridxby where_opt(Y).
@@ -1268,14 +1265,14 @@ trigger_cmd(A) ::= DELETE FROM xfullname(X) tridxby where_opt(Y).
 
 // SELECT
 trigger_cmd(A) ::= select(X).
-   {A = TriggerCmd::Select(Box::new_in(X, self.ctx.bump)); /*A-overwrites-X*/}
+   {A = TriggerCmd::Select(self.ctx.bump.alloc(X)); /*A-overwrites-X*/}
 
 // The special RAISE expression that may occur in trigger programs
 expr(A) ::= RAISE LP IGNORE RP.  {
   A = Expr::Raise(ResolveType::Ignore, None);
 }
 expr(A) ::= RAISE LP raisetype(T) COMMA expr(Z) RP.  {
-  A = Expr::Raise(T, Some(Box::new_in(Z, self.ctx.bump)));
+  A = Expr::Raise(T, Some(self.ctx.bump.alloc(Z)));
 }
 %endif  !SQLITE_OMIT_TRIGGER
 
@@ -1507,17 +1504,17 @@ frame_exclude(A) ::= TIES.        { A = FrameExclude::Ties; }
 window_clause(A) ::= WINDOW windowdefn_list(B). { A = B; }
 
 filter_over(A) ::= filter_clause(F) over_clause(O). {
-  A = FunctionTail{ filter_clause: Some(Box::new_in(F, self.ctx.bump)), over_clause: Some(Box::new_in(O, self.ctx.bump)) };
+  A = FunctionTail{ filter_clause: Some(self.ctx.bump.alloc(F)), over_clause: Some(self.ctx.bump.alloc(O)) };
 }
 filter_over(A) ::= over_clause(O). {
-  A = FunctionTail{ filter_clause: None, over_clause: Some(Box::new_in(O, self.ctx.bump)) };
+  A = FunctionTail{ filter_clause: None, over_clause: Some(self.ctx.bump.alloc(O)) };
 }
 filter_over(A) ::= filter_clause(F). {
-  A = FunctionTail{ filter_clause: Some(Box::new_in(F, self.ctx.bump)), over_clause: None };
+  A = FunctionTail{ filter_clause: Some(self.ctx.bump.alloc(F)), over_clause: None };
 }
 
 over_clause(A) ::= OVER LP window(Z) RP. {
-  A = Over::Window(Box::new_in(Z, self.ctx.bump));
+  A = Over::Window(self.ctx.bump.alloc(Z));
 }
 over_clause(A) ::= OVER nm(Z). {
   A = Over::Name(Z);
