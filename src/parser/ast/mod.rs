@@ -101,7 +101,7 @@ pub enum Stmt<'bump> {
         /// table name
         tbl_name: Name<'bump>,
         /// indexed columns or expressions
-        columns: Vec<'bump, SortedColumn<'bump>>,
+        columns: &'bump [SortedColumn<'bump>],
         /// partial index
         where_clause: Option<Expr<'bump>>,
     },
@@ -135,7 +135,7 @@ pub enum Stmt<'bump> {
         /// `WHEN`
         when_clause: Option<Expr<'bump>>,
         /// statements
-        commands: Vec<'bump, TriggerCmd<'bump>>,
+        commands: &'bump [TriggerCmd<'bump>],
     },
     /// `CREATE VIEW`
     CreateView {
@@ -146,7 +146,7 @@ pub enum Stmt<'bump> {
         /// view name
         view_name: QualifiedName<'bump>,
         /// columns
-        columns: Option<Vec<'bump, IndexedColumn<'bump>>>, // TODO check no duplicate directly
+        columns: Option<&'bump [IndexedColumn<'bump>]>, // TODO check no duplicate directly
         /// query
         select: &'bump Select<'bump>,
     },
@@ -159,7 +159,7 @@ pub enum Stmt<'bump> {
         /// module
         module_name: Name<'bump>,
         /// args
-        args: Option<Vec<'bump, &'bump str>>,
+        args: Option<&'bump [&'bump str]>,
     },
     /// `DELETE`
     Delete {
@@ -172,9 +172,9 @@ pub enum Stmt<'bump> {
         /// `WHERE` clause
         where_clause: Option<Expr<'bump>>,
         /// `RETURNING`
-        returning: Option<Vec<'bump, ResultColumn<'bump>>>,
+        returning: Option<&'bump [ResultColumn<'bump>]>,
         /// `ORDER BY`
-        order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
+        order_by: Option<&'bump [SortedColumn<'bump>]>,
         /// `LIMIT`
         limit: Option<Limit<'bump>>,
     },
@@ -221,7 +221,7 @@ pub enum Stmt<'bump> {
         /// `VALUES` or `SELECT`
         body: InsertBody<'bump>,
         /// `RETURNING`
-        returning: Option<Vec<'bump, ResultColumn<'bump>>>,
+        returning: Option<&'bump [ResultColumn<'bump>]>,
     },
     /// `PRAGMA`: pragma name, body
     Pragma(QualifiedName<'bump>, Option<PragmaBody<'bump>>),
@@ -254,15 +254,15 @@ pub enum Stmt<'bump> {
         /// `INDEXED`
         indexed: Option<Indexed<'bump>>,
         /// `SET` assignments
-        sets: Vec<'bump, Set<'bump>>, // FIXME unique
+        sets: &'bump [Set<'bump>], // FIXME unique
         /// `FROM`
         from: Option<FromClause<'bump>>,
         /// `WHERE` clause
         where_clause: Option<Expr<'bump>>,
         /// `RETURNING`
-        returning: Option<Vec<'bump, ResultColumn<'bump>>>,
+        returning: Option<&'bump [ResultColumn<'bump>]>,
         /// `ORDER BY`
-        order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
+        order_by: Option<&'bump [SortedColumn<'bump>]>,
         /// `LIMIT`
         limit: Option<Limit<'bump>>,
     },
@@ -286,7 +286,7 @@ impl<'bump> Stmt<'bump> {
             if_not_exists,
             idx_name,
             tbl_name,
-            columns,
+            columns: columns.into_bump_slice(),
             where_clause,
         })
     }
@@ -332,11 +332,11 @@ impl<'bump> Stmt<'bump> {
             or_conflict,
             tbl_name,
             indexed,
-            sets,
+            sets: sets.into_bump_slice(),
             from,
             where_clause,
-            returning,
-            order_by,
+            returning: returning.map(|r| r.into_bump_slice()),
+            order_by: order_by.map(|ob| ob.into_bump_slice()),
             limit,
         })
     }
@@ -364,7 +364,7 @@ pub enum Expr<'bump> {
         /// operand
         base: Option<&'bump Expr<'bump>>,
         /// `WHEN` condition `THEN` result
-        when_then_pairs: Vec<'bump, (Expr<'bump>, Expr<'bump>)>,
+        when_then_pairs: &'bump [(Expr<'bump>, Expr<'bump>)],
         /// `ELSE` result
         else_expr: Option<&'bump Expr<'bump>>,
     },
@@ -388,7 +388,7 @@ pub enum Expr<'bump> {
         /// `DISTINCT`
         distinctness: Option<Distinctness>,
         /// arguments
-        args: Option<Vec<'bump, Expr<'bump>>>,
+        args: Option<&'bump [Expr<'bump>]>,
         /// `ORDER BY` or `WITHIN GROUP`
         order_by: Option<FunctionCallOrder<'bump>>,
         /// `FILTER`
@@ -410,7 +410,7 @@ pub enum Expr<'bump> {
         /// `NOT`
         not: bool,
         /// values
-        rhs: Option<Vec<'bump, Expr<'bump>>>,
+        rhs: Option<&'bump [Expr<'bump>]>,
     },
     /// `IN` subselect
     InSelect {
@@ -430,7 +430,7 @@ pub enum Expr<'bump> {
         /// table name
         rhs: QualifiedName<'bump>,
         /// table function arguments
-        args: Option<Vec<'bump, Expr<'bump>>>,
+        args: Option<&'bump [Expr<'bump>]>,
     },
     /// `IS NULL`
     IsNull(&'bump Expr<'bump>),
@@ -471,7 +471,7 @@ pub enum Expr<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum FunctionCallOrder<'bump> {
     /// `ORDER BY cols`
-    SortList(Vec<'bump, SortedColumn<'bump>>),
+    SortList(&'bump [SortedColumn<'bump>]),
     /// `WITHIN GROUP (ORDER BY expr)`
     #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
     WithinGroup(&'bump Expr<'bump>),
@@ -562,7 +562,7 @@ impl<'bump> Expr<'bump> {
         Self::InList {
             lhs: b.alloc(lhs),
             not,
-            rhs,
+            rhs: rhs.map(|r| r.into_bump_slice()),
         }
     }
     /// Constructor
@@ -585,7 +585,7 @@ impl<'bump> Expr<'bump> {
             lhs: b.alloc(lhs),
             not,
             rhs,
-            args,
+            args: args.map(|a| a.into_bump_slice()),
         }
     }
     /// Constructor
@@ -613,7 +613,7 @@ impl<'bump> Expr<'bump> {
         Ok(Self::FunctionCall {
             name: Id::from_token(xt, x, b),
             distinctness,
-            args,
+            args: args.map(|a| a.into_bump_slice()),
             order_by,
             filter_over,
         })
@@ -828,7 +828,7 @@ pub struct Select<'bump> {
     /// body
     pub body: SelectBody<'bump>,
     /// `ORDER BY`
-    pub order_by: Option<Vec<'bump, SortedColumn<'bump>>>, // TODO: ORDER BY term does not match any column in the result set
+    pub order_by: Option<&'bump [SortedColumn<'bump>]>, // TODO: ORDER BY term does not match any column in the result set
     /// `LIMIT`
     pub limit: Option<Limit<'bump>>,
 }
@@ -844,12 +844,12 @@ impl<'bump> Select<'bump> {
         let select = Self {
             with,
             body,
-            order_by,
+            order_by: order_by.map(|ob| ob.into_bump_slice()),
             limit,
         };
         #[cfg(feature = "extra_checks")]
         if let Self {
-            order_by: Some(ref scs),
+            order_by: Some(scs),
             ..
         } = select
         {
@@ -930,17 +930,17 @@ pub enum OneSelect<'bump> {
         /// `DISTINCT`
         distinctness: Option<Distinctness>,
         /// columns
-        columns: Vec<'bump, ResultColumn<'bump>>,
+        columns: &'bump [ResultColumn<'bump>],
         /// `FROM` clause
         from: Option<FromClause<'bump>>,
         /// `WHERE` clause
         where_clause: Option<&'bump Expr<'bump>>,
         /// `GROUP BY`
-        group_by: Option<Vec<'bump, Expr<'bump>>>,
+        group_by: Option<&'bump [Expr<'bump>]>,
         /// `HAVING`
         having: Option<&'bump Expr<'bump>>, // TODO: HAVING clause on a non-aggregate query
         /// `WINDOW` definition
-        window_clause: Option<Vec<'bump, WindowDef<'bump>>>,
+        window_clause: Option<&'bump [WindowDef<'bump>]>,
     },
     /// `VALUES`
     Values(Vec<'bump, Vec<'bump, Expr<'bump>>>),
@@ -969,17 +969,16 @@ impl<'bump> OneSelect<'bump> {
         }
         let select = Self::Select {
             distinctness,
-            columns,
+            columns: columns.into_bump_slice(),
             from,
             where_clause: where_clause.map(|wc| b.alloc(wc) as _),
-            group_by,
+            group_by: group_by.map(|gb| gb.into_bump_slice()),
             having: having.map(|h| b.alloc(h) as _),
-            window_clause,
+            window_clause: window_clause.map(|wc| wc.into_bump_slice()),
         };
         #[cfg(feature = "extra_checks")]
         if let Self::Select {
-            group_by: Some(ref gb),
-            ..
+            group_by: Some(gb), ..
         } = select
         {
             if let ColumnCount::Fixed(n) = select.column_count() {
@@ -1117,7 +1116,7 @@ pub enum SelectTable<'bump> {
     /// table function call
     TableCall(
         QualifiedName<'bump>,
-        Option<Vec<'bump, Expr<'bump>>>,
+        Option<&'bump [Expr<'bump>]>,
         Option<As<'bump>>,
     ),
     /// `SELECT` subquery
@@ -1499,7 +1498,7 @@ pub enum CreateTableBody<'bump> {
         /// table column definitions
         columns: IndexMap<Name<'bump>, ColumnDefinition<'bump>>,
         /// table constraints
-        constraints: Option<Vec<'bump, NamedTableConstraint<'bump>>>,
+        constraints: Option<&'bump [NamedTableConstraint<'bump>]>,
         /// table flags
         flags: TabFlags,
     },
@@ -1538,7 +1537,7 @@ impl<'bump> CreateTableBody<'bump> {
         }
         Ok(Self::ColumnsAndConstraints {
             columns,
-            constraints,
+            constraints: constraints.map(|cs| cs.into_bump_slice()),
             flags,
         })
     }
@@ -1582,7 +1581,7 @@ pub struct ColumnDefinition<'bump> {
     /// column type
     pub col_type: Option<Type<'bump>>,
     /// column constraints
-    pub constraints: Vec<'bump, NamedColumnConstraint<'bump>>,
+    pub constraints: &'bump [NamedColumnConstraint<'bump>],
     /// column flags
     pub flags: ColFlags,
 }
@@ -1624,7 +1623,7 @@ impl<'bump> ColumnDefinition<'bump> {
                     ..
                 } => {
                     // The child table may reference the primary key of the parent without specifying the primary key column
-                    if columns.as_ref().map_or(0, Vec::len) > 1 {
+                    if columns.as_ref().map_or(0, |cs| cs.len()) > 1 {
                         return Err(custom_err!(
                             "foreign key on {} should reference only one column of table {}",
                             col_name,
@@ -1689,7 +1688,7 @@ impl<'bump> ColumnDefinition<'bump> {
         Ok(Self {
             col_name,
             col_type,
-            constraints,
+            constraints: constraints.into_bump_slice(),
             flags,
         })
     }
@@ -1790,7 +1789,7 @@ pub enum TableConstraint<'bump> {
     /// `PRIMARY KEY`
     PrimaryKey {
         /// columns
-        columns: Vec<'bump, SortedColumn<'bump>>,
+        columns: &'bump [SortedColumn<'bump>],
         /// `AUTOINCREMENT`
         auto_increment: bool,
         /// `ON CONFLICT` clause
@@ -1799,7 +1798,7 @@ pub enum TableConstraint<'bump> {
     /// `UNIQUE`
     Unique {
         /// columns
-        columns: Vec<'bump, SortedColumn<'bump>>,
+        columns: &'bump [SortedColumn<'bump>],
         /// `ON CONFLICT` clause
         conflict_clause: Option<ResolveType>,
     },
@@ -1808,7 +1807,7 @@ pub enum TableConstraint<'bump> {
     /// `FOREIGN KEY`
     ForeignKey {
         /// columns
-        columns: Vec<'bump, IndexedColumn<'bump>>,
+        columns: &'bump [IndexedColumn<'bump>],
         /// `REFERENCES`
         clause: ForeignKeyClause<'bump>,
         /// `DEFERRABLE`
@@ -1826,7 +1825,7 @@ impl<'bump> TableConstraint<'bump> {
         has_expression(&columns)?;
         has_explicit_nulls(&columns)?;
         Ok(Self::PrimaryKey {
-            columns,
+            columns: columns.into_bump_slice(),
             auto_increment,
             conflict_clause,
         })
@@ -1839,7 +1838,7 @@ impl<'bump> TableConstraint<'bump> {
         has_expression(&columns)?;
         has_explicit_nulls(&columns)?;
         Ok(Self::Unique {
-            columns,
+            columns: columns.into_bump_slice(),
             conflict_clause,
         })
     }
@@ -1870,9 +1869,24 @@ pub struct ForeignKeyClause<'bump> {
     /// foreign table name
     pub tbl_name: Name<'bump>,
     /// foreign table columns
-    pub columns: Option<Vec<'bump, IndexedColumn<'bump>>>,
+    pub columns: Option<&'bump [IndexedColumn<'bump>]>,
     /// referential action(s) / deferrable option(s)
-    pub args: Vec<'bump, RefArg<'bump>>,
+    pub args: &'bump [RefArg<'bump>],
+}
+
+impl<'bump> ForeignKeyClause<'bump> {
+    /// Constructor
+    pub fn new(
+        tbl_name: Name<'bump>,
+        columns: Option<Vec<'bump, IndexedColumn<'bump>>>,
+        args: Vec<'bump, RefArg<'bump>>,
+    ) -> Self {
+        ForeignKeyClause {
+            tbl_name,
+            columns: columns.map(|cs| cs.into_bump_slice()),
+            args: args.into_bump_slice(),
+        }
+    }
 }
 
 /// foreign-key reference args
@@ -2060,7 +2074,7 @@ pub enum TriggerCmd<'bump> {
         /// table name
         tbl_name: QualifiedName<'bump>,
         /// `SET` assignments
-        sets: Vec<'bump, Set<'bump>>, // FIXME unique
+        sets: &'bump [Set<'bump>], // FIXME unique
         /// `FROM`
         from: Option<FromClause<'bump>>,
         /// `WHERE` clause
@@ -2113,7 +2127,7 @@ pub struct With<'bump> {
     /// `RECURSIVE`
     pub recursive: bool,
     /// CTEs
-    pub ctes: Vec<'bump, CommonTableExpr<'bump>>,
+    pub ctes: &'bump [CommonTableExpr<'bump>],
 }
 
 /// CTE materialization
@@ -2134,7 +2148,7 @@ pub struct CommonTableExpr<'bump> {
     /// table name
     pub tbl_name: Name<'bump>,
     /// table columns
-    pub columns: Option<Vec<'bump, IndexedColumn<'bump>>>, // TODO: check no duplicate (eidlist_opt)
+    pub columns: Option<&'bump [IndexedColumn<'bump>]>, // TODO: check no duplicate (eidlist_opt)
     /// `MATERIALIZED`
     pub materialized: Materialized,
     /// query
@@ -2165,7 +2179,7 @@ impl<'bump> CommonTableExpr<'bump> {
         }
         Ok(Self {
             tbl_name,
-            columns,
+            columns: columns.map(|cs| cs.into_bump_slice()),
             materialized,
             select: b.alloc(select),
         })
@@ -2229,7 +2243,7 @@ pub struct Upsert<'bump> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct UpsertIndex<'bump> {
     /// columns
-    pub targets: Vec<'bump, SortedColumn<'bump>>,
+    pub targets: &'bump [SortedColumn<'bump>],
     /// `WHERE` clause
     pub where_clause: Option<Expr<'bump>>,
 }
@@ -2242,7 +2256,7 @@ impl<'bump> UpsertIndex<'bump> {
     ) -> Result<Self, ParserError> {
         has_explicit_nulls(&targets)?;
         Ok(Self {
-            targets,
+            targets: targets.into_bump_slice(),
             where_clause,
         })
     }
@@ -2254,7 +2268,7 @@ pub enum UpsertDo<'bump> {
     /// `SET`
     Set {
         /// assignments
-        sets: Vec<'bump, Set<'bump>>,
+        sets: &'bump [Set<'bump>],
         /// `WHERE` clause
         where_clause: Option<Expr<'bump>>,
     },
@@ -2297,11 +2311,28 @@ pub struct Window<'bump> {
     /// base window name
     pub base: Option<Name<'bump>>,
     /// `PARTITION BY`
-    pub partition_by: Option<Vec<'bump, Expr<'bump>>>,
+    pub partition_by: Option<&'bump [Expr<'bump>]>,
     /// `ORDER BY`
-    pub order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
+    pub order_by: Option<&'bump [SortedColumn<'bump>]>,
     /// frame spec
     pub frame_clause: Option<FrameClause<'bump>>,
+}
+
+impl<'bump> Window<'bump> {
+    /// Constructor
+    pub fn new(
+        base: Option<Name<'bump>>,
+        partition_by: Option<Vec<'bump, Expr<'bump>>>,
+        order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
+        frame_clause: Option<FrameClause<'bump>>,
+    ) -> Self {
+        Self {
+            base,
+            partition_by: partition_by.map(|pb| pb.into_bump_slice()),
+            order_by: order_by.map(|ob| ob.into_bump_slice()),
+            frame_clause,
+        }
+    }
 }
 
 /// Frame specification

@@ -358,7 +358,7 @@ ccons(A) ::= CHECK LP expr(X) RP.   {
 }
 ccons(A) ::= REFERENCES nm(T) eidlist_opt(TA) refargs(R). {
   let name = self.ctx.constraint_name();
-  let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
+  let clause = ForeignKeyClause::new(T, TA, R);
   let constraint = ColumnConstraint::ForeignKey{ clause, defer_clause: None }; // FIXME defer_clause
   A = NamedColumnConstraint{ name, constraint };
 }
@@ -449,8 +449,8 @@ tcons(A) ::= CHECK LP expr(E) RP onconf(R). {
 tcons(A) ::= FOREIGN KEY LP eidlist(FA) RP
           REFERENCES nm(T) eidlist_opt(TA) refargs(R) defer_subclause_opt(D). {
   let name = self.ctx.constraint_name();
-  let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
-  let constraint = TableConstraint::ForeignKey{ columns: FA, clause, defer_clause: D };
+  let clause = ForeignKeyClause::new(T, TA, R);
+  let constraint = TableConstraint::ForeignKey{ columns: FA.into_bump_slice(), clause, defer_clause: D };
   A = NamedTableConstraint{ name, constraint };
 }
 %type defer_subclause_opt {Option<DeferSubclause>}
@@ -485,7 +485,7 @@ ifexists(A) ::= .            {A = false;}
 %ifndef SQLITE_OMIT_VIEW
 cmd ::= createkw temp(T) VIEW ifnotexists(E) fullname(Y) eidlist_opt(C)
           AS select(S). {
-  self.ctx.stmt = Some(Stmt::CreateView{ temporary: T, if_not_exists: E, view_name: Y, columns: C,
+  self.ctx.stmt = Some(Stmt::CreateView{ temporary: T, if_not_exists: E, view_name: Y, columns: C.map(|cs| cs.into_bump_slice()),
                                          select: self.ctx.bump.alloc(S) });
 }
 cmd ::= DROP VIEW ifexists(E) fullname(X). {
@@ -508,10 +508,10 @@ cmd ::= select(X).  {
 
 %ifndef SQLITE_OMIT_CTE
 select(A) ::= WITH wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select::new(Some(With { recursive: false, ctes: W }), X, Z, L)?;
+  A = Select::new(Some(With { recursive: false, ctes: W.into_bump_slice() }), X, Z, L)?;
 }
 select(A) ::= WITH RECURSIVE wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select::new(Some(With { recursive: true, ctes: W }), X, Z, L)?;
+  A = Select::new(Some(With { recursive: true, ctes: W.into_bump_slice() }), X, Z, L)?;
 }
 %endif /* SQLITE_OMIT_CTE */
 select(A) ::= selectnowith(X) orderby_opt(Z) limit_opt(L). {
@@ -633,7 +633,7 @@ seltablist(A) ::= stl_prefix(A) fullname(Y) as(Z) indexed_opt(I) on_using(N). {
     A.push(st, jc, self.ctx.bump)?;
 }
 seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z) on_using(N). {
-    let st = SelectTable::TableCall(Y, E, Z);
+    let st = SelectTable::TableCall(Y, E.map(|e| e.into_bump_slice()), Z);
     let jc = N;
     A.push(st, jc, self.ctx.bump)?;
 }
@@ -780,8 +780,8 @@ limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y).
 cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt_ret(W)
         orderby_opt(O) limit_opt(L). {
   let (where_clause, returning) = W;
-  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause, returning,
-                                     order_by: O, limit: L });
+  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause, returning: returning.map(|r| r.into_bump_slice()),
+                                     order_by: O.map(|ob| ob.into_bump_slice()), limit: L });
 }
 %else
 cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt_ret(W). {
@@ -847,13 +847,13 @@ cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
   let (upsert, returning) = U;
   let body = InsertBody::Select(self.ctx.bump.alloc(S), upsert.map(|u| self.ctx.bump.alloc(u) as _));
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
-                                     body, returning });
+                                     body, returning: returning.map(|r| r.into_bump_slice()) });
 }
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) DEFAULT VALUES returning(Y).
 {
   let body = InsertBody::DefaultValues;
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
-                                     body, returning: Y });
+                                     body, returning: Y.map(|r| r.into_bump_slice()) });
 }
 
 %type upsert "(Option<Upsert<'i>>, Option<Vec<'i, ResultColumn<'i>>>)"
@@ -868,7 +868,7 @@ upsert(A) ::= RETURNING selcollist(X).  { A = (None, Some(X)); }
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW)
               DO UPDATE SET setlist(Z) where_opt(W) upsert(N).
               { let index = UpsertIndex::new(T, TW)?;
-                let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
+                let do_clause = UpsertDo::Set{ sets: Z.into_bump_slice(), where_clause: W };
                 let (next, returning) = N;
                 A = (Some(Upsert{ index: Some(index), do_clause, next: next.map(|n| self.ctx.bump.alloc(n) as _) }), returning);}
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING upsert(N).
@@ -878,7 +878,7 @@ upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING upsert(N).
 upsert(A) ::= ON CONFLICT DO NOTHING returning(R).
               { A = (Some(Upsert{ index: None, do_clause: UpsertDo::Nothing, next: None }), R); }
 upsert(A) ::= ON CONFLICT DO UPDATE SET setlist(Z) where_opt(W) returning(R).
-              { let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
+              { let do_clause = UpsertDo::Set{ sets: Z.into_bump_slice(), where_clause: W };
                 A = (Some(Upsert{ index: None, do_clause, next: None }), R);}
 
 %type returning "Option<Vec<'i, ResultColumn<'i>>>"
@@ -938,7 +938,7 @@ expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP. {
   A = Expr::function_call(@X, X, D, Y, None, None, self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP. {
-  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O)), None, self.ctx.bump)?; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O.into_bump_slice())), None, self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP. {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X, self.ctx.bump), filter_over: None }; /*A-overwrites-X*/
@@ -955,7 +955,7 @@ expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
   A = Expr::function_call(@X, X, D, Y, None, Some(Z), self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP filter_over(Z). {
-  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O)), Some(Z), self.ctx.bump)?; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O.into_bump_slice())), Some(Z), self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
   A = Expr::FunctionCallStar{ name: Id::from_token(@X, X, self.ctx.bump), filter_over: Some(Z) }; /*A-overwrites-X*/
@@ -1066,7 +1066,7 @@ expr(A) ::= expr(B) between_op(N) expr(X) AND expr(Y). [BETWEEN] {
 
 /* CASE expressions */
 expr(A) ::= CASE case_operand(X) case_exprlist(Y) case_else(Z) END. {
-  A = Expr::Case{ base: X.map(|x| self.ctx.bump.alloc(x) as _), when_then_pairs: Y, else_expr: Z.map(|z| self.ctx.bump.alloc(z) as _)};
+  A = Expr::Case{ base: X.map(|x| self.ctx.bump.alloc(x) as _), when_then_pairs: Y.into_bump_slice(), else_expr: Z.map(|z| self.ctx.bump.alloc(z) as _)};
 }
 %type case_exprlist "Vec<'i, (Expr<'i>, Expr<'i>)>"
 case_exprlist(A) ::= case_exprlist(A) WHEN expr(Y) THEN expr(Z). {
@@ -1198,7 +1198,7 @@ cmd ::= createkw temp(T) TRIGGER ifnotexists(NOERR) fullname(B) trigger_time(C) 
         ON fullname(E) foreach_clause(X) when_clause(G) BEGIN trigger_cmd_list(S) END. {
   self.ctx.stmt = Some(Stmt::CreateTrigger{
     temporary: T, if_not_exists: NOERR, trigger_name: B, time: C, event: D, tbl_name: E,
-    for_each_row: X, when_clause: G, commands: S
+    for_each_row: X, when_clause: G, commands: S.into_bump_slice()
   });
 }
 
@@ -1253,7 +1253,7 @@ tridxby ::= NOT INDEXED. {
 // UPDATE
 trigger_cmd(A) ::=
    UPDATE orconf(R) xfullname(X) tridxby SET setlist(Y) from(F) where_opt(Z).
-   {A = TriggerCmd::Update{ or_conflict: R, tbl_name: X, sets: Y, from: F, where_clause: Z };}
+   {A = TriggerCmd::Update{ or_conflict: R, tbl_name: X, sets: Y.into_bump_slice(), from: F, where_clause: Z };}
 
 // INSERT
 trigger_cmd(A) ::= insert_cmd(R) INTO
@@ -1366,7 +1366,7 @@ cmd ::= create_vtab(X).                       {self.ctx.stmt = Some(X);}
 cmd ::= create_vtab(X) LP vtabarglist RP.  {
   let mut stmt = X;
   if let Stmt::CreateVirtualTable{ ref mut args, .. } = stmt {
-    *args = self.ctx.module_args();
+    *args = self.ctx.module_args().map(|a| a.into_bump_slice());
   }
   self.ctx.stmt = Some(stmt);
 }
@@ -1396,8 +1396,8 @@ anylist ::= anylist ANY.
 
 with(A) ::= . { A = None; }
 %ifndef SQLITE_OMIT_CTE
-with(A) ::= WITH wqlist(W).              { A = Some(With{ recursive: false, ctes: W }); }
-with(A) ::= WITH RECURSIVE wqlist(W).    { A = Some(With{ recursive: true, ctes: W }); }
+with(A) ::= WITH wqlist(W).              { A = Some(With{ recursive: false, ctes: W.into_bump_slice() }); }
+with(A) ::= WITH RECURSIVE wqlist(W).    { A = Some(With{ recursive: true, ctes: W.into_bump_slice() }); }
 
 %type wqas {Materialized}
 wqas(A)   ::= AS.                  {A = Materialized::Any;}
@@ -1452,22 +1452,22 @@ windowdefn(A) ::= nm(X) AS LP window(Y) RP. {
 %type frame_bound_e "FrameBound<'i>"
 
 window(A) ::= PARTITION BY nexprlist(X) orderby_opt(Y) frame_opt(Z). {
-  A = Window{ base: None,  partition_by: Some(X), order_by: Y, frame_clause: Z};
+  A = Window::new(None,  Some(X), Y, Z);
 }
 window(A) ::= nm(W) PARTITION BY nexprlist(X) orderby_opt(Y) frame_opt(Z). {
-  A = Window{ base: Some(W),  partition_by: Some(X), order_by: Y, frame_clause: Z};
+  A = Window::new(Some(W), Some(X), Y, Z);
 }
 window(A) ::= ORDER BY sortlist(Y) frame_opt(Z). {
-  A = Window{ base: None,  partition_by: None, order_by: Some(Y), frame_clause: Z};
+  A = Window::new(None, None, Some(Y), Z);
 }
 window(A) ::= nm(W) ORDER BY sortlist(Y) frame_opt(Z). {
-  A = Window{ base: Some(W),  partition_by: None, order_by: Some(Y), frame_clause: Z};
+  A = Window::new(Some(W), None, Some(Y), Z);
 }
 window(A) ::= frame_opt(Z). {
-  A = Window{ base: None,  partition_by: None, order_by: None, frame_clause: Z};
+  A = Window::new(None, None, None, Z);
 }
 window(A) ::= nm(W) frame_opt(Z). {
-  A = Window{ base: Some(W),  partition_by: None, order_by: None, frame_clause: Z};
+  A = Window::new(Some(W), None, None, Z);
 }
 
 frame_opt(A) ::= .                             {

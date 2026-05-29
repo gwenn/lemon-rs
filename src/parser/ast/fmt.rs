@@ -184,7 +184,7 @@ impl ToTokens for Stmt<'_> {
                 s.append(TK_ON, None)?;
                 tbl_name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
-                comma(columns, s)?;
+                comma(*columns, s)?;
                 s.append(TK_RP, None)?;
                 if let Some(where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
@@ -249,7 +249,7 @@ impl ToTokens for Stmt<'_> {
                     when_clause.to_tokens(s)?;
                 }
                 s.append(TK_BEGIN, Some("\n"))?;
-                for command in commands {
+                for command in *commands {
                     command.to_tokens(s)?;
                     s.append(TK_SEMI, Some("\n"))?;
                 }
@@ -275,7 +275,7 @@ impl ToTokens for Stmt<'_> {
                 view_name.to_tokens(s)?;
                 if let Some(columns) = columns {
                     s.append(TK_LP, None)?;
-                    comma(columns, s)?;
+                    comma(*columns, s)?;
                     s.append(TK_RP, None)?;
                 }
                 s.append(TK_AS, None)?;
@@ -300,7 +300,7 @@ impl ToTokens for Stmt<'_> {
                 module_name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
                 if let Some(args) = args {
-                    comma(args, s)?;
+                    comma(*args, s)?;
                 }
                 s.append(TK_RP, None)
             }
@@ -328,12 +328,12 @@ impl ToTokens for Stmt<'_> {
                 }
                 if let Some(returning) = returning {
                     s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
+                    comma(*returning, s)?;
                 }
                 if let Some(order_by) = order_by {
                     s.append(TK_ORDER, None)?;
                     s.append(TK_BY, None)?;
-                    comma(order_by, s)?;
+                    comma(*order_by, s)?;
                 }
                 if let Some(limit) = limit {
                     limit.to_tokens(s)?;
@@ -422,7 +422,7 @@ impl ToTokens for Stmt<'_> {
                 body.to_tokens(s)?;
                 if let Some(returning) = returning {
                     s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
+                    comma(*returning, s)?;
                 }
                 Ok(())
             }
@@ -490,7 +490,7 @@ impl ToTokens for Stmt<'_> {
                     indexed.to_tokens(s)?;
                 }
                 s.append(TK_SET, None)?;
-                comma(sets, s)?;
+                comma(*sets, s)?;
                 if let Some(from) = from {
                     s.append(TK_FROM, None)?;
                     from.to_tokens(s)?;
@@ -501,12 +501,12 @@ impl ToTokens for Stmt<'_> {
                 }
                 if let Some(returning) = returning {
                     s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
+                    comma(*returning, s)?;
                 }
                 if let Some(order_by) = order_by {
                     s.append(TK_ORDER, None)?;
                     s.append(TK_BY, None)?;
-                    comma(order_by, s)?;
+                    comma(*order_by, s)?;
                 }
                 if let Some(limit) = limit {
                     limit.to_tokens(s)?;
@@ -515,10 +515,10 @@ impl ToTokens for Stmt<'_> {
             }
             Self::Vacuum(name, expr) => {
                 s.append(TK_VACUUM, None)?;
-                if let Some(ref name) = name {
+                if let Some(name) = name {
                     name.to_tokens(s)?;
                 }
-                if let Some(ref expr) = expr {
+                if let Some(expr) = expr {
                     s.append(TK_INTO, None)?;
                     expr.to_tokens(s)?;
                 }
@@ -557,16 +557,16 @@ impl ToTokens for Expr<'_> {
                 else_expr,
             } => {
                 s.append(TK_CASE, None)?;
-                if let Some(ref base) = base {
+                if let Some(base) = base {
                     base.to_tokens(s)?;
                 }
-                for (when, then) in when_then_pairs {
+                for (when, then) in *when_then_pairs {
                     s.append(TK_WHEN, None)?;
                     when.to_tokens(s)?;
                     s.append(TK_THEN, None)?;
                     then.to_tokens(s)?;
                 }
-                if let Some(ref else_expr) = else_expr {
+                if let Some(else_expr) = else_expr {
                     s.append(TK_ELSE, None)?;
                     else_expr.to_tokens(s)?;
                 }
@@ -577,7 +577,7 @@ impl ToTokens for Expr<'_> {
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
                 s.append(TK_AS, None)?;
-                if let Some(ref type_name) = type_name {
+                if let Some(type_name) = type_name {
                     type_name.to_tokens(s)?;
                 }
                 s.append(TK_RP, None)
@@ -613,14 +613,14 @@ impl ToTokens for Expr<'_> {
                     distinctness.to_tokens(s)?;
                 }
                 if let Some(args) = args {
-                    comma(args, s)?;
+                    comma(*args, s)?;
                 }
                 if let Some(order_by) = order_by {
                     match order_by {
                         FunctionCallOrder::SortList(order_by) => {
                             s.append(TK_ORDER, None)?;
                             s.append(TK_BY, None)?;
-                            comma(order_by, s)?;
+                            comma(*order_by, s)?;
                         }
                         #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
                         FunctionCallOrder::WithinGroup(order_by) => {
@@ -659,7 +659,7 @@ impl ToTokens for Expr<'_> {
                 s.append(TK_IN, None)?;
                 s.append(TK_LP, None)?;
                 if let Some(rhs) = rhs {
-                    comma(rhs, s)?;
+                    comma(*rhs, s)?;
                 }
                 s.append(TK_RP, None)
             }
@@ -687,7 +687,7 @@ impl ToTokens for Expr<'_> {
                 rhs.to_tokens(s)?;
                 if let Some(args) = args {
                     s.append(TK_LP, None)?;
-                    comma(args, s)?;
+                    comma(*args, s)?;
                     s.append(TK_RP, None)?;
                 }
                 Ok(())
@@ -848,7 +848,7 @@ impl ToTokens for Select<'_> {
             with.to_tokens(s)?;
         }
         self.body.to_tokens(s)?;
-        if let Some(ref order_by) = self.order_by {
+        if let Some(order_by) = self.order_by {
             s.append(TK_ORDER, None)?;
             s.append(TK_BY, None)?;
             comma(order_by, s)?;
@@ -912,30 +912,30 @@ impl ToTokens for OneSelect<'_> {
                 window_clause,
             } => {
                 s.append(TK_SELECT, None)?;
-                if let Some(ref distinctness) = distinctness {
+                if let Some(distinctness) = distinctness {
                     distinctness.to_tokens(s)?;
                 }
-                comma(columns, s)?;
-                if let Some(ref from) = from {
+                comma(*columns, s)?;
+                if let Some(from) = from {
                     s.append(TK_FROM, None)?;
                     from.to_tokens(s)?;
                 }
-                if let Some(ref where_clause) = where_clause {
+                if let Some(where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
                     where_clause.to_tokens(s)?;
                 }
-                if let Some(ref group_by) = group_by {
+                if let Some(group_by) = group_by {
                     s.append(TK_GROUP, None)?;
                     s.append(TK_BY, None)?;
-                    comma(group_by, s)?;
+                    comma(*group_by, s)?;
                 }
-                if let Some(ref having) = having {
+                if let Some(having) = having {
                     s.append(TK_HAVING, None)?;
                     having.to_tokens(s)?;
                 }
-                if let Some(ref window_clause) = window_clause {
+                if let Some(window_clause) = window_clause {
                     s.append(TK_WINDOW, None)?;
-                    comma(window_clause, s)?;
+                    comma(*window_clause, s)?;
                 }
                 Ok(())
             }
@@ -1040,7 +1040,7 @@ impl ToTokens for SelectTable<'_> {
                 name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
                 if let Some(exprs) = exprs {
-                    comma(exprs, s)?;
+                    comma(*exprs, s)?;
                 }
                 s.append(TK_RP, None)?;
                 if let Some(alias) = alias {
@@ -1075,7 +1075,7 @@ impl ToTokens for JoinOperator {
         match self {
             Self::Comma => s.append(TK_COMMA, None),
             Self::TypedJoin(join_type) => {
-                if let Some(ref join_type) = join_type {
+                if let Some(join_type) = join_type {
                     join_type.to_tokens(s)?;
                 }
                 s.append(TK_JOIN, None)
@@ -1239,7 +1239,7 @@ impl ToTokens for CreateTableBody<'_> {
                 comma(columns.values(), s)?;
                 if let Some(constraints) = constraints {
                     s.append(TK_COMMA, None)?;
-                    comma(constraints, s)?;
+                    comma(*constraints, s)?;
                 }
                 s.append(TK_RP, None)?;
                 if flags.contains(TabFlags::WithoutRowid) {
@@ -1265,7 +1265,7 @@ impl ToTokens for ColumnDefinition<'_> {
         if let Some(ref col_type) = self.col_type {
             col_type.to_tokens(s)?;
         }
-        for constraint in &self.constraints {
+        for constraint in self.constraints {
             constraint.to_tokens(s)?;
         }
         Ok(())
@@ -1390,7 +1390,7 @@ impl ToTokens for TableConstraint<'_> {
                 s.append(TK_PRIMARY, None)?;
                 s.append(TK_KEY, None)?;
                 s.append(TK_LP, None)?;
-                comma(columns, s)?;
+                comma(*columns, s)?;
                 if *auto_increment {
                     s.append(TK_AUTOINCR, None)?;
                 }
@@ -1408,7 +1408,7 @@ impl ToTokens for TableConstraint<'_> {
             } => {
                 s.append(TK_UNIQUE, None)?;
                 s.append(TK_LP, None)?;
-                comma(columns, s)?;
+                comma(*columns, s)?;
                 s.append(TK_RP, None)?;
                 if let Some(conflict_clause) = conflict_clause {
                     s.append(TK_ON, None)?;
@@ -1437,7 +1437,7 @@ impl ToTokens for TableConstraint<'_> {
                 s.append(TK_FOREIGN, None)?;
                 s.append(TK_KEY, None)?;
                 s.append(TK_LP, None)?;
-                comma(columns, s)?;
+                comma(*columns, s)?;
                 s.append(TK_RP, None)?;
                 s.append(TK_REFERENCES, None)?;
                 clause.to_tokens(s)?;
@@ -1478,12 +1478,12 @@ impl ToTokens for NullsOrder {
 impl ToTokens for ForeignKeyClause<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.tbl_name.to_tokens(s)?;
-        if let Some(ref columns) = self.columns {
+        if let Some(columns) = self.columns {
             s.append(TK_LP, None)?;
             comma(columns, s)?;
             s.append(TK_RP, None)?;
         }
-        for arg in &self.args {
+        for arg in self.args {
             arg.to_tokens(s)?;
         }
         Ok(())
@@ -1685,7 +1685,7 @@ impl ToTokens for TriggerEvent<'_> {
             Self::Delete => s.append(TK_DELETE, None),
             Self::Insert => s.append(TK_INSERT, None),
             Self::Update => s.append(TK_UPDATE, None),
-            Self::UpdateOf(ref col_names) => {
+            Self::UpdateOf(col_names) => {
                 s.append(TK_UPDATE, None)?;
                 s.append(TK_OF, None)?;
                 comma(col_names.deref(), s)
@@ -1711,7 +1711,7 @@ impl ToTokens for TriggerCmd<'_> {
                 }
                 tbl_name.to_tokens(s)?;
                 s.append(TK_SET, None)?;
-                comma(sets, s)?;
+                comma(*sets, s)?;
                 if let Some(from) = from {
                     s.append(TK_FROM, None)?;
                     from.to_tokens(s)?;
@@ -1790,14 +1790,14 @@ impl ToTokens for With<'_> {
         if self.recursive {
             s.append(TK_RECURSIVE, None)?;
         }
-        comma(&self.ctes, s)
+        comma(self.ctes, s)
     }
 }
 
 impl ToTokens for CommonTableExpr<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.tbl_name.to_tokens(s)?;
-        if let Some(ref columns) = self.columns {
+        if let Some(columns) = self.columns {
             s.append(TK_LP, None)?;
             comma(columns, s)?;
             s.append(TK_RP, None)?;
@@ -1867,7 +1867,7 @@ impl ToTokens for Upsert<'_> {
             index.to_tokens(s)?;
         }
         self.do_clause.to_tokens(s)?;
-        if let Some(ref next) = self.next {
+        if let Some(next) = self.next {
             next.to_tokens(s)?;
         }
         Ok(())
@@ -1877,7 +1877,7 @@ impl ToTokens for Upsert<'_> {
 impl ToTokens for UpsertIndex<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(TK_LP, None)?;
-        comma(&self.targets, s)?;
+        comma(self.targets, s)?;
         s.append(TK_RP, None)?;
         if let Some(ref where_clause) = self.where_clause {
             s.append(TK_WHERE, None)?;
@@ -1894,7 +1894,7 @@ impl ToTokens for UpsertDo<'_> {
                 s.append(TK_DO, None)?;
                 s.append(TK_UPDATE, None)?;
                 s.append(TK_SET, None)?;
-                comma(sets, s)?;
+                comma(*sets, s)?;
                 if let Some(where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
                     where_clause.to_tokens(s)?;
@@ -1911,14 +1911,14 @@ impl ToTokens for UpsertDo<'_> {
 
 impl ToTokens for FunctionTail<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if let Some(ref filter_clause) = self.filter_clause {
+        if let Some(filter_clause) = self.filter_clause {
             s.append(TK_FILTER, None)?;
             s.append(TK_LP, None)?;
             s.append(TK_WHERE, None)?;
             filter_clause.to_tokens(s)?;
             s.append(TK_RP, None)?;
         }
-        if let Some(ref over_clause) = self.over_clause {
+        if let Some(over_clause) = self.over_clause {
             s.append(TK_OVER, None)?;
             over_clause.to_tokens(s)?;
         }
@@ -1949,12 +1949,12 @@ impl ToTokens for Window<'_> {
         if let Some(ref base) = self.base {
             base.to_tokens(s)?;
         }
-        if let Some(ref partition_by) = self.partition_by {
+        if let Some(partition_by) = self.partition_by {
             s.append(TK_PARTITION, None)?;
             s.append(TK_BY, None)?;
             comma(partition_by, s)?;
         }
-        if let Some(ref order_by) = self.order_by {
+        if let Some(order_by) = self.order_by {
             s.append(TK_ORDER, None)?;
             s.append(TK_BY, None)?;
             comma(order_by, s)?;
