@@ -55,7 +55,6 @@
 //
 %include {
 use bumpalo::collections::Vec;
-use indexmap::IndexMap;
 use log::error;
 
 use crate::custom_err;
@@ -152,7 +151,7 @@ table_option(A) ::= nm(X). {
     return Err(custom_err!("unknown table option: {}", option));
   }
 }
-%type columnlist "IndexMap<Name<'i>,ColumnDefinition<'i>>"
+%type columnlist "Vec<'i,ColumnDefinition<'i>>"
 columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
   let col = X;
   let cd = ColumnDefinition::new(col.0, col.1, Y, self.ctx.bump)?;
@@ -161,9 +160,9 @@ columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
 columnlist(A) ::= columnname(X) carglist(Y). {
   let col = X;
   let cd = ColumnDefinition::new(col.0, col.1, Y, self.ctx.bump)?;
-  let mut map = IndexMap::new();
-  ColumnDefinition::add_column(&mut map, cd)?;
-  A = map;
+  let mut cs = Vec::new_in(self.ctx.bump);
+  ColumnDefinition::add_column(&mut cs, cd)?;
+  A = cs;
 }
 %type columnname "(Name<'i>, Option<Type<'i>>)"
 columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
@@ -826,7 +825,7 @@ cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from
 %type setlist "Vec<'i, Set<'i>>"
 
 setlist(A) ::= setlist(A) COMMA nm(X) EQ expr(Y). {
-  let s = Set{ col_names: DistinctNames::single(X), expr: Y };
+  let s = Set{ col_names: DistinctNames::single(X, self.ctx.bump), expr: Y };
   A.push(s);
 }
 setlist(A) ::= setlist(A) COMMA LP idlist(X) RP EQ expr(Y). {
@@ -834,7 +833,7 @@ setlist(A) ::= setlist(A) COMMA LP idlist(X) RP EQ expr(Y). {
   A.push(s);
 }
 setlist(A) ::= nm(X) EQ expr(Y). {
-  A = self.ctx.new_vec(Set{ col_names: DistinctNames::single(X), expr: Y });
+  A = self.ctx.new_vec(Set{ col_names: DistinctNames::single(X, self.ctx.bump), expr: Y });
 }
 setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
   A = self.ctx.new_vec(Set{ col_names: X, expr: Y });
@@ -896,7 +895,7 @@ idlist_opt(A) ::= LP idlist(X) RP.    {A = Some(X);}
 idlist(A) ::= idlist(A) COMMA nm(Y).
     {let id = Y; A.insert(id)?;}
 idlist(A) ::= nm(Y).
-    { A = DistinctNames::new(Y); /*A-overwrites-Y*/}
+    { A = DistinctNames::new(Y, self.ctx.bump); /*A-overwrites-Y*/}
 
 /////////////////////////// Expression Processing /////////////////////////////
 //

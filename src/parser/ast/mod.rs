@@ -8,7 +8,6 @@ use std::ops::Deref;
 use std::str::{self, Bytes, FromStr as _};
 
 use bumpalo::{collections::Vec, Bump};
-use indexmap::{IndexMap, IndexSet};
 
 #[cfg(feature = "extra_checks")]
 use check::ColumnCount;
@@ -25,7 +24,7 @@ pub struct ParameterInfo {
     /// Number of SQL parameters in a prepared statement, like `sqlite3_bind_parameter_count`
     pub count: u16,
     /// Parameter name(s) if any
-    pub names: IndexSet<String>,
+    pub names: indexmap::IndexSet<String>,
 }
 
 // https://sqlite.org/lang_expr.html#parameters
@@ -1393,19 +1392,19 @@ impl<'bump> QualifiedName<'bump> {
 
 /// Ordered set of distinct column names
 #[derive(Debug, PartialEq, Eq)]
-pub struct DistinctNames<'bump>(IndexSet<Name<'bump>>);
+pub struct DistinctNames<'bump>(Vec<'bump, Name<'bump>>);
 
 impl<'bump> DistinctNames<'bump> {
     /// Initialize
-    pub fn new(name: Name<'bump>) -> Self {
-        let mut dn = Self(IndexSet::new());
-        dn.0.insert(name);
+    pub fn new(name: Name<'bump>, bump: &'bump Bump) -> Self {
+        let mut dn = Self(Vec::new_in(bump));
+        dn.0.push(name);
         dn
     }
     /// Single column name
-    pub fn single(name: Name<'bump>) -> Self {
-        let mut dn = Self(IndexSet::with_capacity(1));
-        dn.0.insert(name);
+    pub fn single(name: Name<'bump>, bump: &'bump Bump) -> Self {
+        let mut dn = Self(Vec::with_capacity_in(1, bump));
+        dn.0.push(name);
         dn
     }
     /// Push a distinct name or fail
@@ -1413,14 +1412,14 @@ impl<'bump> DistinctNames<'bump> {
         if self.0.contains(&name) {
             return Err(custom_err!("column \"{}\" specified more than once", name));
         }
-        self.0.insert(name);
+        self.0.push(name);
         Ok(())
     }
 }
 impl<'bump> Deref for DistinctNames<'bump> {
-    type Target = IndexSet<Name<'bump>>;
+    type Target = Vec<'bump, Name<'bump>>;
 
-    fn deref(&self) -> &IndexSet<Name<'bump>> {
+    fn deref(&self) -> &Vec<'bump, Name<'bump>> {
         &self.0
     }
 }
@@ -1496,7 +1495,7 @@ pub enum CreateTableBody<'bump> {
     /// columns and constraints
     ColumnsAndConstraints {
         /// table column definitions
-        columns: IndexMap<Name<'bump>, ColumnDefinition<'bump>>,
+        columns: Vec<'bump, ColumnDefinition<'bump>>,
         /// table constraints
         constraints: Option<&'bump [NamedTableConstraint<'bump>]>,
         /// table flags
@@ -1509,11 +1508,11 @@ pub enum CreateTableBody<'bump> {
 impl<'bump> CreateTableBody<'bump> {
     /// Constructor
     pub fn columns_and_constraints(
-        columns: IndexMap<Name<'bump>, ColumnDefinition<'bump>>,
+        columns: Vec<'bump, ColumnDefinition<'bump>>,
         constraints: Option<Vec<'bump, NamedTableConstraint<'bump>>>,
         mut flags: TabFlags,
     ) -> Result<Self, ParserError> {
-        for col in columns.values() {
+        for col in &columns {
             if col.flags.contains(ColFlags::PRIMKEY) {
                 flags |= TabFlags::HasPrimaryKey;
             }
@@ -1693,22 +1692,16 @@ impl<'bump> ColumnDefinition<'bump> {
         })
     }
     /// Collector
-    pub fn add_column(
-        columns: &mut IndexMap<Name<'bump>, Self>,
-        cd: Self,
-    ) -> Result<(), ParserError> {
-        let col_name = &cd.col_name;
-        if columns.contains_key(col_name) {
-            return Err(custom_err!("duplicate column name: {}", col_name));
+    pub fn add_column(columns: &mut Vec<'bump, Self>, cd: Self) -> Result<(), ParserError> {
+        if columns.iter().any(|c| c.col_name == cd.col_name) {
+            return Err(custom_err!("duplicate column name: {}", cd.col_name));
         } else if cd.flags.contains(ColFlags::PRIMKEY)
-            && columns
-                .values()
-                .any(|c| c.flags.contains(ColFlags::PRIMKEY))
+            && columns.iter().any(|c| c.flags.contains(ColFlags::PRIMKEY))
         {
             #[cfg(feature = "extra_checks")]
             return Err(custom_err!("table has more than one primary key")); // FIXME table name
         }
-        columns.insert(col_name.clone(), cd);
+        columns.push(cd);
         Ok(())
     }
 }

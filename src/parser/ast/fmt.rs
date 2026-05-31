@@ -1236,7 +1236,7 @@ impl ToTokens for CreateTableBody<'_> {
                 flags,
             } => {
                 s.append(TK_LP, None)?;
-                comma(columns.values(), s)?;
+                comma(columns, s)?;
                 if let Some(constraints) = constraints {
                     s.append(TK_COMMA, None)?;
                     comma(*constraints, s)?;

@@ -200,7 +200,7 @@ impl CreateTableBody<'_> {
         } = self
         {
             let mut generated_count = 0;
-            for c in columns.values() {
+            for c in columns {
                 if c.flags.intersects(ColFlags::GENERATED) {
                     generated_count += 1;
                 }
@@ -210,7 +210,7 @@ impl CreateTableBody<'_> {
             }
 
             if flags.contains(TabFlags::Strict) {
-                for c in columns.values() {
+                for c in columns {
                     match &c.col_type {
                         Some(Type {
                             name,
