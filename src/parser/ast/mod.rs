@@ -175,7 +175,7 @@ pub enum Stmt<'bump> {
         /// `ORDER BY`
         order_by: Option<&'bump [SortedColumn<'bump>]>,
         /// `LIMIT`
-        limit: Option<Limit<'bump>>,
+        limit: Option<&'bump Limit<'bump>>,
     },
     /// `DETACH DATABASE`: db name
     Detach(Expr<'bump>), // TODO distinction between DETACH and DETACH DATABASE
@@ -263,7 +263,7 @@ pub enum Stmt<'bump> {
         /// `ORDER BY`
         order_by: Option<&'bump [SortedColumn<'bump>]>,
         /// `LIMIT`
-        limit: Option<Limit<'bump>>,
+        limit: Option<&'bump Limit<'bump>>,
     },
     /// `VACUUM`: database name, into expr
     Vacuum(Option<Name<'bump>>, Option<Expr<'bump>>),
@@ -301,7 +301,7 @@ impl<'bump> Stmt<'bump> {
         where_clause: Option<Expr<'bump>>,
         returning: Option<Vec<'bump, ResultColumn<'bump>>>,
         order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
-        limit: Option<Limit<'bump>>,
+        limit: Option<&'bump Limit<'bump>>,
     ) -> Result<Self, ParserError> {
         #[cfg(feature = "extra_checks")]
         if let Some(FromClause {
@@ -829,7 +829,7 @@ pub struct Select<'bump> {
     /// `ORDER BY`
     pub order_by: Option<&'bump [SortedColumn<'bump>]>, // TODO: ORDER BY term does not match any column in the result set
     /// `LIMIT`
-    pub limit: Option<Limit<'bump>>,
+    pub limit: Option<&'bump Limit<'bump>>,
 }
 
 impl<'bump> Select<'bump> {
@@ -838,7 +838,7 @@ impl<'bump> Select<'bump> {
         with: Option<With<'bump>>,
         body: SelectBody<'bump>,
         order_by: Option<Vec<'bump, SortedColumn<'bump>>>,
-        limit: Option<Limit<'bump>>,
+        limit: Option<&'bump Limit<'bump>>,
     ) -> Result<Self, ParserError> {
         let select = Self {
             with,
