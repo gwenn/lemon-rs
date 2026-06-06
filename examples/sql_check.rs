@@ -42,6 +42,8 @@ fn main() {
                             }
                             Ok(Some(check)) => {
                                 if cmd != check {
+                                    eprintln!("{}:{}", arg, parser.position());
+                                    eprintln!("{input}");
                                     eprintln!("{cmd:?}\n<>\n{check:?}");
                                 }
                             }

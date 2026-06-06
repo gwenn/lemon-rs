@@ -1680,6 +1680,9 @@ impl<'bump> ColumnDefinition<'bump> {
                     col_type.name = new_type.into_bump_str();
                 }
             }
+            if col_type.as_ref().is_some_and(|ct| ct.name.is_empty()) {
+                col_type = None;
+            }
         }
         if col_type.as_ref().is_some_and(|t| !t.name.is_empty()) {
             flags |= ColFlags::HASTYPE;
