@@ -27,6 +27,17 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --no-deps -- -D warnings
 
+  miri:
+    name: Miri
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hecrj/setup-rust-action@v2
+        with:
+          rust-version: nightly
+          components: miri
+      - run: cargo miri test --features extra_checks
+
   direct-minimal-versions:
     name: Test min versions
     runs-on: ubuntu-latest
