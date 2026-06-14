@@ -8,8 +8,8 @@ edition = "2018"
 sqlite3-parser = { path = "..", default-features = false, features = [
     "YYNOERRORRECOVERY",
     "NDEBUG",
+    "extra_checks",
 ] }
-fallible-iterator = "0.3"
 
 [dev-dependencies]
 criterion = "0.5"

@@ -1,6 +1,4 @@
-use bumpalo::Bump;
-use fallible_iterator::FallibleIterator as _;
-use sqlite3_parser::lexer::sql::Parser;
+use sqlite3_parser::{lexer::sql::Parser, Bump, FallibleIterator as _};
 
 // RUST_LOG=sqlite3Parser=debug
 fn main() {

@@ -11,8 +11,7 @@
 // limitations under the License.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use fallible_iterator::FallibleIterator;
-use sqlite3_parser::lexer::sql::Parser;
+use sqlite3_parser::{lexer::sql::Parser, Bump, FallibleIterator as _};
 
 fn basic_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("sqlite3_parser parsing benchmark");
@@ -20,7 +19,8 @@ fn basic_queries(c: &mut Criterion) {
     let string = b"SELECT * FROM `table` WHERE 1 = 1";
     group.bench_with_input("sqlite3_parser::select", &string, |b, &s| {
         b.iter(|| {
-            let mut parser = Parser::new(s);
+            let bump = Bump::new();
+            let mut parser = Parser::new(&bump, s);
             assert!(parser.next().unwrap().unwrap().readonly())
         });
     });
@@ -38,7 +38,8 @@ fn basic_queries(c: &mut Criterion) {
     ";
     group.bench_with_input("sqlite3_parser::with_select", &with_query, |b, &s| {
         b.iter(|| {
-            let mut parser = Parser::new(s);
+            let bump = Bump::new();
+            let mut parser = Parser::new(&bump, s);
             assert!(parser.next().unwrap().unwrap().readonly())
         });
     });
