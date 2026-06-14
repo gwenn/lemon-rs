@@ -54,6 +54,7 @@ opt-level = 1
 debug = true
 
 [workspace.lints.clippy]
+large_stack_frames = "warn"
 ref_option = "warn"
 semicolon_if_nothing_returned = "warn"
 unnecessary_semicolon = "warn"
