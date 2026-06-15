@@ -1,4 +1,5 @@
 //! Adaptation/port of [`SQLite` tokenizer](http://www.sqlite.org/src/artifact?ci=trunk&filename=src/tokenize.c)
+use bumpalo::Bump;
 use fallible_iterator::FallibleIterator;
 use memchr::memchr;
 
@@ -32,21 +33,16 @@ pub struct Parser<'input> {
 
 impl<'input> Parser<'input> {
     /// Constructor
-    pub fn new(input: &'input [u8]) -> Self {
+    pub fn new(bump: &'input Bump, input: &'input [u8]) -> Self {
         let lexer = Tokenizer::new();
         let scanner = Scanner::new(lexer);
-        let ctx = Context::new(input);
+        let ctx = Context::new(bump, input);
         let parser = yyParser::new(ctx);
         Parser {
             input,
             scanner,
             parser,
         }
-    }
-    /// Parse new `input`
-    pub fn reset(&mut self, input: &'input [u8]) {
-        self.input = input;
-        self.scanner.reset();
     }
     /// Current position in input
     pub fn position(&self) -> Pos {
@@ -160,11 +156,11 @@ macro_rules! try_with_position {
     };
 }
 
-impl FallibleIterator for Parser<'_> {
-    type Item = Cmd;
+impl<'input> FallibleIterator for Parser<'input> {
+    type Item = Cmd<'input>;
     type Error = Error;
 
-    fn next(&mut self) -> Result<Option<Cmd>, Error> {
+    fn next(&mut self) -> Result<Option<Cmd<'input>>, Error> {
         //print!("line: {}, column: {}: ", self.scanner.line(), self.scanner.column());
         self.parser.ctx.reset();
         let mut last_token_parsed = TK_EOF;

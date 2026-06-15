@@ -1,9 +1,8 @@
-use fallible_iterator::FallibleIterator as _;
 use std::env;
 use std::fs::read;
 use std::panic;
 
-use sqlite3_parser::lexer::sql::Parser;
+use sqlite3_parser::{lexer::sql::Parser, Bump, FallibleIterator as _};
 
 /// Parse specified files and check all commands.
 fn main() {
@@ -13,7 +12,8 @@ fn main() {
         println!("{arg}");
         let result = panic::catch_unwind(|| {
             let input = read(arg.clone()).unwrap();
-            let mut parser = Parser::new(&input);
+            let bump = Bump::new();
+            let mut parser = Parser::new(&bump, &input);
             loop {
                 match parser.next() {
                     Ok(None) => break,
@@ -23,7 +23,7 @@ fn main() {
                     }
                     Ok(Some(cmd)) => {
                         let input = cmd.to_string();
-                        let mut checker = Parser::new(input.as_bytes());
+                        let mut checker = Parser::new(&bump, input.as_bytes());
                         match checker.next() {
                             Err(err) => {
                                 eprintln!(
@@ -40,10 +40,12 @@ fn main() {
                             }
                             Ok(Some(check)) => {
                                 if cmd != check {
+                                    eprintln!("{}:{}", arg, parser.position());
+                                    eprintln!("{input}");
                                     eprintln!("{cmd:?}\n<>\n{check:?}");
                                 }
                             }
-                        }
+                        };
                     }
                 }
             }

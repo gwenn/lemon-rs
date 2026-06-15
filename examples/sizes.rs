@@ -11,8 +11,8 @@ fn main() {
     //println!("size_of(YYMINORTYPE) => {}", size_of::<YYMINORTYPE>());
 }
 /*
-size_of(Cmd) => 520
-size_of(Stmt) => 512
-size_of(Select) => 408
-size_of(Expr) => 96
+size_of(Cmd) => 296
+size_of(Stmt) => 288
+size_of(Select) => 200
+size_of(Expr) => 80
 */

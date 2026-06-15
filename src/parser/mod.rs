@@ -1,9 +1,9 @@
 //! SQLite parser
+use bumpalo::{collections::Vec, Bump};
 
 pub mod ast;
 pub mod parse {
     #![expect(unused_braces)]
-    #![expect(clippy::if_same_then_else)]
     #![expect(clippy::absurd_extreme_comparisons)] // FIXME
     #![expect(clippy::needless_return)]
     #![expect(clippy::upper_case_acronyms)]
@@ -11,6 +11,7 @@ pub mod parse {
 
     include!(concat!(env!("OUT_DIR"), "/parse.rs"));
 }
+mod stack;
 
 use crate::dialect::Token;
 use ast::{Cmd, ExplainKind, Name, Stmt};
@@ -19,7 +20,7 @@ use ast::{Cmd, ExplainKind, Name, Stmt};
 #[derive(Debug, PartialEq)]
 pub enum ParserError {
     /// Syntax error
-    SyntaxError(Box<str>),
+    SyntaxError(String),
     /// Unexpected EOF
     UnexpectedEof,
     /// Custom error
@@ -56,19 +57,21 @@ macro_rules! custom_err {
 
 /// Parser context
 pub struct Context<'input> {
+    bump: &'input Bump,
     input: &'input [u8],
     explain: Option<ExplainKind>,
-    stmt: Option<Stmt>,
-    constraint_name: Option<Name>,      // transient
-    module_arg: Option<(usize, usize)>, // Complete text of a module argument
-    module_args: Option<Vec<Box<str>>>, // CREATE VIRTUAL TABLE args
+    stmt: Option<Stmt<'input>>,
+    constraint_name: Option<Name<'input>>,         // transient
+    module_arg: Option<(usize, usize)>,            // Complete text of a module argument
+    module_args: Option<Vec<'input, &'input str>>, // CREATE VIRTUAL TABLE args
     done: bool,
     error: Option<ParserError>,
 }
 
 impl<'input> Context<'input> {
-    pub fn new(input: &'input [u8]) -> Self {
+    pub fn new(bump: &'input Bump, input: &'input [u8]) -> Self {
         Context {
+            bump,
             input,
             explain: None,
             stmt: None,
@@ -80,8 +83,14 @@ impl<'input> Context<'input> {
         }
     }
 
+    pub fn new_vec<T>(&mut self, e: T) -> Vec<'input, T> {
+        let mut vec = Vec::new_in(self.bump);
+        vec.push(e);
+        vec
+    }
+
     /// Consume parsed command
-    pub fn cmd(&mut self) -> Option<Cmd> {
+    pub fn cmd(&mut self) -> Option<Cmd<'input>> {
         if let Some(stmt) = self.stmt.take() {
             match self.explain.take() {
                 Some(ExplainKind::Explain) => Some(Cmd::Explain(stmt)),
@@ -93,7 +102,7 @@ impl<'input> Context<'input> {
         }
     }
 
-    fn constraint_name(&mut self) -> Option<Name> {
+    fn constraint_name(&mut self) -> Option<Name<'input>> {
         self.constraint_name.take()
     }
     fn no_constraint_name(&self) -> bool {
@@ -114,11 +123,13 @@ impl<'input> Context<'input> {
     fn add_module_arg(&mut self) {
         if let Some((start, end)) = self.module_arg.take() {
             if let Ok(arg) = std::str::from_utf8(&self.input[start..end]) {
-                self.module_args.get_or_insert(vec![]).push(arg.into());
+                self.module_args
+                    .get_or_insert(Vec::new_in(self.bump))
+                    .push(self.bump.alloc_str(arg));
             } // FIXME error handling
         }
     }
-    fn module_args(&mut self) -> Option<Vec<Box<str>>> {
+    fn module_args(&mut self) -> Option<Vec<'input, &'input str>> {
         self.add_module_arg();
         self.module_args.take()
     }

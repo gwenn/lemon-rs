@@ -1,11 +1,10 @@
-use fallible_iterator::FallibleIterator as _;
 use std::env;
 use std::fs::read;
 use std::panic;
 
 #[cfg(not(feature = "YYNOERRORRECOVERY"))]
 use sqlite3_parser::lexer::sql::Error;
-use sqlite3_parser::lexer::sql::Parser;
+use sqlite3_parser::{lexer::sql::Parser, Bump, FallibleIterator as _};
 
 /// Parse specified files and print all commands.
 fn main() {
@@ -15,7 +14,8 @@ fn main() {
         println!("{arg}");
         let result = panic::catch_unwind(|| {
             let input = read(arg.clone()).unwrap();
-            let mut parser = Parser::new(input.as_ref());
+            let bump = Bump::new();
+            let mut parser = Parser::new(&bump, input.as_ref());
             loop {
                 match parser.next() {
                     Ok(None) => break,

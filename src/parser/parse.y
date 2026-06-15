@@ -42,7 +42,7 @@
     self.ctx.error = Some(ParserError::UnexpectedEof);
   } else {
     error!(target: TARGET, "near \"{}\": syntax error", std::str::from_utf8(yyminor.1).unwrap_or(""));
-    self.ctx.error = Some(ParserError::SyntaxError(from_bytes(yyminor.1)));
+    self.ctx.error = Some(ParserError::SyntaxError(String::from_utf8_lossy(yyminor.1).to_string()));
   }
 }
 
@@ -54,12 +54,13 @@
 // code file that implements the parser.
 //
 %include {
+use bumpalo::collections::Vec;
+use log::error;
+
 use crate::custom_err;
 use crate::parser::ast::*;
 use crate::parser::{Context, ParserError};
-use crate::dialect::{from_bytes, from_token, Token, TokenType};
-use indexmap::IndexMap;
-use log::error;
+use crate::dialect::{from_token, Token, TokenType};
 
 #[expect(non_camel_case_types)]
 type sqlite3ParserError = crate::parser::ParserError;
@@ -82,7 +83,7 @@ cmdx ::= cmd.           { self.ctx.sqlite3_finish_coding(); }
 //
 
 cmd ::= BEGIN transtype(Y) trans_opt(X).  {self.ctx.stmt = Some(Stmt::Begin(Y, X));}
-%type trans_opt {Option<Name>}
+%type trans_opt "Option<Name<'i>>"
 trans_opt(A) ::= .               {A = None;}
 trans_opt(A) ::= TRANSACTION.    {A = None;}
 trans_opt(A) ::= TRANSACTION nm(X). {A = Some(X);}
@@ -122,12 +123,12 @@ temp(A) ::= TEMP.  {A = true;}
 %endif  SQLITE_OMIT_TEMPDB
 temp(A) ::= .      {A = false;}
 
-%type create_table_args {CreateTableBody}
+%type create_table_args "CreateTableBody<'i>"
 create_table_args(A) ::= LP columnlist(C) conslist_opt(X) RP table_option_set(F). {
   A = CreateTableBody::columns_and_constraints(C, X, F)?;
 }
 create_table_args(A) ::= AS select(S). {
-  A = CreateTableBody::AsSelect(Box::new(S));
+  A = CreateTableBody::AsSelect(self.ctx.bump.alloc(S));
 }
 %type table_option_set {TabFlags}
 %type table_option {TabFlags}
@@ -150,20 +151,20 @@ table_option(A) ::= nm(X). {
     return Err(custom_err!("unknown table option: {}", option));
   }
 }
-%type columnlist {IndexMap<Name,ColumnDefinition>}
+%type columnlist "Vec<'i,ColumnDefinition<'i>>"
 columnlist(A) ::= columnlist(A) COMMA columnname(X) carglist(Y). {
   let col = X;
-  let cd = ColumnDefinition::new(col.0, col.1, Y)?;
+  let cd = ColumnDefinition::new(col.0, col.1, Y, self.ctx.bump)?;
   ColumnDefinition::add_column(A, cd)?;
 }
 columnlist(A) ::= columnname(X) carglist(Y). {
   let col = X;
-  let cd = ColumnDefinition::new(col.0, col.1, Y)?;
-  let mut map = IndexMap::new();
-  ColumnDefinition::add_column(&mut map, cd)?;
-  A = map;
+  let cd = ColumnDefinition::new(col.0, col.1, Y, self.ctx.bump)?;
+  let mut cs = Vec::new_in(self.ctx.bump);
+  ColumnDefinition::add_column(&mut cs, cd)?;
+  A = cs;
 }
-%type columnname {(Name, Option<Type>)}
+%type columnname "(Name<'i>, Option<Type<'i>>)"
 columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 
 // Declare some tokens early in order to influence their values, to
@@ -249,27 +250,32 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 
 // The name of a column or table can be any of the following:
 //
-%type nm {Name}
-nm(A) ::= idj(X). { A = Name::from_token(@X, X); }
-nm(A) ::= STRING(X). { A = Name::from_token(@X, X); }
+%type nm "Name<'i>"
+nm(A) ::= idj(X). { A = Name::from_token(@X, X, self.ctx.bump); }
+nm(A) ::= STRING(X). { A = Name::from_token(@X, X, self.ctx.bump); }
 
 // A typetoken is really zero or more tokens that form a type name such
 // as can be found after the column name in a CREATE TABLE statement.
 // Multiple tokens are concatenated to form the value of the typetoken.
 //
-%type typetoken {Option<Type>}
+%type typetoken "Option<Type<'i>>"
 typetoken(A) ::= .   {A = None;}
 typetoken(A) ::= typename(X). {A = Some(Type{ name: X, size: None });}
 typetoken(A) ::= typename(X) LP signed(Y) RP. {
-  A = Some(Type{ name: X, size: Some(TypeSize::MaxSize(Box::new(Y))) });
+  A = Some(Type{ name: X, size: Some(TypeSize::MaxSize(self.ctx.bump.alloc(Y))) });
 }
 typetoken(A) ::= typename(X) LP signed(Y) COMMA signed(Z) RP. {
-  A = Some(Type{ name: X, size: Some(TypeSize::TypeSize(Box::new(Y), Box::new(Z))) });
+  A = Some(Type{ name: X, size: Some(TypeSize::TypeSize(self.ctx.bump.alloc(Y), self.ctx.bump.alloc(Z))) });
 }
-%type typename {String}
-typename(A) ::= ids(X). {A=from_token(@X, X).into();}
-typename(A) ::= typename(A) ids(Y). {let ids=from_token(@Y, Y); A.push(' '); A.push_str(&ids);}
-%type signed {Expr}
+%type typename "&'i str"
+typename(A) ::= ids(X). {A=from_token(@X, X, self.ctx.bump);}
+typename(A) ::= typename(X) ids(Y). {
+  let ids = from_token(@Y, Y, self.ctx.bump);
+  let mut s = bumpalo::collections::String::from_str_in(X, self.ctx.bump);
+  s.push(' '); s.push_str(ids);
+  A = s.into_bump_str();
+}
+%type signed "Expr<'i>"
 signed ::= plus_num.
 signed ::= minus_num.
 
@@ -290,10 +296,10 @@ signed ::= minus_num.
 // "carglist" is a list of additional constraints that come after the
 // column name and column type in a CREATE TABLE statement.
 //
-%type carglist {Vec<NamedColumnConstraint>}
+%type carglist "Vec<'i, NamedColumnConstraint<'i>>"
 carglist(A) ::= carglist(A) ccons(X). {if self.ctx.no_constraint_name() { let cc = X; A.push(cc); }}
-carglist(A) ::= .                     {A = vec![];}
-%type ccons {NamedColumnConstraint}
+carglist(A) ::= .                     {A = Vec::new_in(self.ctx.bump);}
+%type ccons "NamedColumnConstraint<'i>"
 ccons ::= CONSTRAINT nm(X).           { self.ctx.constraint_name = Some(X);}
 ccons(A) ::= DEFAULT term(X). {
   let name = self.ctx.constraint_name();
@@ -302,22 +308,22 @@ ccons(A) ::= DEFAULT term(X). {
 }
 ccons(A) ::= DEFAULT LP expr(X) RP. {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Default(Expr::parenthesized(X));
+  let constraint = ColumnConstraint::Default(Expr::parenthesized(X, self.ctx.bump));
   A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= DEFAULT PLUS term(X). {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Positive, Box::new(X)));
+  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Positive, self.ctx.bump.alloc(X)));
   A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= DEFAULT MINUS term(X).      {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Negative, Box::new(X)));
+  let constraint = ColumnConstraint::Default(Expr::Unary(UnaryOperator::Negative, self.ctx.bump.alloc(X)));
   A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= DEFAULT id(X).       {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Default(Expr::id(@X, X));
+  let constraint = ColumnConstraint::Default(Expr::id(@X, X, self.ctx.bump));
   A = NamedColumnConstraint{ name, constraint };
 }
 
@@ -351,7 +357,7 @@ ccons(A) ::= CHECK LP expr(X) RP.   {
 }
 ccons(A) ::= REFERENCES nm(T) eidlist_opt(TA) refargs(R). {
   let name = self.ctx.constraint_name();
-  let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
+  let clause = ForeignKeyClause::new(T, TA, R);
   let constraint = ColumnConstraint::ForeignKey{ clause, defer_clause: None }; // FIXME defer_clause
   A = NamedColumnConstraint{ name, constraint };
 }
@@ -361,7 +367,7 @@ ccons(A) ::= defer_subclause(D).    {
 }
 ccons(A) ::= COLLATE ids(C).        {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Collate{ collation_name: Name::from_token(@C, C) };
+  let constraint = ColumnConstraint::Collate{ collation_name: Name::from_token(@C, C, self.ctx.bump) };
   A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= GENERATED ALWAYS AS generated(X). {
@@ -374,12 +380,12 @@ ccons(A) ::= AS generated(X). {
   let constraint = X;
   A = NamedColumnConstraint{ name, constraint };
 }
-%type generated {ColumnConstraint}
+%type generated "ColumnConstraint<'i>"
 generated(X) ::= LP expr(E) RP. {
   X = ColumnConstraint::Generated{ expr: E, typ: None };
 }
 generated(X) ::= LP expr(E) RP ID(TYPE). {
-  X = ColumnConstraint::Generated{ expr: E, typ: Some(Id::from_token(@TYPE, TYPE)) };
+  X = ColumnConstraint::Generated{ expr: E, typ: Some(Id::from_token(@TYPE, TYPE, self.ctx.bump)) };
 }
 
 // The optional AUTOINCREMENT keyword
@@ -392,15 +398,15 @@ autoinc(X) ::= AUTOINCR.  {X = true;}
 // or immediate and which determine what action to take if a ref-integ
 // check fails.
 //
-%type refargs {Vec<RefArg>}
-refargs(A) ::= .                  { A = vec![]; /* EV: R-19803-45884 */}
+%type refargs "Vec<'i, RefArg<'i>>"
+refargs(A) ::= .                  { A = Vec::new_in(self.ctx.bump); /* EV: R-19803-45884 */}
 refargs(A) ::= refargs(A) refarg(Y). { let ra = Y; A.push(ra); }
-%type refarg {RefArg}
+%type refarg "RefArg<'i>"
 refarg(A) ::= MATCH nm(X).              { A = RefArg::Match(X); }
 refarg(A) ::= ON INSERT refact(X).      { A = RefArg::OnInsert(X); }
 refarg(A) ::= ON DELETE refact(X).   { A = RefArg::OnDelete(X); }
 refarg(A) ::= ON UPDATE refact(X).   { A = RefArg::OnUpdate(X); }
-%type refact {RefAct}
+%type refact "RefAct"
 refact(A) ::= SET NULL.              { A = RefAct::SetNull;  /* EV: R-33326-45252 */}
 refact(A) ::= SET DEFAULT.           { A = RefAct::SetDefault;  /* EV: R-33326-45252 */}
 refact(A) ::= CASCADE.               { A = RefAct::Cascade;  /* EV: R-33326-45252 */}
@@ -414,15 +420,15 @@ init_deferred_pred_opt(A) ::= .                       {A = None;}
 init_deferred_pred_opt(A) ::= INITIALLY DEFERRED.     {A = Some(InitDeferredPred::InitiallyDeferred);}
 init_deferred_pred_opt(A) ::= INITIALLY IMMEDIATE.    {A = Some(InitDeferredPred::InitiallyImmediate);}
 
-%type conslist_opt {Option<Vec<NamedTableConstraint>>}
+%type conslist_opt "Option<Vec<'i, NamedTableConstraint<'i>>>"
 conslist_opt(A) ::= .                         {A = None;}
 conslist_opt(A) ::= COMMA conslist(X).        {A = Some(X);}
-%type conslist {Vec<NamedTableConstraint>}
+%type conslist "Vec<'i, NamedTableConstraint<'i>>"
 conslist(A) ::= conslist(A) tconscomma tcons(X). {if self.ctx.no_constraint_name() { let tc = X; A.push(tc); }}
-conslist(A) ::= tcons(X).                        {if self.ctx.no_constraint_name() { let tc = X; A = vec![tc]; } else { A = vec![]; }}
+conslist(A) ::= tcons(X).                        {if self.ctx.no_constraint_name() { let tc = X; A = self.ctx.new_vec(tc); } else { A = Vec::new_in(self.ctx.bump); }}
 tconscomma ::= COMMA.            { self.ctx.constraint_name = None;} // TODO Validate: useful ?
 tconscomma ::= .
-%type tcons {NamedTableConstraint}
+%type tcons "NamedTableConstraint<'i>"
 tcons ::= CONSTRAINT nm(X).      { self.ctx.constraint_name = Some(X)}
 tcons(A) ::= PRIMARY KEY LP sortlist(X) autoinc(I) RP onconf(R). {
   let name = self.ctx.constraint_name();
@@ -442,8 +448,8 @@ tcons(A) ::= CHECK LP expr(E) RP onconf(R). {
 tcons(A) ::= FOREIGN KEY LP eidlist(FA) RP
           REFERENCES nm(T) eidlist_opt(TA) refargs(R) defer_subclause_opt(D). {
   let name = self.ctx.constraint_name();
-  let clause = ForeignKeyClause{ tbl_name: T, columns: TA, args: R };
-  let constraint = TableConstraint::ForeignKey{ columns: FA, clause, defer_clause: D };
+  let clause = ForeignKeyClause::new(T, TA, R);
+  let constraint = TableConstraint::ForeignKey{ columns: FA.into_bump_slice(), clause, defer_clause: D };
   A = NamedTableConstraint{ name, constraint };
 }
 %type defer_subclause_opt {Option<DeferSubclause>}
@@ -478,8 +484,8 @@ ifexists(A) ::= .            {A = false;}
 %ifndef SQLITE_OMIT_VIEW
 cmd ::= createkw temp(T) VIEW ifnotexists(E) fullname(Y) eidlist_opt(C)
           AS select(S). {
-  self.ctx.stmt = Some(Stmt::CreateView{ temporary: T, if_not_exists: E, view_name: Y, columns: C,
-                                         select: Box::new(S) });
+  self.ctx.stmt = Some(Stmt::CreateView{ temporary: T, if_not_exists: E, view_name: Y, columns: C.map(|cs| cs.into_bump_slice()),
+                                         select: self.ctx.bump.alloc(S) });
 }
 cmd ::= DROP VIEW ifexists(E) fullname(X). {
   self.ctx.stmt = Some(Stmt::DropView{ if_exists: E, view_name: X });
@@ -489,22 +495,22 @@ cmd ::= DROP VIEW ifexists(E) fullname(X). {
 //////////////////////// The SELECT statement /////////////////////////////////
 //
 cmd ::= select(X).  {
-  self.ctx.stmt = Some(Stmt::Select(Box::new(X)));
+  self.ctx.stmt = Some(Stmt::Select(self.ctx.bump.alloc(X)));
 }
 
-%type select {Select}
-%type selectnowith {SelectBody}
-%type oneselect {OneSelect}
+%type select "Select<'i>"
+%type selectnowith "SelectBody<'i>"
+%type oneselect "OneSelect<'i>"
 
 %include {
 }
 
 %ifndef SQLITE_OMIT_CTE
 select(A) ::= WITH wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select::new(Some(With { recursive: false, ctes: W }), X, Z, L)?;
+  A = Select::new(Some(With { recursive: false, ctes: W.into_bump_slice() }), X, Z, L)?;
 }
 select(A) ::= WITH RECURSIVE wqlist(W) selectnowith(X) orderby_opt(Z) limit_opt(L). {
-  A = Select::new(Some(With { recursive: true, ctes: W }), X, Z, L)?;
+  A = Select::new(Some(With { recursive: true, ctes: W.into_bump_slice() }), X, Z, L)?;
 }
 %endif /* SQLITE_OMIT_CTE */
 select(A) ::= selectnowith(X) orderby_opt(Z) limit_opt(L). {
@@ -517,7 +523,7 @@ selectnowith(A) ::= oneselect(X). {
 %ifndef SQLITE_OMIT_COMPOUND_SELECT
 selectnowith(A) ::= selectnowith(A) multiselect_op(Y) oneselect(Z).  {
   let cs = CompoundSelect{ operator: Y, select: Z };
-  A.push(cs)?;
+  A.push(cs, self.ctx.bump)?;
 }
 %type multiselect_op {CompoundOperator}
 multiselect_op(A) ::= UNION.             {A = CompoundOperator::Union;}
@@ -528,28 +534,28 @@ multiselect_op(A) ::= INTERSECT.         {A = CompoundOperator::Intersect;}
 
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
                  groupby_opt(P) having_opt(Q). {
-  A = OneSelect::new(D, W, X, Y, P, Q, None)?;
+  A = OneSelect::new(D, W, X, Y, P, Q, None, self.ctx.bump)?;
     }
 %ifndef SQLITE_OMIT_WINDOWFUNC
 oneselect(A) ::= SELECT distinct(D) selcollist(W) from(X) where_opt(Y)
                  groupby_opt(P) having_opt(Q) window_clause(R). {
-  A = OneSelect::new(D, W, X, Y, P, Q, Some(R))?;
+  A = OneSelect::new(D, W, X, Y, P, Q, Some(R), self.ctx.bump)?;
 }
 %endif
 
 
 // Single row VALUES clause.
 //
-%type values {Vec<Vec<Expr>>}
+%type values "Vec<'i, Vec<'i, Expr<'i>>>"
 oneselect(A) ::= values(X). { A = OneSelect::Values(X); }
 
 values(A) ::= VALUES LP nexprlist(X) RP. {
-  A = vec![X];
+  A = self.ctx.new_vec(X);
 }
 
 // Multiple row VALUES clause.
 //
-%type mvalues {Vec<Vec<Expr>>}
+%type mvalues "Vec<'i, Vec<'i, Expr<'i>>>"
 oneselect(A) ::= mvalues(X). {
   A = OneSelect::Values(X);
 }
@@ -575,10 +581,10 @@ distinct(A) ::= .           {A = None;}
 // "SELECT * FROM ..." is encoded as a special expression with an
 // opcode of TK_ASTERISK.
 //
-%type selcollist {Vec<ResultColumn>}
-%type sclp {Vec<ResultColumn>}
+%type selcollist "Vec<'i, ResultColumn<'i>>"
+%type sclp "Vec<'i, ResultColumn<'i>>"
 sclp(A) ::= selcollist(A) COMMA.
-sclp(A) ::= .                                {A = Vec::<ResultColumn>::new();}
+sclp(A) ::= .                                {A = Vec::<ResultColumn>::new_in(self.ctx.bump);}
 selcollist(A) ::= sclp(A) expr(X) as(Y).     {
   let rc = ResultColumn::Expr(X, Y);
   A.push(rc);
@@ -595,15 +601,15 @@ selcollist(A) ::= sclp(A) nm(X) DOT STAR. {
 // An option "AS <id>" phrase that can follow one of the expressions that
 // define the result set, or one of the tables in the FROM clause.
 //
-%type as {Option<As>}
+%type as "Option<As<'i>>"
 as(X) ::= AS nm(Y).    {X = Some(As::As(Y));}
-as(X) ::= ids(Y).      {X = Some(As::Elided(Name::from_token(@Y, Y)));}
+as(X) ::= ids(Y).      {X = Some(As::Elided(Name::from_token(@Y, Y, self.ctx.bump)));}
 as(X) ::= .            {X = None;}
 
 
-%type seltablist {FromClause}
-%type stl_prefix {FromClause}
-%type from {Option<FromClause>}
+%type seltablist "FromClause<'i>"
+%type stl_prefix "FromClause<'i>"
+%type from "Option<FromClause<'i>>"
 
 // A complete FROM clause.
 //
@@ -623,27 +629,27 @@ stl_prefix(A) ::= .                           {A = FromClause::empty();}
 seltablist(A) ::= stl_prefix(A) fullname(Y) as(Z) indexed_opt(I) on_using(N). {
     let st = SelectTable::Table(Y, Z, I);
     let jc = N;
-    A.push(st, jc)?;
+    A.push(st, jc, self.ctx.bump)?;
 }
 seltablist(A) ::= stl_prefix(A) fullname(Y) LP exprlist(E) RP as(Z) on_using(N). {
-    let st = SelectTable::TableCall(Y, E, Z);
+    let st = SelectTable::TableCall(Y, E.map(|e| e.into_bump_slice()), Z);
     let jc = N;
-    A.push(st, jc)?;
+    A.push(st, jc, self.ctx.bump)?;
 }
 %ifndef SQLITE_OMIT_SUBQUERY
   seltablist(A) ::= stl_prefix(A) LP select(S) RP as(Z) on_using(N). {
-    let st = SelectTable::Select(Box::new(S), Z);
+    let st = SelectTable::Select(self.ctx.bump.alloc(S), Z);
     let jc = N;
-    A.push(st, jc)?;
+    A.push(st, jc, self.ctx.bump)?;
   }
   seltablist(A) ::= stl_prefix(A) LP seltablist(F) RP as(Z) on_using(N). {
     let st = SelectTable::Sub(F, Z);
     let jc = N;
-    A.push(st, jc)?;
+    A.push(st, jc, self.ctx.bump)?;
   }
 %endif  SQLITE_OMIT_SUBQUERY
 
-%type fullname {QualifiedName}
+%type fullname "QualifiedName<'i>"
 fullname(A) ::= nm(X).  {
   A = QualifiedName::single(X);
 }
@@ -651,7 +657,7 @@ fullname(A) ::= nm(X) DOT nm(Y). {
   A = QualifiedName::fullname(X, Y);
 }
 
-%type xfullname {QualifiedName}
+%type xfullname "QualifiedName<'i>"
 xfullname(A) ::= nm(X).  {
   A = QualifiedName::single(X);
 }
@@ -692,7 +698,7 @@ joinop(X) ::= JOIN_KW(A) nm(B) nm(C) JOIN.
 // The [AND] and [OR] precedence marks in the rules for on_using cause the
 // ON in this context to always be interpreted as belonging to the JOIN.
 //
-%type on_using {Option<JoinConstraint>}
+%type on_using "Option<JoinConstraint<'i>>"
 on_using(N) ::= ON expr(E).            {N = Some(JoinConstraint::On(E));}
 on_using(N) ::= USING LP idlist(L) RP. {N = Some(JoinConstraint::Using(L));}
 on_using(N) ::= .                 [OR] {N = None;}
@@ -707,18 +713,18 @@ on_using(N) ::= .                 [OR] {N = None;}
 // normally illegal. The sqlite3SrcListIndexedBy() function
 // recognizes and interprets this as a special case.
 //
-%type indexed_opt {Option<Indexed>}
+%type indexed_opt "Option<Indexed<'i>>"
 indexed_opt(A) ::= .                 {A = None;}
 indexed_opt(A) ::= INDEXED BY nm(X). {A = Some(Indexed::IndexedBy(X));}
 indexed_opt(A) ::= NOT INDEXED.      {A = Some(Indexed::NotIndexed);}
 
-%type orderby_opt {Option<Vec<SortedColumn>>}
+%type orderby_opt "Option<Vec<'i, SortedColumn<'i>>>"
 
 // the sortlist non-terminal stores a list of expression where each
 // expression is optionally followed by ASC or DESC to indicate the
 // sort order.
 //
-%type sortlist {Vec<SortedColumn>}
+%type sortlist "Vec<'i, SortedColumn<'i>>"
 
 orderby_opt(A) ::= .                          {A = None;}
 orderby_opt(A) ::= ORDER BY sortlist(X).      {A = Some(X);}
@@ -727,7 +733,7 @@ sortlist(A) ::= sortlist(A) COMMA expr(Y) sortorder(Z) nulls(X). {
   A.push(sc);
 }
 sortlist(A) ::= expr(Y) sortorder(Z) nulls(X). {
-  A = vec![SortedColumn { expr: Y, order: Z, nulls: X }]; /*A-overwrites-Y*/
+  A = self.ctx.new_vec(SortedColumn { expr: Y, order: Z, nulls: X }); /*A-overwrites-Y*/
 }
 
 %type sortorder {Option<SortOrder>}
@@ -741,15 +747,15 @@ nulls(A) ::= NULLS FIRST.       {A = Some(NullsOrder::First);}
 nulls(A) ::= NULLS LAST.        {A = Some(NullsOrder::Last);}
 nulls(A) ::= .                  {A = None;}
 
-%type groupby_opt {Option<Vec<Expr>>}
+%type groupby_opt "Option<Vec<'i, Expr<'i>>>"
 groupby_opt(A) ::= .                      {A = None;}
 groupby_opt(A) ::= GROUP BY nexprlist(X). {A = Some(X);}
 
-%type having_opt {Option<Expr>}
+%type having_opt "Option<Expr<'i>>"
 having_opt(A) ::= .                {A = None;}
 having_opt(A) ::= HAVING expr(X).  {A = Some(X);}
 
-%type limit_opt {Option<Limit>}
+%type limit_opt "Option<&'i Limit<'i>>"
 
 // The destructor for limit_opt will never fire in the current grammar.
 // The limit_opt non-terminal only occurs at the end of a single production
@@ -761,11 +767,11 @@ having_opt(A) ::= HAVING expr(X).  {A = Some(X);}
 //%destructor limit_opt {sqlite3ExprDelete(pParse->db, $$);}
 limit_opt(A) ::= .       {A = None;}
 limit_opt(A) ::= LIMIT expr(X).
-                         {A = Some(Limit{ expr: X, offset: None });}
+                         {A = Some(self.ctx.bump.alloc(Limit{ expr: X, offset: None }));}
 limit_opt(A) ::= LIMIT expr(X) OFFSET expr(Y).
-                         {A = Some(Limit{ expr: X, offset: Some(Y) });}
+                         {A = Some(self.ctx.bump.alloc(Limit{ expr: X, offset: Some(Y) }));}
 limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y).
-                         {A = Some(Limit{ expr: X, offset: Some(Y) });}
+                         {A = Some(self.ctx.bump.alloc(Limit{ expr: X, offset: Some(Y) }));}
 
 /////////////////////////// The DELETE statement /////////////////////////////
 //
@@ -773,8 +779,8 @@ limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y).
 cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt_ret(W)
         orderby_opt(O) limit_opt(L). {
   let (where_clause, returning) = W;
-  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause, returning,
-                                     order_by: O, limit: L });
+  self.ctx.stmt = Some(Stmt::Delete{ with: C, tbl_name: X, indexed: I, where_clause, returning: returning.map(|r| r.into_bump_slice()),
+                                     order_by: O.map(|ob| ob.into_bump_slice()), limit: L });
 }
 %else
 cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt_ret(W). {
@@ -784,8 +790,8 @@ cmd ::= with(C) DELETE FROM xfullname(X) indexed_opt(I) where_opt_ret(W). {
 }
 %endif
 
-%type where_opt {Option<Expr>}
-%type where_opt_ret {(Option<Expr>, Option<Vec<ResultColumn>>)}
+%type where_opt "Option<Expr<'i>>"
+%type where_opt_ret "(Option<Expr<'i>>, Option<Vec<'i, ResultColumn<'i>>>)"
 
 where_opt(A) ::= .                    {A = None;}
 where_opt(A) ::= WHERE expr(X).       {A = Some(X);}
@@ -816,10 +822,10 @@ cmd ::= with(C) UPDATE orconf(R) xfullname(X) indexed_opt(I) SET setlist(Y) from
 
 
 
-%type setlist {Vec<Set>}
+%type setlist "Vec<'i, Set<'i>>"
 
 setlist(A) ::= setlist(A) COMMA nm(X) EQ expr(Y). {
-  let s = Set{ col_names: DistinctNames::single(X), expr: Y };
+  let s = Set{ col_names: DistinctNames::single(X, self.ctx.bump), expr: Y };
   A.push(s);
 }
 setlist(A) ::= setlist(A) COMMA LP idlist(X) RP EQ expr(Y). {
@@ -827,10 +833,10 @@ setlist(A) ::= setlist(A) COMMA LP idlist(X) RP EQ expr(Y). {
   A.push(s);
 }
 setlist(A) ::= nm(X) EQ expr(Y). {
-  A = vec![Set{ col_names: DistinctNames::single(X), expr: Y }];
+  A = self.ctx.new_vec(Set{ col_names: DistinctNames::single(X, self.ctx.bump), expr: Y });
 }
 setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
-  A = vec![Set{ col_names: X, expr: Y }];
+  A = self.ctx.new_vec(Set{ col_names: X, expr: Y });
 }
 
 ////////////////////////// The INSERT command /////////////////////////////////
@@ -838,18 +844,18 @@ setlist(A) ::= LP idlist(X) RP EQ expr(Y). {
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) select(S)
         upsert(U). {
   let (upsert, returning) = U;
-  let body = InsertBody::Select(Box::new(S), upsert.map(Box::new));
+  let body = InsertBody::Select(self.ctx.bump.alloc(S), upsert.map(|u| self.ctx.bump.alloc(u) as _));
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
-                                     body, returning });
+                                     body, returning: returning.map(|r| r.into_bump_slice()) });
 }
 cmd ::= with(W) insert_cmd(R) INTO xfullname(X) idlist_opt(F) DEFAULT VALUES returning(Y).
 {
   let body = InsertBody::DefaultValues;
   self.ctx.stmt = Some(Stmt::Insert{ with: W, or_conflict: R, tbl_name: X, columns: F,
-                                     body, returning: Y });
+                                     body, returning: Y.map(|r| r.into_bump_slice()) });
 }
 
-%type upsert {(Option<Upsert>, Option<Vec<ResultColumn>>)}
+%type upsert "(Option<Upsert<'i>>, Option<Vec<'i, ResultColumn<'i>>>)"
 
 // Because upsert only occurs at the tip end of the INSERT rule for cmd,
 // there is never a case where the value of the upsert pointer will not
@@ -861,20 +867,20 @@ upsert(A) ::= RETURNING selcollist(X).  { A = (None, Some(X)); }
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW)
               DO UPDATE SET setlist(Z) where_opt(W) upsert(N).
               { let index = UpsertIndex::new(T, TW)?;
-                let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
+                let do_clause = UpsertDo::Set{ sets: Z.into_bump_slice(), where_clause: W };
                 let (next, returning) = N;
-                A = (Some(Upsert{ index: Some(index), do_clause, next: next.map(Box::new) }), returning);}
+                A = (Some(Upsert{ index: Some(index), do_clause, next: next.map(|n| self.ctx.bump.alloc(n) as _) }), returning);}
 upsert(A) ::= ON CONFLICT LP sortlist(T) RP where_opt(TW) DO NOTHING upsert(N).
               { let index = UpsertIndex::new(T, TW)?;
                 let (next, returning) = N;
-                A = (Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing, next: next.map(Box::new) }), returning); }
+                A = (Some(Upsert{ index: Some(index), do_clause: UpsertDo::Nothing, next: next.map(|n| self.ctx.bump.alloc(n) as _) }), returning); }
 upsert(A) ::= ON CONFLICT DO NOTHING returning(R).
               { A = (Some(Upsert{ index: None, do_clause: UpsertDo::Nothing, next: None }), R); }
 upsert(A) ::= ON CONFLICT DO UPDATE SET setlist(Z) where_opt(W) returning(R).
-              { let do_clause = UpsertDo::Set{ sets: Z, where_clause: W };
+              { let do_clause = UpsertDo::Set{ sets: Z.into_bump_slice(), where_clause: W };
                 A = (Some(Upsert{ index: None, do_clause, next: None }), R);}
 
-%type returning {Option<Vec<ResultColumn>>}
+%type returning "Option<Vec<'i, ResultColumn<'i>>>"
 returning(A) ::= RETURNING selcollist(X).  {A = Some(X);}
 returning(A) ::= . {A = None;}
 
@@ -882,27 +888,27 @@ returning(A) ::= . {A = None;}
 insert_cmd(A) ::= INSERT orconf(R).   {A = R;}
 insert_cmd(A) ::= REPLACE.            {A = Some(ResolveType::Replace);}
 
-%type idlist_opt {Option<DistinctNames>}
-%type idlist {DistinctNames}
+%type idlist_opt "Option<DistinctNames<'i>>"
+%type idlist "DistinctNames<'i>"
 idlist_opt(A) ::= .                       {A = None;}
 idlist_opt(A) ::= LP idlist(X) RP.    {A = Some(X);}
 idlist(A) ::= idlist(A) COMMA nm(Y).
     {let id = Y; A.insert(id)?;}
 idlist(A) ::= nm(Y).
-    { A = DistinctNames::new(Y); /*A-overwrites-Y*/}
+    { A = DistinctNames::new(Y, self.ctx.bump); /*A-overwrites-Y*/}
 
 /////////////////////////// Expression Processing /////////////////////////////
 //
 
-%type expr {Expr}
-%type term {Expr}
+%type expr "Expr<'i>"
+%type term "Expr<'i>"
 
 %include {
 }
 
 expr(A) ::= term(A).
-expr(A) ::= LP expr(X) RP. {A = Expr::parenthesized(X);}
-expr(A) ::= idj(X).          {A= Expr::id(@X, X); /*A-overwrites-X*/}
+expr(A) ::= LP expr(X) RP. {A = Expr::parenthesized(X, self.ctx.bump);}
+expr(A) ::= idj(X).          {A= Expr::id(@X, X, self.ctx.bump); /*A-overwrites-X*/}
 expr(A) ::= nm(X) DOT nm(Y). {
   A = Expr::Qualified(X, Y); /*A-overwrites-X*/
 }
@@ -910,53 +916,53 @@ expr(A) ::= nm(X) DOT nm(Y) DOT nm(Z). {
   A = Expr::DoublyQualified(X, Y, Z); /*A-overwrites-X*/
 }
 term(A) ::= NULL. {A=Expr::Literal(Literal::Null);}
-term(A) ::= BLOB(X). {A=Expr::Literal(Literal::Blob(X.unwrap())); /*A-overwrites-X*/}
-term(A) ::= STRING(X).          {A=Expr::Literal(Literal::String(X.unwrap())); /*A-overwrites-X*/}
+term(A) ::= BLOB(X). {A=Expr::Literal(Literal::Blob(X.unwrap(self.ctx.bump))); /*A-overwrites-X*/}
+term(A) ::= STRING(X).          {A=Expr::Literal(Literal::String(X.unwrap(self.ctx.bump))); /*A-overwrites-X*/}
 term(A) ::= FLOAT|INTEGER(X). {
-  A = Expr::Literal(Literal::Numeric(X.unwrap())); /*A-overwrites-X*/
+  A = Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump))); /*A-overwrites-X*/
 }
 expr(A) ::= VARIABLE(X).     {
-  A = Expr::Variable(X.unwrap()); /*A-overwrites-X*/
+  A = Expr::Variable(X.unwrap(self.ctx.bump)); /*A-overwrites-X*/
 }
 expr(A) ::= expr(X) COLLATE ids(C). {
-  A = Expr::collate(X, @C, C); /*A-overwrites-X*/
+  A = Expr::collate(X, @C, C, self.ctx.bump); /*A-overwrites-X*/
 }
 %ifndef SQLITE_OMIT_CAST
 expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
-  A = Expr::cast(E, T);
+  A = Expr::cast(E, T, self.ctx.bump);
 }
 %endif  SQLITE_OMIT_CAST
 
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP. {
-  A = Expr::function_call(@X, X, D, Y, None, None)?; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, None, None, self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP. {
-  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O)), None)?; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O.into_bump_slice())), None, self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP. {
-  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: None }; /*A-overwrites-X*/
+  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X, self.ctx.bump), filter_over: None }; /*A-overwrites-X*/
 }
 
 %ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP. {
-  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), None);
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), None, self.ctx.bump);
 }
 %endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 
 %ifndef SQLITE_OMIT_WINDOWFUNC
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP filter_over(Z). {
-  A = Expr::function_call(@X, X, D, Y, None, Some(Z))?; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, None, Some(Z), self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP filter_over(Z). {
-  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O)), Some(Z))?; /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O.into_bump_slice())), Some(Z), self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
-  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X), filter_over: Some(Z) }; /*A-overwrites-X*/
+  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X, self.ctx.bump), filter_over: Some(Z) }; /*A-overwrites-X*/
 }
 %ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP
             filter_over(Z). {
-  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), Some(Z)); /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), Some(Z), self.ctx.bump); /*A-overwrites-X*/
 }
 %endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 
@@ -972,124 +978,124 @@ expr(A) ::= LP nexprlist(X) COMMA expr(Y) RP. {
   A = Expr::Parenthesized(x);
 }
 
-expr(A) ::= expr(X) AND(OP) expr(Y).    {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
-expr(A) ::= expr(X) OR(OP) expr(Y).     {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+expr(A) ::= expr(X) AND(OP) expr(Y).    {A=Expr::binary(X,@OP,Y, self.ctx.bump); /*A-overwrites-X*/}
+expr(A) ::= expr(X) OR(OP) expr(Y).     {A=Expr::binary(X,@OP,Y, self.ctx.bump); /*A-overwrites-X*/}
 expr(A) ::= expr(X) LT|GT|GE|LE(OP) expr(Y).
-                                        {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
-expr(A) ::= expr(X) EQ|NE(OP) expr(Y).  {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+                                        {A=Expr::binary(X,@OP,Y, self.ctx.bump); /*A-overwrites-X*/}
+expr(A) ::= expr(X) EQ|NE(OP) expr(Y).  {A=Expr::binary(X,@OP,Y, self.ctx.bump); /*A-overwrites-X*/}
 expr(A) ::= expr(X) BITAND|BITOR|LSHIFT|RSHIFT(OP) expr(Y).
-                                        {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+                                        {A=Expr::binary(X,@OP,Y, self.ctx.bump); /*A-overwrites-X*/}
 expr(A) ::= expr(X) PLUS|MINUS(OP) expr(Y).
-                                        {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+                                        {A=Expr::binary(X,@OP,Y, self.ctx.bump); /*A-overwrites-X*/}
 expr(A) ::= expr(X) STAR|SLASH|REM(OP) expr(Y).
-                                        {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
-expr(A) ::= expr(X) CONCAT(OP) expr(Y). {A=Expr::binary(X,@OP,Y); /*A-overwrites-X*/}
+                                        {A=Expr::binary(X,@OP,Y, self.ctx.bump); /*A-overwrites-X*/}
+expr(A) ::= expr(X) CONCAT(OP) expr(Y). {A=Expr::binary(X,@OP,Y, self.ctx.bump); /*A-overwrites-X*/}
 %type likeop {(bool, LikeOperator)}
 likeop(A) ::= LIKE_KW|MATCH(X). {A=(false, LikeOperator::from_token(@X, X)); /*A-overwrite-X*/}
 likeop(A) ::= NOT LIKE_KW|MATCH(X). {A=(true, LikeOperator::from_token(@X, X)); /*A-overwrite-X*/}
 expr(A) ::= expr(X) likeop(OP) expr(Y).  [LIKE_KW]  {
   let op = OP;
-  A=Expr::like(X,op.0,op.1,Y,None); /*A-overwrites-X*/
+  A=Expr::like(X,op.0,op.1,Y,None, self.ctx.bump); /*A-overwrites-X*/
 }
 expr(A) ::= expr(X) likeop(OP) expr(Y) ESCAPE expr(E).  [LIKE_KW]  {
   let op = OP;
-  A=Expr::like(X,op.0,op.1,Y,Some(E)); /*A-overwrites-X*/
+  A=Expr::like(X,op.0,op.1,Y,Some(E), self.ctx.bump); /*A-overwrites-X*/
 }
 
 %include {
 }
 
-expr(A) ::= expr(X) ISNULL|NOTNULL(E).   {A = Expr::not_null(X, @E); /*A-overwrites-X*/}
-expr(A) ::= expr(X) NOT NULL.    {A = Expr::not_null(X, TokenType::TK_NOTNULL as YYCODETYPE); /*A-overwrites-X*/}
+expr(A) ::= expr(X) ISNULL|NOTNULL(E).   {A = Expr::not_null(X, @E, self.ctx.bump); /*A-overwrites-X*/}
+expr(A) ::= expr(X) NOT NULL.    {A = Expr::not_null(X, TokenType::TK_NOTNULL as YYCODETYPE, self.ctx.bump); /*A-overwrites-X*/}
 
 //    expr1 IS expr2       same as    expr1 IS NOT DISTINCT FROM expr2
 //    expr1 IS NOT expr2   same as    expr1 IS DISTINCT FROM expr2
 //
 expr(A) ::= expr(X) IS(OP) expr(Y).     {
-  A = Expr::binary(X, @OP, Y); /*A-overwrites-X*/
+  A = Expr::binary(X, @OP, Y, self.ctx.bump); /*A-overwrites-X*/
 }
 expr(A) ::= expr(X) IS NOT expr(Y). {
-  A = Expr::binary(X, TokenType::TK_NOT as YYCODETYPE, Y); /*A-overwrites-X*/
+  A = Expr::binary(X, TokenType::TK_NOT as YYCODETYPE, Y, self.ctx.bump); /*A-overwrites-X*/
 }
 expr(A) ::= expr(X) IS NOT DISTINCT FROM expr(Y).     {
-  A = Expr::binary(X, TokenType::TK_IS as YYCODETYPE, Y); /*A-overwrites-X*/
+  A = Expr::binary(X, TokenType::TK_IS as YYCODETYPE, Y, self.ctx.bump); /*A-overwrites-X*/
 }
 expr(A) ::= expr(X) IS DISTINCT FROM expr(Y). {
-  A = Expr::binary(X, TokenType::TK_NOT as YYCODETYPE, Y); /*A-overwrites-X*/
+  A = Expr::binary(X, TokenType::TK_NOT as YYCODETYPE, Y, self.ctx.bump); /*A-overwrites-X*/
 }
 
 expr(A) ::= NOT(B) expr(X).
-              {A = Expr::unary(UnaryOperator::from(@B), X);/*A-overwrites-B*/}
+              {A = Expr::unary(UnaryOperator::from(@B), X, self.ctx.bump);/*A-overwrites-B*/}
 expr(A) ::= BITNOT(B) expr(X).
-              {A = Expr::unary(UnaryOperator::from(@B), X);/*A-overwrites-B*/}
+              {A = Expr::unary(UnaryOperator::from(@B), X, self.ctx.bump);/*A-overwrites-B*/}
 expr(A) ::= PLUS|MINUS(B) expr(X). [BITNOT] {
-  A = Expr::unary(UnaryOperator::from(@B), X);/*A-overwrites-B*/
+  A = Expr::unary(UnaryOperator::from(@B), X, self.ctx.bump);/*A-overwrites-B*/
 }
 
 expr(A) ::= expr(B) PTR(C) expr(D). {
-  A = Expr::ptr(B, C, D);
+  A = Expr::ptr(B, C, D, self.ctx.bump);
 }
 
 %type between_op {bool}
 between_op(A) ::= BETWEEN.     {A = false;}
 between_op(A) ::= NOT BETWEEN. {A = true;}
 expr(A) ::= expr(B) between_op(N) expr(X) AND expr(Y). [BETWEEN] {
-  A = Expr::between(B, N, X, Y);/*A-overwrites-B*/
+  A = Expr::between(B, N, X, Y, self.ctx.bump);/*A-overwrites-B*/
 }
 %ifndef SQLITE_OMIT_SUBQUERY
   %type in_op {bool}
   in_op(A) ::= IN.      {A = false;}
   in_op(A) ::= NOT IN.  {A = true;}
   expr(A) ::= expr(X) in_op(N) LP exprlist(Y) RP. [IN] {
-    A = Expr::in_list(X, N, Y);/*A-overwrites-X*/
+    A = Expr::in_list(X, N, Y, self.ctx.bump);/*A-overwrites-X*/
   }
   expr(A) ::= LP select(X) RP. {
-    A = Expr::sub_query(X);
+    A = Expr::sub_query(X, self.ctx.bump);
   }
   expr(A) ::= expr(X) in_op(N) LP select(Y) RP.  [IN] {
-    A = Expr::in_select(X, N, Y);/*A-overwrites-X*/
+    A = Expr::in_select(X, N, Y, self.ctx.bump);/*A-overwrites-X*/
   }
   expr(A) ::= expr(X) in_op(N) fullname(Y) paren_exprlist(E). [IN] {
-    A = Expr::in_table(X, N, Y, E);/*A-overwrites-X*/
+    A = Expr::in_table(X, N, Y, E, self.ctx.bump);/*A-overwrites-X*/
   }
   expr(A) ::= EXISTS LP select(Y) RP. {
-    A = Expr::Exists(Box::new(Y));
+    A = Expr::Exists(self.ctx.bump.alloc(Y));
   }
 %endif SQLITE_OMIT_SUBQUERY
 
 /* CASE expressions */
 expr(A) ::= CASE case_operand(X) case_exprlist(Y) case_else(Z) END. {
-  A = Expr::Case{ base: X.map(Box::new), when_then_pairs: Y, else_expr: Z.map(Box::new)};
+  A = Expr::Case{ base: X.map(|x| self.ctx.bump.alloc(x) as _), when_then_pairs: Y.into_bump_slice(), else_expr: Z.map(|z| self.ctx.bump.alloc(z) as _)};
 }
-%type case_exprlist {Vec<(Expr, Expr)>}
+%type case_exprlist "Vec<'i, (Expr<'i>, Expr<'i>)>"
 case_exprlist(A) ::= case_exprlist(A) WHEN expr(Y) THEN expr(Z). {
   let pair = (Y, Z);
   A.push(pair);
 }
 case_exprlist(A) ::= WHEN expr(Y) THEN expr(Z). {
-  A = vec![(Y, Z)];
+  A = self.ctx.new_vec((Y, Z));
 }
-%type case_else {Option<Expr>}
+%type case_else "Option<Expr<'i>>"
 case_else(A) ::=  ELSE expr(X).         {A = Some(X);}
 case_else(A) ::=  .                     {A = None;}
-%type case_operand {Option<Expr>}
+%type case_operand "Option<Expr<'i>>"
 case_operand(A) ::= expr(X).            {A = Some(X); /*A-overwrites-X*/}
 case_operand(A) ::= .                   {A = None;}
 
-%type exprlist {Option<Vec<Expr>>}
-%type nexprlist {Vec<Expr>}
+%type exprlist "Option<Vec<'i, Expr<'i>>>"
+%type nexprlist "Vec<'i, Expr<'i>>"
 
 exprlist(A) ::= nexprlist(X).                {A = Some(X);}
 exprlist(A) ::= .                            {A = None;}
 nexprlist(A) ::= nexprlist(A) COMMA expr(Y).
     { let expr = Y; A.push(expr);}
 nexprlist(A) ::= expr(Y).
-    {A = vec![Y]; /*A-overwrites-Y*/}
+    {A = self.ctx.new_vec(Y); /*A-overwrites-Y*/}
 
 %ifndef SQLITE_OMIT_SUBQUERY
 /* A paren_exprlist is an optional expression list contained inside
 ** of parenthesis */
-%type paren_exprlist {Option<Vec<Expr>>}
+%type paren_exprlist "Option<Vec<'i, Expr<'i>>>"
 paren_exprlist(A) ::= .   {A = None;}
 paren_exprlist(A) ::= LP exprlist(X) RP.  {A = X;}
 %endif SQLITE_OMIT_SUBQUERY
@@ -1122,8 +1128,8 @@ uniqueflag(A) ::= .        {A = false;}
 // (busted) old databases, we need to continue parsing them when loading
 // historical schemas.
 //
-%type eidlist {Vec<IndexedColumn>}
-%type eidlist_opt {Option<Vec<IndexedColumn>>}
+%type eidlist "Vec<'i, IndexedColumn<'i>>"
+%type eidlist_opt "Option<Vec<'i, IndexedColumn<'i>>>"
 
 %include {
 } // end %include
@@ -1137,12 +1143,12 @@ eidlist(A) ::= eidlist(A) COMMA nm(Y) collate(C) sortorder(Z).  {
 }
 eidlist(A) ::= nm(Y) collate(C) sortorder(Z). {
   // FIXME
-  A = vec![IndexedColumn{ col_name: Y, collation_name: C, order: Z }]; /*A-overwrites-Y*/
+  A = self.ctx.new_vec(IndexedColumn{ col_name: Y, collation_name: C, order: Z }); /*A-overwrites-Y*/
 }
 
-%type collate {Option<Name>}
+%type collate "Option<Name<'i>>"
 collate(C) ::= .              {C = None;}
-collate(C) ::= COLLATE ids(X).   {C = Some(Name::from_token(@X, X));}
+collate(C) ::= COLLATE ids(X).   {C = Some(Name::from_token(@X, X, self.ctx.bump));}
 
 
 ///////////////////////////// The DROP INDEX command /////////////////////////
@@ -1152,7 +1158,7 @@ cmd ::= DROP INDEX ifexists(E) fullname(X).   {self.ctx.stmt = Some(Stmt::DropIn
 ///////////////////////////// The VACUUM command /////////////////////////////
 //
 %if !SQLITE_OMIT_VACUUM && !SQLITE_OMIT_ATTACH
-%type vinto {Option<Expr>}
+%type vinto "Option<Expr<'i>>"
 cmd ::= VACUUM vinto(Y).                {self.ctx.stmt = Some(Stmt::Vacuum(None, Y));}
 cmd ::= VACUUM nm(X) vinto(Y).          {self.ctx.stmt = Some(Stmt::Vacuum(Some(X), Y));}
 vinto(A) ::= INTO expr(X).              {A = Some(X);}
@@ -1170,19 +1176,19 @@ cmd ::= PRAGMA fullname(X) EQ minus_num(Y).
 cmd ::= PRAGMA fullname(X) LP minus_num(Y) RP.
                                              {self.ctx.stmt = Some(Stmt::Pragma(X, Some(PragmaBody::Call(Y))));}
 
-%type nmnum {Expr}
+%type nmnum "Expr<'i>"
 nmnum(A) ::= plus_num(A).
 nmnum(A) ::= nm(X). {A = Expr::Name(X);}
-nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
-nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
-nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X)));}
+nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X, self.ctx.bump)));}
+nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X, self.ctx.bump)));}
+nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X, self.ctx.bump)));}
 %endif SQLITE_OMIT_PRAGMA
 %token_class number INTEGER|FLOAT.
-%type plus_num {Expr}
-plus_num(A) ::= PLUS number(X).       {A = Expr::unary(UnaryOperator::Positive, Expr::Literal(Literal::Numeric(X.unwrap())));}
-plus_num(A) ::= number(X).            {A = Expr::Literal(Literal::Numeric(X.unwrap()));}
-%type minus_num {Expr}
-minus_num(A) ::= MINUS number(X).     {A = Expr::unary(UnaryOperator::Negative, Expr::Literal(Literal::Numeric(X.unwrap())));}
+%type plus_num "Expr<'i>"
+plus_num(A) ::= PLUS number(X).       {A = Expr::unary(UnaryOperator::Positive, Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump))), self.ctx.bump);}
+plus_num(A) ::= number(X).            {A = Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump)));}
+%type minus_num "Expr<'i>"
+minus_num(A) ::= MINUS number(X).     {A = Expr::unary(UnaryOperator::Negative, Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump))), self.ctx.bump);}
 //////////////////////////// The CREATE TRIGGER command /////////////////////
 
 %ifndef SQLITE_OMIT_TRIGGER
@@ -1191,7 +1197,7 @@ cmd ::= createkw temp(T) TRIGGER ifnotexists(NOERR) fullname(B) trigger_time(C) 
         ON fullname(E) foreach_clause(X) when_clause(G) BEGIN trigger_cmd_list(S) END. {
   self.ctx.stmt = Some(Stmt::CreateTrigger{
     temporary: T, if_not_exists: NOERR, trigger_name: B, time: C, event: D, tbl_name: E,
-    for_each_row: X, when_clause: G, commands: S
+    for_each_row: X, when_clause: G, commands: S.into_bump_slice()
   });
 }
 
@@ -1201,7 +1207,7 @@ trigger_time(A) ::= AFTER.  { A = Some(TriggerTime::After); }
 trigger_time(A) ::= INSTEAD OF.  { A = Some(TriggerTime::InsteadOf);}
 trigger_time(A) ::= .            { A = None; }
 
-%type trigger_event {TriggerEvent}
+%type trigger_event "TriggerEvent<'i>"
 trigger_event(A) ::= DELETE.   {A = TriggerEvent::Delete;}
 trigger_event(A) ::= INSERT.   {A = TriggerEvent::Insert;}
 trigger_event(A) ::= UPDATE.          {A = TriggerEvent::Update;}
@@ -1211,17 +1217,17 @@ trigger_event(A) ::= UPDATE OF idlist(X).{A = TriggerEvent::UpdateOf(X);}
 foreach_clause(A) ::= .             { A = false; }
 foreach_clause(A) ::= FOR EACH ROW. { A = true;  }
 
-%type when_clause {Option<Expr>}
+%type when_clause "Option<Expr<'i>>"
 when_clause(A) ::= .             { A = None; }
 when_clause(A) ::= WHEN expr(X). { A = Some(X); }
 
-%type trigger_cmd_list {Vec<TriggerCmd>}
+%type trigger_cmd_list "Vec<'i, TriggerCmd<'i>>"
 trigger_cmd_list(A) ::= trigger_cmd_list(A) trigger_cmd(X) SEMI. {
   let tc = X;
   A.push(tc);
 }
 trigger_cmd_list(A) ::= trigger_cmd(X) SEMI. {
-  A = vec![X];
+  A = self.ctx.new_vec(X);
 }
 
 // Disallow the INDEX BY and NOT INDEXED clauses on UPDATE and DELETE
@@ -1242,11 +1248,11 @@ tridxby ::= NOT INDEXED. {
 
 
 
-%type trigger_cmd {TriggerCmd}
+%type trigger_cmd "TriggerCmd<'i>"
 // UPDATE
 trigger_cmd(A) ::=
    UPDATE orconf(R) xfullname(X) tridxby SET setlist(Y) from(F) where_opt(Z).
-   {A = TriggerCmd::Update{ or_conflict: R, tbl_name: X, sets: Y, from: F, where_clause: Z };}
+   {A = TriggerCmd::Update{ or_conflict: R, tbl_name: X, sets: Y.into_bump_slice(), from: F, where_clause: Z };}
 
 // INSERT
 trigger_cmd(A) ::= insert_cmd(R) INTO
@@ -1255,7 +1261,7 @@ trigger_cmd(A) ::= insert_cmd(R) INTO
   if returning.is_some() {
     return Err(custom_err!("cannot use RETURNING in a trigger"));
   }
-  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: Box::new(S), upsert: upsert.map(Box::new) };/*A-overwrites-R*/
+  A = TriggerCmd::Insert{ or_conflict: R, tbl_name: X, col_names: F, select: self.ctx.bump.alloc(S), upsert: upsert.map(|u| self.ctx.bump.alloc(u) as _) };/*A-overwrites-R*/
 }
 // DELETE
 trigger_cmd(A) ::= DELETE FROM xfullname(X) tridxby where_opt(Y).
@@ -1263,14 +1269,14 @@ trigger_cmd(A) ::= DELETE FROM xfullname(X) tridxby where_opt(Y).
 
 // SELECT
 trigger_cmd(A) ::= select(X).
-   {A = TriggerCmd::Select(Box::new(X)); /*A-overwrites-X*/}
+   {A = TriggerCmd::Select(self.ctx.bump.alloc(X)); /*A-overwrites-X*/}
 
 // The special RAISE expression that may occur in trigger programs
 expr(A) ::= RAISE LP IGNORE RP.  {
   A = Expr::Raise(ResolveType::Ignore, None);
 }
 expr(A) ::= RAISE LP raisetype(T) COMMA expr(Z) RP.  {
-  A = Expr::Raise(T, Some(Box::new(Z)));
+  A = Expr::Raise(T, Some(self.ctx.bump.alloc(Z)));
 }
 %endif  !SQLITE_OMIT_TRIGGER
 
@@ -1296,7 +1302,7 @@ cmd ::= DETACH database_kw_opt expr(D). {
   self.ctx.stmt = Some(Stmt::Detach(D));
 }
 
-%type key_opt {Option<Expr>}
+%type key_opt "Option<Expr<'i>>"
 key_opt(A) ::= .                     { A = None; }
 key_opt(A) ::= KEY expr(X).          { A = Some(X); }
 
@@ -1322,7 +1328,7 @@ cmd ::= ALTER TABLE fullname(X) RENAME TO nm(Z). {
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::RenameTo(Z)));
 }
 cmd ::= ALTER TABLE fullname(X) ADD kwcolumn_opt nm(Y) typetoken(Z) carglist(C). {
-  let cd = ColumnDefinition::new(Y, Z, C)?;
+  let cd = ColumnDefinition::new(Y, Z, C, self.ctx.bump)?;
   self.ctx.stmt = Some(Stmt::AlterTable(X, AlterTableBody::AddColumn(cd)));
 }
 cmd ::= ALTER TABLE fullname(X) DROP kwcolumn_opt nm(Y). {
@@ -1359,11 +1365,11 @@ cmd ::= create_vtab(X).                       {self.ctx.stmt = Some(X);}
 cmd ::= create_vtab(X) LP vtabarglist RP.  {
   let mut stmt = X;
   if let Stmt::CreateVirtualTable{ ref mut args, .. } = stmt {
-    *args = self.ctx.module_args();
+    *args = self.ctx.module_args().map(|a| a.into_bump_slice());
   }
   self.ctx.stmt = Some(stmt);
 }
-%type create_vtab {Stmt}
+%type create_vtab "Stmt<'i>"
 create_vtab(A) ::= createkw VIRTUAL TABLE ifnotexists(E)
                 fullname(X) USING nm(Z). {
     A = Stmt::CreateVirtualTable{ if_not_exists: E, tbl_name: X, module_name: Z, args: None };
@@ -1382,25 +1388,25 @@ anylist ::= anylist ANY.
 
 
 //////////////////////// COMMON TABLE EXPRESSIONS ////////////////////////////
-%type with {Option<With>}
-%type wqlist {Vec<CommonTableExpr>}
-%type wqitem {CommonTableExpr}
+%type with "Option<With<'i>>"
+%type wqlist "Vec<'i, CommonTableExpr<'i>>"
+%type wqitem "CommonTableExpr<'i>"
 // %destructor wqitem {sqlite3CteDelete(pParse->db, $$);} // not reachable
 
 with(A) ::= . { A = None; }
 %ifndef SQLITE_OMIT_CTE
-with(A) ::= WITH wqlist(W).              { A = Some(With{ recursive: false, ctes: W }); }
-with(A) ::= WITH RECURSIVE wqlist(W).    { A = Some(With{ recursive: true, ctes: W }); }
+with(A) ::= WITH wqlist(W).              { A = Some(With{ recursive: false, ctes: W.into_bump_slice() }); }
+with(A) ::= WITH RECURSIVE wqlist(W).    { A = Some(With{ recursive: true, ctes: W.into_bump_slice() }); }
 
 %type wqas {Materialized}
 wqas(A)   ::= AS.                  {A = Materialized::Any;}
 wqas(A)   ::= AS MATERIALIZED.     {A = Materialized::Yes;}
 wqas(A)   ::= AS NOT MATERIALIZED. {A = Materialized::No;}
 wqitem(A) ::= nm(X) eidlist_opt(Y) wqas(M) LP select(Z) RP. {
-  A = CommonTableExpr::new(X, Y, M, Z)?; /*A-overwrites-X*/
+  A = CommonTableExpr::new(X, Y, M, Z, self.ctx.bump)?; /*A-overwrites-X*/
 }
 wqlist(A) ::= wqitem(X). {
-  A = vec![X]; /*A-overwrites-X*/
+  A = self.ctx.new_vec(X); /*A-overwrites-X*/
 }
 wqlist(A) ::= wqlist(A) COMMA wqitem(X). {
   let cte = X;
@@ -1416,51 +1422,51 @@ wqlist(A) ::= wqlist(A) COMMA wqitem(X). {
 // and TK_ILLEGAL.
 //
 %ifndef SQLITE_OMIT_WINDOWFUNC
-%type windowdefn_list {Vec<WindowDef>}
-windowdefn_list(A) ::= windowdefn(Z). { A = vec![Z]; }
+%type windowdefn_list "Vec<'i, WindowDef<'i>>"
+windowdefn_list(A) ::= windowdefn(Z). { A = self.ctx.new_vec(Z); }
 windowdefn_list(A) ::= windowdefn_list(A) COMMA windowdefn(Z). {
   let w = Z;
   A.push(w);
 }
 
-%type windowdefn {WindowDef}
+%type windowdefn "WindowDef<'i>"
 windowdefn(A) ::= nm(X) AS LP window(Y) RP. {
   A = WindowDef { name: X, window: Y};
 }
 
-%type window {Window}
+%type window "Window<'i>"
 
-%type frame_opt {Option<FrameClause>}
+%type frame_opt "Option<FrameClause<'i>>"
 
-%type filter_clause {Expr}
+%type filter_clause "Expr<'i>"
 
-%type over_clause {Over}
+%type over_clause "Over<'i>"
 
-%type filter_over {FunctionTail}
+%type filter_over "FunctionTail<'i>"
 
 %type range_or_rows {FrameMode}
 
-%type frame_bound {FrameBound}
-%type frame_bound_s {FrameBound}
-%type frame_bound_e {FrameBound}
+%type frame_bound "FrameBound<'i>"
+%type frame_bound_s "FrameBound<'i>"
+%type frame_bound_e "FrameBound<'i>"
 
 window(A) ::= PARTITION BY nexprlist(X) orderby_opt(Y) frame_opt(Z). {
-  A = Window{ base: None,  partition_by: Some(X), order_by: Y, frame_clause: Z};
+  A = Window::new(None,  Some(X), Y, Z);
 }
 window(A) ::= nm(W) PARTITION BY nexprlist(X) orderby_opt(Y) frame_opt(Z). {
-  A = Window{ base: Some(W),  partition_by: Some(X), order_by: Y, frame_clause: Z};
+  A = Window::new(Some(W), Some(X), Y, Z);
 }
 window(A) ::= ORDER BY sortlist(Y) frame_opt(Z). {
-  A = Window{ base: None,  partition_by: None, order_by: Some(Y), frame_clause: Z};
+  A = Window::new(None, None, Some(Y), Z);
 }
 window(A) ::= nm(W) ORDER BY sortlist(Y) frame_opt(Z). {
-  A = Window{ base: Some(W),  partition_by: None, order_by: Some(Y), frame_clause: Z};
+  A = Window::new(Some(W), None, Some(Y), Z);
 }
 window(A) ::= frame_opt(Z). {
-  A = Window{ base: None,  partition_by: None, order_by: None, frame_clause: Z};
+  A = Window::new(None, None, None, Z);
 }
 window(A) ::= nm(W) frame_opt(Z). {
-  A = Window{ base: Some(W),  partition_by: None, order_by: None, frame_clause: Z};
+  A = Window::new(Some(W), None, None, Z);
 }
 
 frame_opt(A) ::= .                             {
@@ -1498,21 +1504,21 @@ frame_exclude(A) ::= CURRENT ROW. { A = FrameExclude::CurrentRow; }
 frame_exclude(A) ::= GROUP.       { A = FrameExclude::Group; }
 frame_exclude(A) ::= TIES.        { A = FrameExclude::Ties; }
 
-%type window_clause {Vec<WindowDef>}
+%type window_clause "Vec<'i, WindowDef<'i>>"
 window_clause(A) ::= WINDOW windowdefn_list(B). { A = B; }
 
 filter_over(A) ::= filter_clause(F) over_clause(O). {
-  A = FunctionTail{ filter_clause: Some(Box::new(F)), over_clause: Some(Box::new(O)) };
+  A = FunctionTail{ filter_clause: Some(self.ctx.bump.alloc(F)), over_clause: Some(self.ctx.bump.alloc(O)) };
 }
 filter_over(A) ::= over_clause(O). {
-  A = FunctionTail{ filter_clause: None, over_clause: Some(Box::new(O)) };
+  A = FunctionTail{ filter_clause: None, over_clause: Some(self.ctx.bump.alloc(O)) };
 }
 filter_over(A) ::= filter_clause(F). {
-  A = FunctionTail{ filter_clause: Some(Box::new(F)), over_clause: None };
+  A = FunctionTail{ filter_clause: Some(self.ctx.bump.alloc(F)), over_clause: None };
 }
 
 over_clause(A) ::= OVER LP window(Z) RP. {
-  A = Over::Window(Box::new(Z));
+  A = Over::Window(self.ctx.bump.alloc(Z));
 }
 over_clause(A) ::= OVER nm(Z). {
   A = Over::Name(Z);

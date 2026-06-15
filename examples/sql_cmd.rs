@@ -3,8 +3,7 @@ use std::{
     io::{stdin, IsTerminal as _, Read as _},
 };
 
-use fallible_iterator::FallibleIterator as _;
-use sqlite3_parser::lexer::sql::Parser;
+use sqlite3_parser::{lexer::sql::Parser, Bump, FallibleIterator as _};
 
 /// Parse args.
 // RUST_LOG=sqlite3Parser=debug
@@ -22,7 +21,8 @@ fn main() {
 }
 
 fn parse(arg: String) {
-    let mut parser = Parser::new(arg.as_bytes());
+    let bump = Bump::new();
+    let mut parser = Parser::new(&bump, arg.as_bytes());
     loop {
         match parser.next() {
             Ok(None) => break,

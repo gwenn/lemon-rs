@@ -12,6 +12,9 @@ keywords = ["sql", "parser", "scanner", "tokenizer"]
 license = "Apache-2.0/MIT"
 build = "build.rs" # Lemon preprocessing
 
+[workspace]
+exclude = ["sqlparser_bench"]
+
 [badges]
 maintenance = { status = "experimental" }
 
@@ -34,6 +37,7 @@ fallible-iterator = "0.3"
 bitflags = "2.0"
 uncased = "0.9.10"
 indexmap = "2.0"
+bumpalo = { version = "3.19", features = ["boxed", "collections"] }
 
 [dev-dependencies]
 env_logger = { version = "0.11", default-features = false }
@@ -50,6 +54,7 @@ opt-level = 1
 debug = true
 
 [workspace.lints.clippy]
+large_stack_frames = "warn"
 ref_option = "warn"
 semicolon_if_nothing_returned = "warn"
 unnecessary_semicolon = "warn"

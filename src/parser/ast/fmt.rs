@@ -71,14 +71,9 @@ impl<T: ?Sized + ToTokens> ToTokens for &T {
     }
 }
 
-impl ToTokens for String {
+impl ToTokens for str {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_ANY, Some(self.as_ref()))
-    }
-}
-impl ToTokens for Box<str> {
-    fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.append(TK_ANY, Some(self.as_ref()))
+        s.append(TK_ANY, Some(self))
     }
 }
 
@@ -94,7 +89,7 @@ impl Display for dyn ToTokens {
 }
 */
 
-impl ToTokens for Cmd {
+impl ToTokens for Cmd<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Explain(stmt) => {
@@ -115,13 +110,13 @@ impl ToTokens for Cmd {
     }
 }
 
-impl Display for Cmd {
+impl Display for Cmd<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.to_fmt(f)
     }
 }
 
-impl ToTokens for Stmt {
+impl ToTokens for Stmt<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::AlterTable(tbl_name, body) => {
@@ -189,7 +184,7 @@ impl ToTokens for Stmt {
                 s.append(TK_ON, None)?;
                 tbl_name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
-                comma(columns, s)?;
+                comma(*columns, s)?;
                 s.append(TK_RP, None)?;
                 if let Some(where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
@@ -254,7 +249,7 @@ impl ToTokens for Stmt {
                     when_clause.to_tokens(s)?;
                 }
                 s.append(TK_BEGIN, Some("\n"))?;
-                for command in commands {
+                for command in *commands {
                     command.to_tokens(s)?;
                     s.append(TK_SEMI, Some("\n"))?;
                 }
@@ -280,7 +275,7 @@ impl ToTokens for Stmt {
                 view_name.to_tokens(s)?;
                 if let Some(columns) = columns {
                     s.append(TK_LP, None)?;
-                    comma(columns, s)?;
+                    comma(*columns, s)?;
                     s.append(TK_RP, None)?;
                 }
                 s.append(TK_AS, None)?;
@@ -305,7 +300,7 @@ impl ToTokens for Stmt {
                 module_name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
                 if let Some(args) = args {
-                    comma(args, s)?;
+                    comma(*args, s)?;
                 }
                 s.append(TK_RP, None)
             }
@@ -333,12 +328,12 @@ impl ToTokens for Stmt {
                 }
                 if let Some(returning) = returning {
                     s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
+                    comma(*returning, s)?;
                 }
                 if let Some(order_by) = order_by {
                     s.append(TK_ORDER, None)?;
                     s.append(TK_BY, None)?;
-                    comma(order_by, s)?;
+                    comma(*order_by, s)?;
                 }
                 if let Some(limit) = limit {
                     limit.to_tokens(s)?;
@@ -427,7 +422,7 @@ impl ToTokens for Stmt {
                 body.to_tokens(s)?;
                 if let Some(returning) = returning {
                     s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
+                    comma(*returning, s)?;
                 }
                 Ok(())
             }
@@ -495,7 +490,7 @@ impl ToTokens for Stmt {
                     indexed.to_tokens(s)?;
                 }
                 s.append(TK_SET, None)?;
-                comma(sets, s)?;
+                comma(*sets, s)?;
                 if let Some(from) = from {
                     s.append(TK_FROM, None)?;
                     from.to_tokens(s)?;
@@ -506,12 +501,12 @@ impl ToTokens for Stmt {
                 }
                 if let Some(returning) = returning {
                     s.append(TK_RETURNING, None)?;
-                    comma(returning, s)?;
+                    comma(*returning, s)?;
                 }
                 if let Some(order_by) = order_by {
                     s.append(TK_ORDER, None)?;
                     s.append(TK_BY, None)?;
-                    comma(order_by, s)?;
+                    comma(*order_by, s)?;
                 }
                 if let Some(limit) = limit {
                     limit.to_tokens(s)?;
@@ -520,10 +515,10 @@ impl ToTokens for Stmt {
             }
             Self::Vacuum(name, expr) => {
                 s.append(TK_VACUUM, None)?;
-                if let Some(ref name) = name {
+                if let Some(name) = name {
                     name.to_tokens(s)?;
                 }
-                if let Some(ref expr) = expr {
+                if let Some(expr) = expr {
                     s.append(TK_INTO, None)?;
                     expr.to_tokens(s)?;
                 }
@@ -533,7 +528,7 @@ impl ToTokens for Stmt {
     }
 }
 
-impl ToTokens for Expr {
+impl ToTokens for Expr<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Between {
@@ -562,16 +557,16 @@ impl ToTokens for Expr {
                 else_expr,
             } => {
                 s.append(TK_CASE, None)?;
-                if let Some(ref base) = base {
+                if let Some(base) = base {
                     base.to_tokens(s)?;
                 }
-                for (when, then) in when_then_pairs {
+                for (when, then) in *when_then_pairs {
                     s.append(TK_WHEN, None)?;
                     when.to_tokens(s)?;
                     s.append(TK_THEN, None)?;
                     then.to_tokens(s)?;
                 }
-                if let Some(ref else_expr) = else_expr {
+                if let Some(else_expr) = else_expr {
                     s.append(TK_ELSE, None)?;
                     else_expr.to_tokens(s)?;
                 }
@@ -582,7 +577,7 @@ impl ToTokens for Expr {
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
                 s.append(TK_AS, None)?;
-                if let Some(ref type_name) = type_name {
+                if let Some(type_name) = type_name {
                     type_name.to_tokens(s)?;
                 }
                 s.append(TK_RP, None)
@@ -618,14 +613,14 @@ impl ToTokens for Expr {
                     distinctness.to_tokens(s)?;
                 }
                 if let Some(args) = args {
-                    comma(args, s)?;
+                    comma(*args, s)?;
                 }
                 if let Some(order_by) = order_by {
                     match order_by {
                         FunctionCallOrder::SortList(order_by) => {
                             s.append(TK_ORDER, None)?;
                             s.append(TK_BY, None)?;
-                            comma(order_by, s)?;
+                            comma(*order_by, s)?;
                         }
                         #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
                         FunctionCallOrder::WithinGroup(order_by) => {
@@ -664,7 +659,7 @@ impl ToTokens for Expr {
                 s.append(TK_IN, None)?;
                 s.append(TK_LP, None)?;
                 if let Some(rhs) = rhs {
-                    comma(rhs, s)?;
+                    comma(*rhs, s)?;
                 }
                 s.append(TK_RP, None)
             }
@@ -692,7 +687,7 @@ impl ToTokens for Expr {
                 rhs.to_tokens(s)?;
                 if let Some(args) = args {
                     s.append(TK_LP, None)?;
-                    comma(args, s)?;
+                    comma(*args, s)?;
                     s.append(TK_RP, None)?;
                 }
                 Ok(())
@@ -766,19 +761,19 @@ impl ToTokens for Expr {
     }
 }
 
-impl Display for Expr {
+impl Display for Expr<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.to_fmt(f)
     }
 }
 
-impl ToTokens for Literal {
+impl ToTokens for Literal<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::Numeric(ref num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
-            Self::String(ref str) => s.append(TK_STRING, Some(str)),
-            Self::Blob(ref blob) => s.append(TK_BLOB, Some(blob)),
-            Self::Keyword(ref str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
+            Self::Numeric(num) => s.append(TK_FLOAT, Some(num)), // TODO Validate TK_FLOAT
+            Self::String(str) => s.append(TK_STRING, Some(str)),
+            Self::Blob(blob) => s.append(TK_BLOB, Some(blob)),
+            Self::Keyword(str) => s.append(TK_ID, Some(str)), // TODO Validate TK_ID
             Self::Null => s.append(TK_NULL, None),
             Self::CurrentDate => s.append(TK_CTIME_KW, Some("CURRENT_DATE")),
             Self::CurrentTime => s.append(TK_CTIME_KW, Some("CURRENT_TIME")),
@@ -847,13 +842,13 @@ impl ToTokens for UnaryOperator {
     }
 }
 
-impl ToTokens for Select {
+impl ToTokens for Select<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if let Some(ref with) = self.with {
             with.to_tokens(s)?;
         }
         self.body.to_tokens(s)?;
-        if let Some(ref order_by) = self.order_by {
+        if let Some(order_by) = self.order_by {
             s.append(TK_ORDER, None)?;
             s.append(TK_BY, None)?;
             comma(order_by, s)?;
@@ -865,7 +860,7 @@ impl ToTokens for Select {
     }
 }
 
-impl ToTokens for SelectBody {
+impl ToTokens for SelectBody<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.select.to_tokens(s)?;
         if let Some(ref compounds) = self.compounds {
@@ -877,7 +872,7 @@ impl ToTokens for SelectBody {
     }
 }
 
-impl ToTokens for CompoundSelect {
+impl ToTokens for CompoundSelect<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.operator.to_tokens(s)?;
         self.select.to_tokens(s)
@@ -904,7 +899,7 @@ impl Display for CompoundOperator {
     }
 }
 
-impl ToTokens for OneSelect {
+impl ToTokens for OneSelect<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Select {
@@ -917,30 +912,30 @@ impl ToTokens for OneSelect {
                 window_clause,
             } => {
                 s.append(TK_SELECT, None)?;
-                if let Some(ref distinctness) = distinctness {
+                if let Some(distinctness) = distinctness {
                     distinctness.to_tokens(s)?;
                 }
-                comma(columns, s)?;
-                if let Some(ref from) = from {
+                comma(*columns, s)?;
+                if let Some(from) = from {
                     s.append(TK_FROM, None)?;
                     from.to_tokens(s)?;
                 }
-                if let Some(ref where_clause) = where_clause {
+                if let Some(where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
                     where_clause.to_tokens(s)?;
                 }
-                if let Some(ref group_by) = group_by {
+                if let Some(group_by) = group_by {
                     s.append(TK_GROUP, None)?;
                     s.append(TK_BY, None)?;
-                    comma(group_by, s)?;
+                    comma(*group_by, s)?;
                 }
-                if let Some(ref having) = having {
+                if let Some(having) = having {
                     s.append(TK_HAVING, None)?;
                     having.to_tokens(s)?;
                 }
-                if let Some(ref window_clause) = window_clause {
+                if let Some(window_clause) = window_clause {
                     s.append(TK_WINDOW, None)?;
-                    comma(window_clause, s)?;
+                    comma(*window_clause, s)?;
                 }
                 Ok(())
             }
@@ -961,7 +956,7 @@ impl ToTokens for OneSelect {
     }
 }
 
-impl ToTokens for FromClause {
+impl ToTokens for FromClause<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.select.as_ref().unwrap().to_tokens(s)?;
         if let Some(ref joins) = self.joins {
@@ -985,7 +980,7 @@ impl ToTokens for Distinctness {
     }
 }
 
-impl ToTokens for ResultColumn {
+impl ToTokens for ResultColumn<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Expr(expr, alias) => {
@@ -1005,7 +1000,7 @@ impl ToTokens for ResultColumn {
     }
 }
 
-impl ToTokens for As {
+impl ToTokens for As<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::As(ref name) => {
@@ -1017,7 +1012,7 @@ impl ToTokens for As {
     }
 }
 
-impl ToTokens for JoinedSelectTable {
+impl ToTokens for JoinedSelectTable<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.operator.to_tokens(s)?;
         self.table.to_tokens(s)?;
@@ -1028,7 +1023,7 @@ impl ToTokens for JoinedSelectTable {
     }
 }
 
-impl ToTokens for SelectTable {
+impl ToTokens for SelectTable<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Table(name, alias, indexed) => {
@@ -1045,7 +1040,7 @@ impl ToTokens for SelectTable {
                 name.to_tokens(s)?;
                 s.append(TK_LP, None)?;
                 if let Some(exprs) = exprs {
-                    comma(exprs, s)?;
+                    comma(*exprs, s)?;
                 }
                 s.append(TK_RP, None)?;
                 if let Some(alias) = alias {
@@ -1080,7 +1075,7 @@ impl ToTokens for JoinOperator {
         match self {
             Self::Comma => s.append(TK_COMMA, None),
             Self::TypedJoin(join_type) => {
-                if let Some(ref join_type) = join_type {
+                if let Some(join_type) = join_type {
                     join_type.to_tokens(s)?;
                 }
                 s.append(TK_JOIN, None)
@@ -1117,7 +1112,7 @@ impl ToTokens for JoinType {
     }
 }
 
-impl ToTokens for JoinConstraint {
+impl ToTokens for JoinConstraint<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::On(expr) => {
@@ -1134,25 +1129,25 @@ impl ToTokens for JoinConstraint {
     }
 }
 
-impl ToTokens for Id {
+impl ToTokens for Id<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        double_quote(&self.0, s)
+        double_quote(self.0, s)
     }
 }
 
-impl ToTokens for Name {
+impl ToTokens for Name<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        double_quote(self.0.as_ref(), s)
+        double_quote(self.0, s)
     }
 }
 
-impl Display for Name {
+impl Display for Name<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.to_fmt(f)
     }
 }
 
-impl ToTokens for QualifiedName {
+impl ToTokens for QualifiedName<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if let Some(ref db_name) = self.db_name {
             db_name.to_tokens(s)?;
@@ -1167,13 +1162,13 @@ impl ToTokens for QualifiedName {
     }
 }
 
-impl Display for QualifiedName {
+impl Display for QualifiedName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.to_fmt(f)
     }
 }
 
-impl ToTokens for AlterTableBody {
+impl ToTokens for AlterTableBody<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::RenameTo(name) => {
@@ -1232,7 +1227,7 @@ impl ToTokens for AlterTableBody {
     }
 }
 
-impl ToTokens for CreateTableBody {
+impl ToTokens for CreateTableBody<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::ColumnsAndConstraints {
@@ -1241,10 +1236,10 @@ impl ToTokens for CreateTableBody {
                 flags,
             } => {
                 s.append(TK_LP, None)?;
-                comma(columns.values(), s)?;
+                comma(columns, s)?;
                 if let Some(constraints) = constraints {
                     s.append(TK_COMMA, None)?;
-                    comma(constraints, s)?;
+                    comma(*constraints, s)?;
                 }
                 s.append(TK_RP, None)?;
                 if flags.contains(TabFlags::WithoutRowid) {
@@ -1264,20 +1259,20 @@ impl ToTokens for CreateTableBody {
     }
 }
 
-impl ToTokens for ColumnDefinition {
+impl ToTokens for ColumnDefinition<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.col_name.to_tokens(s)?;
         if let Some(ref col_type) = self.col_type {
             col_type.to_tokens(s)?;
         }
-        for constraint in &self.constraints {
+        for constraint in self.constraints {
             constraint.to_tokens(s)?;
         }
         Ok(())
     }
 }
 
-impl ToTokens for NamedColumnConstraint {
+impl ToTokens for NamedColumnConstraint<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if let Some(ref name) = self.name {
             s.append(TK_CONSTRAINT, None)?;
@@ -1287,7 +1282,7 @@ impl ToTokens for NamedColumnConstraint {
     }
 }
 
-impl ToTokens for ColumnConstraint {
+impl ToTokens for ColumnConstraint<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::PrimaryKey {
@@ -1374,7 +1369,7 @@ impl ToTokens for ColumnConstraint {
     }
 }
 
-impl ToTokens for NamedTableConstraint {
+impl ToTokens for NamedTableConstraint<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if let Some(ref name) = self.name {
             s.append(TK_CONSTRAINT, None)?;
@@ -1384,7 +1379,7 @@ impl ToTokens for NamedTableConstraint {
     }
 }
 
-impl ToTokens for TableConstraint {
+impl ToTokens for TableConstraint<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::PrimaryKey {
@@ -1395,7 +1390,7 @@ impl ToTokens for TableConstraint {
                 s.append(TK_PRIMARY, None)?;
                 s.append(TK_KEY, None)?;
                 s.append(TK_LP, None)?;
-                comma(columns, s)?;
+                comma(*columns, s)?;
                 if *auto_increment {
                     s.append(TK_AUTOINCR, None)?;
                 }
@@ -1413,7 +1408,7 @@ impl ToTokens for TableConstraint {
             } => {
                 s.append(TK_UNIQUE, None)?;
                 s.append(TK_LP, None)?;
-                comma(columns, s)?;
+                comma(*columns, s)?;
                 s.append(TK_RP, None)?;
                 if let Some(conflict_clause) = conflict_clause {
                     s.append(TK_ON, None)?;
@@ -1442,7 +1437,7 @@ impl ToTokens for TableConstraint {
                 s.append(TK_FOREIGN, None)?;
                 s.append(TK_KEY, None)?;
                 s.append(TK_LP, None)?;
-                comma(columns, s)?;
+                comma(*columns, s)?;
                 s.append(TK_RP, None)?;
                 s.append(TK_REFERENCES, None)?;
                 clause.to_tokens(s)?;
@@ -1480,22 +1475,22 @@ impl ToTokens for NullsOrder {
     }
 }
 
-impl ToTokens for ForeignKeyClause {
+impl ToTokens for ForeignKeyClause<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.tbl_name.to_tokens(s)?;
-        if let Some(ref columns) = self.columns {
+        if let Some(columns) = self.columns {
             s.append(TK_LP, None)?;
             comma(columns, s)?;
             s.append(TK_RP, None)?;
         }
-        for arg in &self.args {
+        for arg in self.args {
             arg.to_tokens(s)?;
         }
         Ok(())
     }
 }
 
-impl ToTokens for RefArg {
+impl ToTokens for RefArg<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::OnDelete(ref action) => {
@@ -1568,7 +1563,7 @@ impl ToTokens for InitDeferredPred {
     }
 }
 
-impl ToTokens for IndexedColumn {
+impl ToTokens for IndexedColumn<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.col_name.to_tokens(s)?;
         if let Some(ref collation_name) = self.collation_name {
@@ -1582,7 +1577,7 @@ impl ToTokens for IndexedColumn {
     }
 }
 
-impl ToTokens for Indexed {
+impl ToTokens for Indexed<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::IndexedBy(ref name) => {
@@ -1598,7 +1593,7 @@ impl ToTokens for Indexed {
     }
 }
 
-impl ToTokens for SortedColumn {
+impl ToTokens for SortedColumn<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.expr.to_tokens(s)?;
         if let Some(ref order) = self.order {
@@ -1611,7 +1606,7 @@ impl ToTokens for SortedColumn {
     }
 }
 
-impl ToTokens for Limit {
+impl ToTokens for Limit<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(TK_LIMIT, None)?;
         self.expr.to_tokens(s)?;
@@ -1623,7 +1618,7 @@ impl ToTokens for Limit {
     }
 }
 
-impl ToTokens for InsertBody {
+impl ToTokens for InsertBody<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Select(select, upsert) => {
@@ -1641,7 +1636,7 @@ impl ToTokens for InsertBody {
     }
 }
 
-impl ToTokens for Set {
+impl ToTokens for Set<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if self.col_names.len() == 1 {
             comma(self.col_names.deref(), s)?;
@@ -1655,7 +1650,7 @@ impl ToTokens for Set {
     }
 }
 
-impl ToTokens for PragmaBody {
+impl ToTokens for PragmaBody<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Equals(value) => {
@@ -1684,13 +1679,13 @@ impl ToTokens for TriggerTime {
     }
 }
 
-impl ToTokens for TriggerEvent {
+impl ToTokens for TriggerEvent<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Delete => s.append(TK_DELETE, None),
             Self::Insert => s.append(TK_INSERT, None),
             Self::Update => s.append(TK_UPDATE, None),
-            Self::UpdateOf(ref col_names) => {
+            Self::UpdateOf(col_names) => {
                 s.append(TK_UPDATE, None)?;
                 s.append(TK_OF, None)?;
                 comma(col_names.deref(), s)
@@ -1699,7 +1694,7 @@ impl ToTokens for TriggerEvent {
     }
 }
 
-impl ToTokens for TriggerCmd {
+impl ToTokens for TriggerCmd<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Update {
@@ -1716,7 +1711,7 @@ impl ToTokens for TriggerCmd {
                 }
                 tbl_name.to_tokens(s)?;
                 s.append(TK_SET, None)?;
-                comma(sets, s)?;
+                comma(*sets, s)?;
                 if let Some(from) = from {
                     s.append(TK_FROM, None)?;
                     from.to_tokens(s)?;
@@ -1789,20 +1784,20 @@ impl ToTokens for ResolveType {
     }
 }
 
-impl ToTokens for With {
+impl ToTokens for With<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(TK_WITH, None)?;
         if self.recursive {
             s.append(TK_RECURSIVE, None)?;
         }
-        comma(&self.ctes, s)
+        comma(self.ctes, s)
     }
 }
 
-impl ToTokens for CommonTableExpr {
+impl ToTokens for CommonTableExpr<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.tbl_name.to_tokens(s)?;
-        if let Some(ref columns) = self.columns {
+        if let Some(columns) = self.columns {
             s.append(TK_LP, None)?;
             comma(columns, s)?;
             s.append(TK_RP, None)?;
@@ -1824,12 +1819,12 @@ impl ToTokens for CommonTableExpr {
     }
 }
 
-impl ToTokens for Type {
+impl ToTokens for Type<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self.size {
-            None => s.append(TK_ID, Some(&self.name)),
+            None => s.append(TK_ID, Some(self.name)),
             Some(ref size) => {
-                s.append(TK_ID, Some(&self.name))?; // TODO check there is no forbidden chars
+                s.append(TK_ID, Some(self.name))?; // TODO check there is no forbidden chars
                 s.append(TK_LP, None)?;
                 size.to_tokens(s)?;
                 s.append(TK_RP, None)
@@ -1838,7 +1833,7 @@ impl ToTokens for Type {
     }
 }
 
-impl ToTokens for TypeSize {
+impl ToTokens for TypeSize<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::MaxSize(size) => size.to_tokens(s),
@@ -1864,7 +1859,7 @@ impl ToTokens for TransactionType {
     }
 }
 
-impl ToTokens for Upsert {
+impl ToTokens for Upsert<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(TK_ON, None)?;
         s.append(TK_CONFLICT, None)?;
@@ -1872,17 +1867,17 @@ impl ToTokens for Upsert {
             index.to_tokens(s)?;
         }
         self.do_clause.to_tokens(s)?;
-        if let Some(ref next) = self.next {
+        if let Some(next) = self.next {
             next.to_tokens(s)?;
         }
         Ok(())
     }
 }
 
-impl ToTokens for UpsertIndex {
+impl ToTokens for UpsertIndex<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(TK_LP, None)?;
-        comma(&self.targets, s)?;
+        comma(self.targets, s)?;
         s.append(TK_RP, None)?;
         if let Some(ref where_clause) = self.where_clause {
             s.append(TK_WHERE, None)?;
@@ -1892,14 +1887,14 @@ impl ToTokens for UpsertIndex {
     }
 }
 
-impl ToTokens for UpsertDo {
+impl ToTokens for UpsertDo<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Set { sets, where_clause } => {
                 s.append(TK_DO, None)?;
                 s.append(TK_UPDATE, None)?;
                 s.append(TK_SET, None)?;
-                comma(sets, s)?;
+                comma(*sets, s)?;
                 if let Some(where_clause) = where_clause {
                     s.append(TK_WHERE, None)?;
                     where_clause.to_tokens(s)?;
@@ -1914,16 +1909,16 @@ impl ToTokens for UpsertDo {
     }
 }
 
-impl ToTokens for FunctionTail {
+impl ToTokens for FunctionTail<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
-        if let Some(ref filter_clause) = self.filter_clause {
+        if let Some(filter_clause) = self.filter_clause {
             s.append(TK_FILTER, None)?;
             s.append(TK_LP, None)?;
             s.append(TK_WHERE, None)?;
             filter_clause.to_tokens(s)?;
             s.append(TK_RP, None)?;
         }
-        if let Some(ref over_clause) = self.over_clause {
+        if let Some(over_clause) = self.over_clause {
             s.append(TK_OVER, None)?;
             over_clause.to_tokens(s)?;
         }
@@ -1931,7 +1926,7 @@ impl ToTokens for FunctionTail {
     }
 }
 
-impl ToTokens for Over {
+impl ToTokens for Over<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::Window(ref window) => window.to_tokens(s),
@@ -1940,7 +1935,7 @@ impl ToTokens for Over {
     }
 }
 
-impl ToTokens for WindowDef {
+impl ToTokens for WindowDef<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.name.to_tokens(s)?;
         s.append(TK_AS, None)?;
@@ -1948,18 +1943,18 @@ impl ToTokens for WindowDef {
     }
 }
 
-impl ToTokens for Window {
+impl ToTokens for Window<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         s.append(TK_LP, None)?;
         if let Some(ref base) = self.base {
             base.to_tokens(s)?;
         }
-        if let Some(ref partition_by) = self.partition_by {
+        if let Some(partition_by) = self.partition_by {
             s.append(TK_PARTITION, None)?;
             s.append(TK_BY, None)?;
             comma(partition_by, s)?;
         }
-        if let Some(ref order_by) = self.order_by {
+        if let Some(order_by) = self.order_by {
             s.append(TK_ORDER, None)?;
             s.append(TK_BY, None)?;
             comma(order_by, s)?;
@@ -1971,7 +1966,7 @@ impl ToTokens for Window {
     }
 }
 
-impl ToTokens for FrameClause {
+impl ToTokens for FrameClause<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.mode.to_tokens(s)?;
         if let Some(ref end) = self.end {
@@ -2003,7 +1998,7 @@ impl ToTokens for FrameMode {
     }
 }
 
-impl ToTokens for FrameBound {
+impl ToTokens for FrameBound<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
             Self::CurrentRow => {

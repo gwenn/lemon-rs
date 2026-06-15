@@ -1,3 +1,4 @@
+use bumpalo::Bump;
 use fallible_iterator::FallibleIterator as _;
 use std::assert_matches;
 
@@ -10,7 +11,8 @@ use crate::parser::{
 
 #[test]
 fn count_placeholders() {
-    let ast = parse_cmd(b"SELECT ? WHERE 1 = ?");
+    let b = Bump::new();
+    let ast = parse_cmd(b"SELECT ? WHERE 1 = ?", &b);
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 2);
@@ -18,7 +20,8 @@ fn count_placeholders() {
 
 #[test]
 fn count_numbered_placeholders() {
-    let ast = parse_cmd(b"SELECT ?1 WHERE 1 = ?2 AND 0 = ?1");
+    let b = Bump::new();
+    let ast = parse_cmd(b"SELECT ?1 WHERE 1 = ?2 AND 0 = ?1", &b);
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 2);
@@ -26,7 +29,8 @@ fn count_numbered_placeholders() {
 
 #[test]
 fn count_unused_placeholders() {
-    let ast = parse_cmd(b"SELECT ?1 WHERE 1 = ?3");
+    let b = Bump::new();
+    let ast = parse_cmd(b"SELECT ?1 WHERE 1 = ?3", &b);
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 3);
@@ -34,7 +38,8 @@ fn count_unused_placeholders() {
 
 #[test]
 fn count_named_placeholders() {
-    let ast = parse_cmd(b"SELECT :x, :y WHERE 1 = :y");
+    let b = Bump::new();
+    let ast = parse_cmd(b"SELECT :x, :y WHERE 1 = :y", &b);
     let mut info = ParameterInfo::default();
     ast.to_tokens(&mut info).unwrap();
     assert_eq!(info.count, 2);
@@ -66,8 +71,12 @@ fn create_table_without_column() {
 
 #[test]
 fn auto_increment() {
-    parse_cmd(b"CREATE TABLE t (x INTEGER PRIMARY KEY AUTOINCREMENT)");
-    parse_cmd(b"CREATE TABLE t (x \"INTEGER\" PRIMARY KEY AUTOINCREMENT)");
+    let b = Bump::new();
+    parse_cmd(b"CREATE TABLE t (x INTEGER PRIMARY KEY AUTOINCREMENT)", &b);
+    parse_cmd(
+        b"CREATE TABLE t (x \"INTEGER\" PRIMARY KEY AUTOINCREMENT)",
+        &b,
+    );
     #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT PRIMARY KEY AUTOINCREMENT)",
@@ -85,7 +94,7 @@ fn generated() {
     expect_parser_err_msg(
         b"CREATE TABLE x(a AS ('id') DEFAULT '')",
         "cannot use DEFAULT on a generated column",
-    )
+    );
 }
 
 #[test]
@@ -124,7 +133,7 @@ fn has_explicit_nulls() {
     expect_parser_err_msg(
         b"CREATE INDEX i ON x(a ASC NULLS LAST)",
         "unsupported use of NULLS LAST",
-    )
+    );
 }
 
 #[test]
@@ -133,7 +142,8 @@ fn vtab_args() -> Result<(), Error> {
   subject VARCHAR(256) NOT NULL,
   body TEXT CHECK(length(body)<10240)
 );";
-    let r = parse_cmd(sql);
+    let b = Bump::new();
+    let r = parse_cmd(sql, &b);
     let Cmd::Stmt(Stmt::CreateVirtualTable {
         tbl_name: QualifiedName {
             name: Name(tbl_name),
@@ -146,25 +156,27 @@ fn vtab_args() -> Result<(), Error> {
     else {
         panic!("unexpected AST")
     };
-    assert_eq!(tbl_name.as_ref(), "mail");
-    assert_eq!(module_name.as_ref(), "fts3");
+    assert_eq!(tbl_name, "mail");
+    assert_eq!(module_name, "fts3");
     assert_eq!(args.len(), 2);
-    assert_eq!(args[0].as_ref(), "subject VARCHAR(256) NOT NULL");
-    assert_eq!(args[1].as_ref(), "body TEXT CHECK(length(body)<10240)");
+    assert_eq!(args[0], "subject VARCHAR(256) NOT NULL");
+    assert_eq!(args[1], "body TEXT CHECK(length(body)<10240)");
     Ok(())
 }
 
 #[test]
 fn only_semicolons_no_statements() {
+    let bump = Bump::new();
     let sqls = ["", ";", ";;;"];
     for sql in &sqls {
-        let r = parse(sql.as_bytes());
+        let r = parse(sql.as_bytes(), &bump);
         assert_eq!(r.unwrap(), None);
     }
 }
 
 #[test]
 fn extra_semicolons_between_statements() {
+    let bump = Bump::new();
     let sqls = [
         "SELECT 1; SELECT 2",
         "SELECT 1; SELECT 2;",
@@ -172,7 +184,7 @@ fn extra_semicolons_between_statements() {
         ";; SELECT 1;; SELECT 2;;",
     ];
     for sql in &sqls {
-        let mut parser = Parser::new(sql.as_bytes());
+        let mut parser = Parser::new(&bump, sql.as_bytes());
         assert_matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. })));
         assert_matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. })));
         assert_eq!(parser.next().unwrap(), None);
@@ -181,6 +193,7 @@ fn extra_semicolons_between_statements() {
 
 #[test]
 fn extra_comments_between_statements() {
+    let bump = Bump::new();
     let sqls = [
         "-- abc\nSELECT 1; --def\nSELECT 2 -- ghj",
         "/* abc */ SELECT 1; /* def */ SELECT 2; /* ghj */",
@@ -188,7 +201,7 @@ fn extra_comments_between_statements() {
         "/* abc */;; SELECT 1;/* def */; SELECT 2; /* ghj */; /* klm */",
     ];
     for sql in &sqls {
-        let mut parser = Parser::new(sql.as_bytes());
+        let mut parser = Parser::new(&bump, sql.as_bytes());
         assert_matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. })));
         assert_matches!(parser.next().unwrap(), Some(Cmd::Stmt(Stmt::Select { .. })));
         assert_eq!(parser.next().unwrap(), None);
@@ -197,8 +210,9 @@ fn extra_comments_between_statements() {
 
 #[test]
 fn values() {
-    parse_cmd(b"SELECT * FROM (VALUES (1))");
-    parse_cmd(b"SELECT * FROM (VALUES (1), (2))");
+    let b = Bump::new();
+    parse_cmd(b"SELECT * FROM (VALUES (1))", &b);
+    parse_cmd(b"SELECT * FROM (VALUES (1), (2))", &b);
     expect_parser_err(
         b"SELECT * FROM (VALUES (1), VALUES (2))",
         ParserError::SyntaxError("VALUES".into()),
@@ -207,7 +221,8 @@ fn values() {
 
 #[test]
 fn having_without_group_by() {
-    parse_cmd(b"SELECT count(*) FROM t2 HAVING count(*)>1");
+    let b = Bump::new();
+    parse_cmd(b"SELECT count(*) FROM t2 HAVING count(*)>1", &b);
 }
 
 #[test]
@@ -259,7 +274,8 @@ fn create_temporary_table_with_qualified_name() {
         b"CREATE TEMPORARY TABLE mem.x AS SELECT 1",
         "temporary table name must be unqualified",
     );
-    parse_cmd(b"CREATE TEMPORARY TABLE temp.x AS SELECT 1");
+    let b = Bump::new();
+    parse_cmd(b"CREATE TEMPORARY TABLE temp.x AS SELECT 1", &b);
 }
 
 #[test]
@@ -288,7 +304,8 @@ fn create_strict_table_unknown_datatype() {
         b"CREATE TABLE t (c1 INT(10)) STRICT",
         "unknown datatype for t.c1: \"INT(...)\"",
     );
-    parse_cmd(b"CREATE TABLE t(c1 \"INT\", c2 [TEXT], c3 `INTEGER`)");
+    let b = Bump::new();
+    parse_cmd(b"CREATE TABLE t(c1 \"INT\", c2 [TEXT], c3 `INTEGER`)", &b);
 }
 
 #[test]
@@ -302,12 +319,14 @@ fn foreign_key_on_column() {
 
 #[test]
 fn create_strict_table_generated_column() {
+    let b = Bump::new();
     parse_cmd(
         b"CREATE TABLE IF NOT EXISTS transactions (
       debit REAL,
       credit REAL,
       amount REAL GENERATED ALWAYS AS (ifnull(credit, 0.0) -ifnull(debit, 0.0))
   ) STRICT;",
+        &b,
     );
 }
 
@@ -404,7 +423,8 @@ fn missing_join_clause() {
 
 #[test]
 fn cast_without_typename() {
-    parse_cmd(b"SELECT CAST(a AS ) FROM t");
+    let b = Bump::new();
+    parse_cmd(b"SELECT CAST(a AS ) FROM t", &b);
 }
 
 #[test]
@@ -427,7 +447,7 @@ fn cte_column_count() {
         b"WITH i(x, y) AS ( VALUES(1) )
       SELECT * FROM i;",
         "table i has 1 values for 2 columns",
-    )
+    );
 }
 #[test]
 #[cfg(feature = "extra_checks")]
@@ -437,7 +457,7 @@ fn duplicate_cte() {
       i(y) AS (SELECT 2)
       SELECT * FROM i;",
         "duplicate WITH table name: i",
-    )
+    );
 }
 
 #[test]
@@ -460,7 +480,8 @@ fn no_tables_specified() {
     expect_parser_err_msg(b"SELECT t.*", "no tables specified");
     #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(b"SELECT count(*), *", "no tables specified");
-    parse_cmd(b"SELECT count(*)");
+    let b = Bump::new();
+    parse_cmd(b"SELECT count(*)", &b);
 }
 
 #[test]
@@ -514,10 +535,12 @@ fn unknown_table_option() {
 
 #[test]
 fn qualified_table_name_within_triggers() {
+    let b = Bump::new();
     parse_cmd(
         b"CREATE TRIGGER tr1 AFTER INSERT ON t1 BEGIN
             DELETE FROM main.t2;
           END;",
+        &b,
     );
 }
 
@@ -566,25 +589,27 @@ fn reserved_name() {
         b"CREATE TRIGGER sqlite_x AFTER INSERT ON x BEGIN SELECT 1; END;",
         "object name reserved for internal use: sqlite_x",
     );
-    parse_cmd(b"CREATE TABLE sqlite(a)");
-    parse_cmd(b"CREATE INDEX \"\" ON t(a)");
+    let b = Bump::new();
+    parse_cmd(b"CREATE TABLE sqlite(a)", &b);
+    parse_cmd(b"CREATE INDEX \"\" ON t(a)", &b);
 }
 
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
     expect_parser_err(input, ParserError::Custom(error_msg.to_owned()));
 }
 fn expect_parser_err(input: &[u8], err: ParserError) {
-    let r = parse(input);
+    let b = Bump::new();
+    let r = parse(input, &b);
     if let Error::ParserError(e, _) = r.unwrap_err() {
         assert_eq!(e, err);
     } else {
         panic!("unexpected error type")
     }
 }
-fn parse_cmd(input: &[u8]) -> Cmd {
-    parse(input).unwrap().unwrap()
+fn parse_cmd<'bump>(input: &'bump [u8], b: &'bump Bump) -> Cmd<'bump> {
+    parse(input, b).unwrap().unwrap()
 }
-fn parse(input: &[u8]) -> Result<Option<Cmd>, Error> {
-    let mut parser = Parser::new(input);
+fn parse<'bump>(input: &'bump [u8], b: &'bump Bump) -> Result<Option<Cmd<'bump>>, Error> {
+    let mut parser = Parser::new(b, input);
     parser.next()
 }
