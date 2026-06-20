@@ -4988,7 +4988,7 @@ void ReportHeader(struct lemon *lemp)
 
   if( lemp->tokenprefix ) prefix = lemp->tokenprefix;
   else                    prefix = "";
-  out = file_open(lemp,".h","wb");
+  out = file_open(lemp,"_token.rs","wb");
   if( out ){
     fprintf(out,"#[non_exhaustive]\n");
     fprintf(out,"#[expect(non_camel_case_types, missing_docs)]\n");
