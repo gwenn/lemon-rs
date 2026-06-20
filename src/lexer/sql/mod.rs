@@ -607,6 +607,8 @@ fn find_end_of_number(
                 continue;
             }
             return Err(Error::BadNumber(None));
+        } else if b == b'$' {
+            return Err(Error::BadNumber(None));
         } else {
             return Ok(Some((j, b)));
         }
@@ -646,22 +648,137 @@ mod tests {
 
     #[test]
     fn fallible_iterator() -> Result<(), Error> {
-        let tokenizer = Tokenizer::new();
+        let mut s = scan();
         let input = b"PRAGMA parser_trace=ON;";
-        let mut s = Scanner::new(tokenizer);
         expect_token(&mut s, input, b"PRAGMA", TokenType::TK_PRAGMA)?;
         expect_token(&mut s, input, b"parser_trace", TokenType::TK_ID)?;
         Ok(())
     }
 
     #[test]
-    fn invalid_number_literal() -> Result<(), Error> {
-        let tokenizer = Tokenizer::new();
-        let input = b"SELECT 1E;";
-        let mut s = Scanner::new(tokenizer);
-        expect_token(&mut s, input, b"SELECT", TokenType::TK_SELECT)?;
-        let err = s.scan(input).unwrap_err();
-        assert_matches!(err, Error::BadNumber(_));
+    fn none() -> Result<(), Error> {
+        expect_none(b" ")?;
+        expect_none(b"  ")?;
+        expect_none(b"--")?;
+        expect_none(b"/**/")?;
+        expect_none(b"/*a/*b*/")?;
+        expect_none(b"/*\na\n/*\nb\n*/")?;
+        Ok(())
+    }
+
+    #[test]
+    fn ints() -> Result<(), Error> {
+        expect_single_token(b"45", b"45", TokenType::TK_INTEGER)?;
+        expect_single_token(b"0xFF", b"0xFF", TokenType::TK_INTEGER)?;
+        expect_single_token(b"0xFFFFFFFF", b"0xFFFFFFFF", TokenType::TK_INTEGER)?;
+        expect_single_token(b"0x123FFFFFFFF", b"0x123FFFFFFFF", TokenType::TK_INTEGER)?;
+        expect_single_token(
+            b"0xFFFFFFFFFFFFFFFF",
+            b"0xFFFFFFFFFFFFFFFF",
+            TokenType::TK_INTEGER,
+        )?;
+        expect_single_token(
+            b"0x7FFFFFFFFFFFFFFF",
+            b"0x7FFFFFFFFFFFFFFF",
+            TokenType::TK_INTEGER,
+        )?;
+        expect_single_token(
+            b"9223372036854775808",
+            b"9223372036854775808",
+            TokenType::TK_INTEGER,
+        )?;
+        expect_single_token(b"1_000", b"1_000", TokenType::TK_INTEGER)?;
+        expect_single_token(
+            b"9_223_372_036_854_775_807",
+            b"9_223_372_036_854_775_807",
+            TokenType::TK_INTEGER,
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn floats() -> Result<(), Error> {
+        expect_single_token(b"1e12", b"1e12", TokenType::TK_FLOAT)?;
+        expect_single_token(b"1.0", b"1.0", TokenType::TK_FLOAT)?;
+        expect_single_token(b"1e1000", b"1e1000", TokenType::TK_FLOAT)?;
+        expect_single_token(b"1.1_1", b"1.1_1", TokenType::TK_FLOAT)?;
+        expect_single_token(b"1_0.1_1", b"1_0.1_1", TokenType::TK_FLOAT)?;
+        expect_single_token(b"1e1_000", b"1e1_000", TokenType::TK_FLOAT)?;
+        expect_single_token(b"12_3_456.7_8_9", b"12_3_456.7_8_9", TokenType::TK_FLOAT)?;
+        expect_single_token(b".123", b".123", TokenType::TK_FLOAT)?;
+        expect_single_token(b".456e789", b".456e789", TokenType::TK_FLOAT)?;
+        expect_single_token(b".456E-789", b".456E-789", TokenType::TK_FLOAT)?;
+        expect_single_token(b".456E-789", b".456E-789", TokenType::TK_FLOAT)?;
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_number_literal() {
+        expect_bad_number(b"1E");
+        expect_bad_number(b"123a456");
+        expect_bad_number(b"123__456");
+        expect_bad_number(b"0xFF__EF");
+        expect_bad_number(b"0xFFEF_");
+        expect_bad_number(b"0xFFEF_");
+        expect_bad_number(b"1_");
+        expect_bad_number(b"1_.4");
+        expect_bad_number(b"1e_4");
+        expect_bad_number(b"1_e4");
+        expect_bad_number(b"1.4_e4");
+        expect_bad_number(b"1.4e+_4");
+        expect_bad_number(b"1.4e-_4");
+        expect_bad_number(b"1.4e4_");
+        expect_bad_number(b"1.4e_4");
+        expect_bad_number(b"12__34");
+        expect_bad_number(b"1234_");
+        expect_bad_number(b"12._34");
+        expect_bad_number(b"12.34_");
+        expect_bad_number(b"1.0e1_______2");
+        expect_bad_number(b"5$");
+    }
+
+    #[test]
+    fn single() -> Result<(), Error> {
+        expect_single_token(b"-", b"-", TokenType::TK_MINUS)?;
+        expect_single_token(b"->", b"->", TokenType::TK_PTR)?;
+        expect_single_token(b"->>", b"->>", TokenType::TK_PTR)?;
+        expect_single_token(b"(", b"(", TokenType::TK_LP)?;
+        expect_single_token(b")", b")", TokenType::TK_RP)?;
+        expect_single_token(b";", b";", TokenType::TK_SEMI)?;
+        expect_single_token(b"+", b"+", TokenType::TK_PLUS)?;
+        expect_single_token(b"*", b"*", TokenType::TK_STAR)?;
+        expect_single_token(b"/", b"/", TokenType::TK_SLASH)?;
+        expect_single_token(b"%", b"%", TokenType::TK_REM)?;
+        expect_single_token(b"=", b"=", TokenType::TK_EQ)?;
+        expect_single_token(b"==", b"==", TokenType::TK_EQ)?;
+        expect_single_token(b"<", b"<", TokenType::TK_LT)?;
+        expect_single_token(b"<=", b"<=", TokenType::TK_LE)?;
+        expect_single_token(b"<>", b"<>", TokenType::TK_NE)?;
+        expect_single_token(b"<<", b"<<", TokenType::TK_LSHIFT)?;
+        expect_single_token(b">", b">", TokenType::TK_GT)?;
+        expect_single_token(b">=", b">=", TokenType::TK_GE)?;
+        expect_single_token(b">>", b">>", TokenType::TK_RSHIFT)?;
+        expect_single_token(b"!=", b"!=", TokenType::TK_NE)?;
+        expect_single_token(b"|", b"|", TokenType::TK_BITOR)?;
+        expect_single_token(b"||", b"||", TokenType::TK_CONCAT)?;
+        expect_single_token(b",", b",", TokenType::TK_COMMA)?;
+        expect_single_token(b"&", b"&", TokenType::TK_BITAND)?;
+        expect_single_token(b"~", b"~", TokenType::TK_BITNOT)?;
+        expect_single_token(b"[]", b"[]", TokenType::TK_ID)?;
+        expect_single_token(b"[a]", b"[a]", TokenType::TK_ID)?;
+        expect_single_token(b"?", b"", TokenType::TK_VARIABLE)?;
+        expect_single_token(b"?1", b"1", TokenType::TK_VARIABLE)?;
+        expect_single_token(b"$a", b"$a", TokenType::TK_VARIABLE)?;
+        expect_single_token(b"@a", b"@a", TokenType::TK_VARIABLE)?;
+        expect_single_token(b"#a", b"#a", TokenType::TK_VARIABLE)?;
+        expect_single_token(b":a", b":a", TokenType::TK_VARIABLE)?;
+        expect_single_token(b"x''", b"", TokenType::TK_BLOB)?;
+        expect_single_token(b"x'ab'", b"ab", TokenType::TK_BLOB)?;
+        expect_single_token(b"x", b"x", TokenType::TK_ID)?;
+        expect_single_token(b"X''", b"", TokenType::TK_BLOB)?;
+        expect_single_token(b"X'ab'", b"ab", TokenType::TK_BLOB)?;
+        expect_single_token(b"X", b"X", TokenType::TK_ID)?;
+        expect_single_token(b"SELECT", b"SELECT", TokenType::TK_SELECT)?;
         Ok(())
     }
 
@@ -675,5 +792,29 @@ mod tests {
         assert_eq!(token, t);
         assert_eq!(token_type, tt);
         Ok(())
+    }
+
+    fn expect_none(input: &[u8]) -> Result<(), Error> {
+        let mut s = scan();
+        assert!(s.scan(input)?.1.is_none());
+        Ok(())
+    }
+    fn expect_single_token(input: &[u8], token: &[u8], token_type: TokenType) -> Result<(), Error> {
+        let mut s = scan();
+        expect_token(&mut s, input, token, token_type)?;
+        assert!(s.scan(input)?.1.is_none());
+        Ok(())
+    }
+    fn expect_bad_number(input: &[u8]) {
+        let err = expect_error(input);
+        assert_matches!(err, Error::BadNumber(_));
+    }
+    fn expect_error(input: &[u8]) -> Error {
+        let mut s = scan();
+        s.scan(input).unwrap_err()
+    }
+    fn scan() -> Scanner<Tokenizer> {
+        let tokenizer = Tokenizer::new();
+        Scanner::new(tokenizer)
     }
 }
