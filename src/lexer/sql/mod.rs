@@ -607,6 +607,8 @@ fn find_end_of_number(
                 continue;
             }
             return Err(Error::BadNumber(None));
+        } else if b == b'$' {
+            return Err(Error::BadNumber(None));
         } else {
             return Ok(Some((j, b)));
         }
@@ -732,6 +734,7 @@ mod tests {
         expect_bad_number(b"12._34");
         expect_bad_number(b"12.34_");
         expect_bad_number(b"1.0e1_______2");
+        expect_bad_number(b"5$");
     }
 
     #[test]
