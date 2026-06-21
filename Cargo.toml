@@ -30,23 +30,19 @@ default = ["YYNOERRORRECOVERY", "NDEBUG"]
 extra_checks = []
 
 [dependencies]
-phf = { version = "0.14.0", features = ["uncased"] }
 log = "0.4.22"
 memchr = "2.0"
 fallible-iterator = "0.3"
 bitflags = "2.0"
-uncased = "0.9.10"
 indexmap = "2.0"
 bumpalo = { version = "3.19", features = ["boxed", "collections"] }
+hashify = "0.2.9"
 
 [dev-dependencies]
 env_logger = { version = "0.11", default-features = false }
 
 [build-dependencies]
 cc = "1.0"
-phf_shared = { version = "0.14.0", features = ["uncased"] }
-phf_codegen = "0.14.0"
-uncased = "0.9.10"
 
 [profile.dev]
 # to avoid stack overflow in yy_reduce
