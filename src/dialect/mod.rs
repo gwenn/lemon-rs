@@ -3,7 +3,6 @@
 use bumpalo::Bump;
 use std::fmt::Formatter;
 use std::str;
-use uncased::UncasedStr;
 
 mod token;
 pub use token::TokenType;
@@ -47,9 +46,7 @@ pub(crate) const MAX_KEYWORD_LEN: usize = 17;
 
 /// Check if `word` is a keyword
 pub fn keyword_token(word: &[u8]) -> Option<TokenType> {
-    KEYWORDS
-        .get(UncasedStr::new(unsafe { str::from_utf8_unchecked(word) }))
-        .copied()
+    keywordCode(word)
 }
 
 pub(crate) fn is_identifier(name: &str) -> bool {
@@ -189,8 +186,8 @@ impl TokenType {
             TK_RELEASE => Some("RELEASE"),
             TK_RENAME => Some("RENAME"),
             TK_REPLACE => Some("REPLACE"),
-            TK_RETURNING => Some("RETURNING"),
             TK_RESTRICT => Some("RESTRICT"),
+            TK_RETURNING => Some("RETURNING"),
             TK_ROLLBACK => Some("ROLLBACK"),
             TK_ROW => Some("ROW"),
             TK_ROWS => Some("ROWS"),
