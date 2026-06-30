@@ -7,7 +7,7 @@ use std::num::ParseIntError;
 use std::ops::Deref;
 use std::str::{self, Bytes, FromStr as _};
 
-use bumpalo::{collections::Vec, Bump};
+use bumpalo::{Bump, collections::Vec};
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
@@ -17,8 +17,8 @@ use fmt::TokenStream;
 
 use crate::custom_err;
 use crate::dialect::TokenType::{self, *};
-use crate::dialect::{from_token, is_identifier, Token};
-use crate::parser::{parse::YYCODETYPE, ParserError};
+use crate::dialect::{Token, from_token, is_identifier};
+use crate::parser::{ParserError, parse::YYCODETYPE};
 
 /// `?` or `$` Prepared statement arg placeholder(s)
 #[derive(Default)]
@@ -34,18 +34,18 @@ impl TokenStream for ParameterInfo {
     type Error = ParseIntError;
 
     fn append(&mut self, ty: TokenType, value: Option<&str>) -> Result<(), Self::Error> {
-        if ty == TK_VARIABLE {
-            if let Some(variable) = value {
-                if variable == "?" {
-                    self.count = self.count.saturating_add(1);
-                } else if variable.as_bytes()[0] == b'?' {
-                    let n = u16::from_str(&variable[1..])?;
-                    if n > self.count {
-                        self.count = n;
-                    }
-                } else if self.names.insert(variable.to_owned()) {
-                    self.count = self.count.saturating_add(1);
+        if ty == TK_VARIABLE
+            && let Some(variable) = value
+        {
+            if variable == "?" {
+                self.count = self.count.saturating_add(1);
+            } else if variable.as_bytes()[0] == b'?' {
+                let n = u16::from_str(&variable[1..])?;
+                if n > self.count {
+                    self.count = n;
                 }
+            } else if self.names.insert(variable.to_owned()) {
+                self.count = self.count.saturating_add(1);
             }
         }
         Ok(())
@@ -1640,10 +1640,10 @@ impl<'bump> ColumnDefinition<'bump> {
                 }
                 ColumnConstraint::Generated { typ, .. } => {
                     flags |= ColFlags::VIRTUAL;
-                    if let Some(id) = typ {
-                        if id.0.eq_ignore_ascii_case("STORED") {
-                            flags |= ColFlags::STORED;
-                        }
+                    if let Some(id) = typ
+                        && id.0.eq_ignore_ascii_case("STORED")
+                    {
+                        flags |= ColFlags::STORED;
                     }
                 }
                 #[cfg(feature = "extra_checks")]

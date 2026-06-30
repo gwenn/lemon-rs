@@ -1,5 +1,5 @@
 //! SQLite parser
-use bumpalo::{collections::Vec, Bump};
+use bumpalo::{Bump, collections::Vec};
 
 pub mod ast;
 pub mod parse {
@@ -91,14 +91,13 @@ impl<'input> Context<'input> {
 
     /// Consume parsed command
     pub fn cmd(&mut self) -> Option<Cmd<'input>> {
-        if let Some(stmt) = self.stmt.take() {
-            match self.explain.take() {
+        match self.stmt.take() {
+            Some(stmt) => match self.explain.take() {
                 Some(ExplainKind::Explain) => Some(Cmd::Explain(stmt)),
                 Some(ExplainKind::QueryPlan) => Some(Cmd::ExplainQueryPlan(stmt)),
                 None => Some(Cmd::Stmt(stmt)),
-            }
-        } else {
-            None
+            },
+            _ => None,
         }
     }
 
@@ -121,13 +120,13 @@ impl<'input> Context<'input> {
         }
     }
     fn add_module_arg(&mut self) {
-        if let Some((start, end)) = self.module_arg.take() {
-            if let Ok(arg) = std::str::from_utf8(&self.input[start..end]) {
-                self.module_args
-                    .get_or_insert(Vec::new_in(self.bump))
-                    .push(self.bump.alloc_str(arg));
-            } // FIXME error handling
-        }
+        if let Some((start, end)) = self.module_arg.take()
+            && let Ok(arg) = std::str::from_utf8(&self.input[start..end])
+        {
+            self.module_args
+                .get_or_insert(Vec::new_in(self.bump))
+                .push(self.bump.alloc_str(arg));
+        } // FIXME error handling
     }
     fn module_args(&mut self) -> Option<Vec<'input, &'input str>> {
         self.add_module_arg();

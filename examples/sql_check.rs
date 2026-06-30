@@ -2,7 +2,7 @@ use std::env;
 use std::fs::read;
 use std::panic;
 
-use sqlite3_parser::{lexer::sql::Parser, Bump, FallibleIterator as _};
+use sqlite3_parser::{Bump, FallibleIterator as _, lexer::sql::Parser};
 
 /// Parse specified files and check all commands.
 fn main() {
@@ -45,7 +45,7 @@ fn main() {
                                     eprintln!("{cmd:?}\n<>\n{check:?}");
                                 }
                             }
-                        };
+                        }
                     }
                 }
             }
