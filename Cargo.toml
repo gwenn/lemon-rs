@@ -28,6 +28,7 @@ NDEBUG = []
 SQLITE_ENABLE_ORDERED_SET_AGGREGATES = []
 default = ["YYNOERRORRECOVERY", "NDEBUG"]
 extra_checks = []
+serde = ["dep:serde", "bitflags/serde", "bumpalo/serde"]
 
 [dependencies]
 log = "0.4.22"
@@ -36,6 +37,7 @@ fallible-iterator = "0.3"
 bitflags = "2.0"
 indexmap = "2.0"
 bumpalo = { version = "3.19", features = ["boxed", "collections"] }
+serde = { version = "1.0.171", features = ["derive"], optional = true }
 
 [dev-dependencies]
 env_logger = { version = "0.11", default-features = false }
