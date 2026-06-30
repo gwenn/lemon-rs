@@ -36,7 +36,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(ref err) => err.fmt(f),
+            Self::Io(err) => err.fmt(f),
             Self::UnrecognizedToken(pos) => write!(f, "unrecognized token at {pos:?}"),
             Self::UnterminatedLiteral(pos) => {
                 write!(f, "non-terminated literal at {pos:?}")
@@ -56,8 +56,8 @@ impl fmt::Display for Error {
             Self::MalformedHexInteger(pos) => {
                 write!(f, "malformed hex integer at {pos:?}")
             }
-            Self::ParserError(ref msg, Some(pos)) => write!(f, "{msg} at {pos}"),
-            Self::ParserError(ref msg, _) => write!(f, "{msg}"),
+            Self::ParserError(msg, Some(pos)) => write!(f, "{msg} at {pos}"),
+            Self::ParserError(msg, _) => write!(f, "{msg}"),
         }
     }
 }

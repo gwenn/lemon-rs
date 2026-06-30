@@ -1003,11 +1003,11 @@ impl ToTokens for ResultColumn<'_> {
 impl ToTokens for As<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::As(ref name) => {
+            Self::As(name) => {
                 s.append(TK_AS, None)?;
                 name.to_tokens(s)
             }
-            Self::Elided(ref name) => name.to_tokens(s),
+            Self::Elided(name) => name.to_tokens(s),
         }
     }
 }
@@ -1493,22 +1493,22 @@ impl ToTokens for ForeignKeyClause<'_> {
 impl ToTokens for RefArg<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::OnDelete(ref action) => {
+            Self::OnDelete(action) => {
                 s.append(TK_ON, None)?;
                 s.append(TK_DELETE, None)?;
                 action.to_tokens(s)
             }
-            Self::OnInsert(ref action) => {
+            Self::OnInsert(action) => {
                 s.append(TK_ON, None)?;
                 s.append(TK_INSERT, None)?;
                 action.to_tokens(s)
             }
-            Self::OnUpdate(ref action) => {
+            Self::OnUpdate(action) => {
                 s.append(TK_ON, None)?;
                 s.append(TK_UPDATE, None)?;
                 action.to_tokens(s)
             }
-            Self::Match(ref name) => {
+            Self::Match(name) => {
                 s.append(TK_MATCH, None)?;
                 name.to_tokens(s)
             }
@@ -1580,7 +1580,7 @@ impl ToTokens for IndexedColumn<'_> {
 impl ToTokens for Indexed<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::IndexedBy(ref name) => {
+            Self::IndexedBy(name) => {
                 s.append(TK_INDEXED, None)?;
                 s.append(TK_BY, None)?;
                 name.to_tokens(s)
@@ -1929,8 +1929,8 @@ impl ToTokens for FunctionTail<'_> {
 impl ToTokens for Over<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         match self {
-            Self::Window(ref window) => window.to_tokens(s),
-            Self::Name(ref name) => name.to_tokens(s),
+            Self::Window(window) => window.to_tokens(s),
+            Self::Name(name) => name.to_tokens(s),
         }
     }
 }

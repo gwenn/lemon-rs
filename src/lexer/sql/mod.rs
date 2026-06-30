@@ -6,18 +6,18 @@ use memchr::memchr;
 pub use crate::dialect::TokenType;
 use crate::dialect::TokenType::*;
 use crate::dialect::{
-    is_identifier_continue, is_identifier_start, keyword_token, sentinel, MAX_KEYWORD_LEN,
+    MAX_KEYWORD_LEN, is_identifier_continue, is_identifier_start, keyword_token, sentinel,
 };
-use crate::parser::ast::Cmd;
-use crate::parser::parse::{yyParser, YYCODETYPE};
 use crate::parser::Context;
+use crate::parser::ast::Cmd;
+use crate::parser::parse::{YYCODETYPE, yyParser};
 
 mod error;
 #[cfg(test)]
 mod test;
 
-use crate::lexer::scan::{Pos, ScanError as _, Splitter};
 use crate::lexer::Scanner;
+use crate::lexer::scan::{Pos, ScanError as _, Splitter};
 pub use crate::parser::ParserError;
 pub use error::Error;
 
@@ -299,10 +299,10 @@ impl Splitter for Tokenizer {
                             Ok((None, data.len()))
                         }
                     } else if *b == b'>' {
-                        if let Some(b) = data.get(2) {
-                            if *b == b'>' {
-                                return Ok((Some((&data[..3], TK_PTR)), 3));
-                            }
+                        if let Some(b) = data.get(2)
+                            && *b == b'>'
+                        {
+                            return Ok((Some((&data[..3], TK_PTR)), 3));
                         }
                         Ok((Some((&data[..2], TK_PTR)), 2))
                     } else {
@@ -642,8 +642,8 @@ impl Tokenizer {
 mod tests {
     use super::Tokenizer;
     use crate::dialect::TokenType;
-    use crate::lexer::sql::Error;
     use crate::lexer::Scanner;
+    use crate::lexer::sql::Error;
     use std::assert_matches;
 
     #[test]
