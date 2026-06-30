@@ -8,6 +8,8 @@ use std::ops::Deref;
 use std::str::{self, Bytes, FromStr as _};
 
 use bumpalo::{collections::Vec, Bump};
+#[cfg(feature = "serde")]
+use serde::Serialize;
 
 #[cfg(feature = "extra_checks")]
 use check::ColumnCount;
@@ -53,6 +55,7 @@ impl TokenStream for ParameterInfo {
 /// Statement or Explain statement
 // https://sqlite.org/syntax/sql-stmt.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Cmd<'bump> {
     /// `EXPLAIN` statement
     Explain(Stmt<'bump>),
@@ -70,6 +73,7 @@ pub(crate) enum ExplainKind {
 /// SQL statement
 // https://sqlite.org/syntax/sql-stmt.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Stmt<'bump> {
     /// `ALTER TABLE`: table name, body
     AlterTable(QualifiedName<'bump>, AlterTableBody<'bump>),
@@ -344,6 +348,7 @@ impl<'bump> Stmt<'bump> {
 /// SQL expression
 // https://sqlite.org/syntax/expr.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Expr<'bump> {
     /// `BETWEEN`
     Between {
@@ -468,6 +473,7 @@ pub enum Expr<'bump> {
 
 /// Function call order
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum FunctionCallOrder<'bump> {
     /// `ORDER BY cols`
     SortList(&'bump [SortedColumn<'bump>]),
@@ -647,6 +653,7 @@ impl<'bump> Expr<'bump> {
 
 /// SQL literal
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Literal<'bump> {
     /// Number
     Numeric(&'bump str),
@@ -685,6 +692,7 @@ impl<'bump> Literal<'bump> {
 
 /// Textual comparison operator in an expression
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum LikeOperator {
     /// `GLOB`
     Glob,
@@ -717,6 +725,7 @@ impl LikeOperator {
 
 /// SQL operators
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Operator {
     /// `+`
     Add,
@@ -794,6 +803,7 @@ impl From<YYCODETYPE> for Operator {
 
 /// Unary operators
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum UnaryOperator {
     /// bitwise negation (`~`)
     BitwiseNot,
@@ -821,6 +831,7 @@ impl From<YYCODETYPE> for UnaryOperator {
 // https://sqlite.org/lang_select.html
 // https://sqlite.org/syntax/factored-select-stmt.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Select<'bump> {
     /// CTE
     pub with: Option<With<'bump>>, // TODO check usages in body
@@ -864,6 +875,7 @@ impl<'bump> Select<'bump> {
 
 /// `SELECT` body
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct SelectBody<'bump> {
     /// first select
     pub select: OneSelect<'bump>,
@@ -899,6 +911,7 @@ impl<'bump> SelectBody<'bump> {
 
 /// Compound select
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct CompoundSelect<'bump> {
     /// operator
     pub operator: CompoundOperator,
@@ -909,6 +922,7 @@ pub struct CompoundSelect<'bump> {
 /// Compound operators
 // https://sqlite.org/syntax/compound-operator.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum CompoundOperator {
     /// `UNION`
     Union,
@@ -923,6 +937,7 @@ pub enum CompoundOperator {
 /// `SELECT` core
 // https://sqlite.org/syntax/select-core.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum OneSelect<'bump> {
     /// `SELECT`
     Select {
@@ -1005,6 +1020,7 @@ impl<'bump> OneSelect<'bump> {
 /// `SELECT` ... `FROM` clause
 // https://sqlite.org/syntax/join-clause.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FromClause<'bump> {
     /// table
     pub select: Option<&'bump SelectTable<'bump>>, // FIXME mandatory
@@ -1062,6 +1078,7 @@ impl<'bump> FromClause<'bump> {
 
 /// `SELECT` distinctness
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Distinctness {
     /// `DISTINCT`
     Distinct,
@@ -1072,6 +1089,7 @@ pub enum Distinctness {
 /// `SELECT` or `RETURNING` result column
 // https://sqlite.org/syntax/result-column.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum ResultColumn<'bump> {
     /// expression
     Expr(Expr<'bump>, Option<As<'bump>>),
@@ -1083,6 +1101,7 @@ pub enum ResultColumn<'bump> {
 
 /// Alias
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum As<'bump> {
     /// `AS`
     As(Name<'bump>),
@@ -1093,6 +1112,7 @@ pub enum As<'bump> {
 /// `JOIN` clause
 // https://sqlite.org/syntax/join-clause.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct JoinedSelectTable<'bump> {
     /// operator
     pub operator: JoinOperator,
@@ -1105,6 +1125,7 @@ pub struct JoinedSelectTable<'bump> {
 /// Table or subquery
 // https://sqlite.org/syntax/table-or-subquery.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum SelectTable<'bump> {
     /// table
     Table(
@@ -1127,6 +1148,7 @@ pub enum SelectTable<'bump> {
 /// Join operators
 // https://sqlite.org/syntax/join-operator.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum JoinOperator {
     /// `,`
     Comma,
@@ -1170,6 +1192,7 @@ impl JoinOperator {
 bitflags::bitflags! {
     /// `JOIN` types
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct JoinType: u8 {
         /// `INNER`
         const INNER   = 0x01;
@@ -1214,6 +1237,7 @@ impl TryFrom<&[u8]> for JoinType {
 
 /// `JOIN` constraint
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum JoinConstraint<'bump> {
     /// `ON`
     On(Expr<'bump>),
@@ -1223,6 +1247,7 @@ pub enum JoinConstraint<'bump> {
 
 /// identifier or one of several keywords or `INDEXED`
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Id<'bump>(pub &'bump str);
 
 impl<'bump> Id<'bump> {
@@ -1236,6 +1261,7 @@ impl<'bump> Id<'bump> {
 
 /// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
 #[derive(Clone, Debug, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Name<'bump>(pub &'bump str); // TODO distinction between Name and "Name"/[Name]/`Name`
 
 pub(crate) fn unquote(s: &str) -> (&str, u8) {
@@ -1346,6 +1372,7 @@ impl<'bump> PartialEq<&str> for Name<'bump> {
 
 /// Qualified name
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct QualifiedName<'bump> {
     /// schema
     pub db_name: Option<Name<'bump>>,
@@ -1392,6 +1419,7 @@ impl<'bump> QualifiedName<'bump> {
 
 /// Ordered set of distinct column names
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DistinctNames<'bump>(Vec<'bump, Name<'bump>>);
 
 impl<'bump> DistinctNames<'bump> {
@@ -1427,6 +1455,7 @@ impl<'bump> Deref for DistinctNames<'bump> {
 /// `ALTER TABLE` body
 // https://sqlite.org/lang_altertable.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum AlterTableBody<'bump> {
     /// `RENAME TO`: new table name
     RenameTo(Name<'bump>),
@@ -1454,6 +1483,7 @@ pub enum AlterTableBody<'bump> {
 bitflags::bitflags! {
     /// `CREATE TABLE` flags
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct TabFlags: u32 {
         //const TF_Readonly = 0x00000001; // Read-only system table
         /// Has one or more hidden columns
@@ -1491,6 +1521,7 @@ bitflags::bitflags! {
 // https://sqlite.org/lang_createtable.html
 // https://sqlite.org/syntax/create-table-stmt.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum CreateTableBody<'bump> {
     /// columns and constraints
     ColumnsAndConstraints {
@@ -1545,6 +1576,7 @@ impl<'bump> CreateTableBody<'bump> {
 bitflags::bitflags! {
     /// Column definition flags
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct ColFlags: u16 {
         /// Column is part of the primary key
         const PRIMKEY = 0x0001;
@@ -1574,6 +1606,7 @@ bitflags::bitflags! {
 /// Table column definition
 // https://sqlite.org/syntax/column-def.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ColumnDefinition<'bump> {
     /// column name
     pub col_name: Name<'bump>,
@@ -1712,6 +1745,7 @@ impl<'bump> ColumnDefinition<'bump> {
 /// Named column constraint
 // https://sqlite.org/syntax/column-constraint.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NamedColumnConstraint<'bump> {
     /// constraint name
     pub name: Option<Name<'bump>>,
@@ -1722,6 +1756,7 @@ pub struct NamedColumnConstraint<'bump> {
 /// Column constraint
 // https://sqlite.org/syntax/column-constraint.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum ColumnConstraint<'bump> {
     /// `PRIMARY KEY`
     PrimaryKey {
@@ -1771,6 +1806,7 @@ pub enum ColumnConstraint<'bump> {
 /// Named table constraint
 // https://sqlite.org/syntax/table-constraint.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NamedTableConstraint<'bump> {
     /// constraint name
     pub name: Option<Name<'bump>>,
@@ -1781,6 +1817,7 @@ pub struct NamedTableConstraint<'bump> {
 /// Table constraint
 // https://sqlite.org/syntax/table-constraint.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum TableConstraint<'bump> {
     /// `PRIMARY KEY`
     PrimaryKey {
@@ -1842,6 +1879,7 @@ impl<'bump> TableConstraint<'bump> {
 
 /// Sort orders
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum SortOrder {
     /// `ASC`
     Asc,
@@ -1851,6 +1889,7 @@ pub enum SortOrder {
 
 /// `NULLS FIRST` or `NULLS LAST`
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum NullsOrder {
     /// `NULLS FIRST`
     First,
@@ -1861,6 +1900,7 @@ pub enum NullsOrder {
 /// `REFERENCES` clause
 // https://sqlite.org/syntax/foreign-key-clause.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ForeignKeyClause<'bump> {
     /// foreign table name
     pub tbl_name: Name<'bump>,
@@ -1887,6 +1927,7 @@ impl<'bump> ForeignKeyClause<'bump> {
 
 /// foreign-key reference args
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum RefArg<'bump> {
     /// `ON DELETE`
     OnDelete(RefAct),
@@ -1900,6 +1941,7 @@ pub enum RefArg<'bump> {
 
 /// foreign-key reference actions
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum RefAct {
     /// `SET NULL`
     SetNull,
@@ -1915,6 +1957,7 @@ pub enum RefAct {
 
 /// foreign-key defer clause
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DeferSubclause {
     /// `DEFERRABLE`
     pub deferrable: bool,
@@ -1924,6 +1967,7 @@ pub struct DeferSubclause {
 
 /// `INITIALLY` `DEFERRED` / `IMMEDIATE`
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum InitDeferredPred {
     /// `INITIALLY DEFERRED`
     InitiallyDeferred,
@@ -1934,6 +1978,7 @@ pub enum InitDeferredPred {
 /// Indexed column
 // https://sqlite.org/syntax/indexed-column.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct IndexedColumn<'bump> {
     /// column name
     pub col_name: Name<'bump>,
@@ -1945,6 +1990,7 @@ pub struct IndexedColumn<'bump> {
 
 /// `INDEXED BY` / `NOT INDEXED`
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Indexed<'bump> {
     /// `INDEXED BY`: idx name
     IndexedBy(Name<'bump>),
@@ -1954,6 +2000,7 @@ pub enum Indexed<'bump> {
 
 /// Sorted column
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct SortedColumn<'bump> {
     /// expression
     pub expr: Expr<'bump>,
@@ -1993,6 +2040,7 @@ fn has_explicit_nulls(columns: &[SortedColumn]) -> Result<(), ParserError> {
 
 /// `LIMIT`
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Limit<'bump> {
     /// count
     pub expr: Expr<'bump>,
@@ -2004,6 +2052,7 @@ pub struct Limit<'bump> {
 // https://sqlite.org/lang_insert.html
 // https://sqlite.org/syntax/insert-stmt.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum InsertBody<'bump> {
     /// `SELECT` or `VALUES`
     Select(&'bump Select<'bump>, Option<&'bump Upsert<'bump>>),
@@ -2013,6 +2062,7 @@ pub enum InsertBody<'bump> {
 
 /// `UPDATE ... SET`
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Set<'bump> {
     /// column name(s)
     pub col_names: DistinctNames<'bump>,
@@ -2023,6 +2073,7 @@ pub struct Set<'bump> {
 /// `PRAGMA` body
 // https://sqlite.org/syntax/pragma-stmt.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum PragmaBody<'bump> {
     /// `=`
     Equals(PragmaValue<'bump>),
@@ -2036,6 +2087,7 @@ pub type PragmaValue<'bump> = Expr<'bump>; // TODO
 
 /// `CREATE TRIGGER` time
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum TriggerTime {
     /// `BEFORE`
     Before, // default
@@ -2047,6 +2099,7 @@ pub enum TriggerTime {
 
 /// `CREATE TRIGGER` event
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum TriggerEvent<'bump> {
     /// `DELETE`
     Delete,
@@ -2062,6 +2115,7 @@ pub enum TriggerEvent<'bump> {
 // https://sqlite.org/lang_createtrigger.html
 // https://sqlite.org/syntax/create-trigger-stmt.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum TriggerCmd<'bump> {
     /// `UPDATE`
     Update {
@@ -2102,6 +2156,7 @@ pub enum TriggerCmd<'bump> {
 
 /// Conflict resolution types
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum ResolveType {
     /// `ROLLBACK`
     Rollback,
@@ -2119,6 +2174,7 @@ pub enum ResolveType {
 // https://sqlite.org/lang_with.html
 // https://sqlite.org/syntax/with-clause.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct With<'bump> {
     /// `RECURSIVE`
     pub recursive: bool,
@@ -2128,6 +2184,7 @@ pub struct With<'bump> {
 
 /// CTE materialization
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Materialized {
     /// No hint
     Any,
@@ -2140,6 +2197,7 @@ pub enum Materialized {
 /// CTE
 // https://sqlite.org/syntax/common-table-expression.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct CommonTableExpr<'bump> {
     /// table name
     pub tbl_name: Name<'bump>,
@@ -2194,6 +2252,7 @@ impl<'bump> CommonTableExpr<'bump> {
 /// Column type
 // https://sqlite.org/syntax/type-name.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Type<'bump> {
     /// type name
     pub name: &'bump str, // TODO Validate: Ids+
@@ -2204,6 +2263,7 @@ pub struct Type<'bump> {
 /// Column type size limit(s)
 // https://sqlite.org/syntax/type-name.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum TypeSize<'bump> {
     /// maximum size
     MaxSize(&'bump Expr<'bump>),
@@ -2213,6 +2273,7 @@ pub enum TypeSize<'bump> {
 
 /// Transaction types
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum TransactionType {
     /// `DEFERRED`
     Deferred, // default
@@ -2226,6 +2287,7 @@ pub enum TransactionType {
 // https://sqlite.org/lang_upsert.html
 // https://sqlite.org/syntax/upsert-clause.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Upsert<'bump> {
     /// conflict targets
     pub index: Option<UpsertIndex<'bump>>,
@@ -2237,6 +2299,7 @@ pub struct Upsert<'bump> {
 
 /// Upsert conflict targets
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct UpsertIndex<'bump> {
     /// columns
     pub targets: &'bump [SortedColumn<'bump>],
@@ -2260,6 +2323,7 @@ impl<'bump> UpsertIndex<'bump> {
 
 /// Upsert `DO` action
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum UpsertDo<'bump> {
     /// `SET`
     Set {
@@ -2274,6 +2338,7 @@ pub enum UpsertDo<'bump> {
 
 /// Function call tail
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FunctionTail<'bump> {
     /// `FILTER` clause
     pub filter_clause: Option<&'bump Expr<'bump>>,
@@ -2284,6 +2349,7 @@ pub struct FunctionTail<'bump> {
 /// Function call `OVER` clause
 // https://sqlite.org/syntax/over-clause.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Over<'bump> {
     /// Window definition
     Window(&'bump Window<'bump>),
@@ -2293,6 +2359,7 @@ pub enum Over<'bump> {
 
 /// `OVER` window definition
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct WindowDef<'bump> {
     /// window name
     pub name: Name<'bump>,
@@ -2303,6 +2370,7 @@ pub struct WindowDef<'bump> {
 /// Window definition
 // https://sqlite.org/syntax/window-defn.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Window<'bump> {
     /// base window name
     pub base: Option<Name<'bump>>,
@@ -2334,6 +2402,7 @@ impl<'bump> Window<'bump> {
 /// Frame specification
 // https://sqlite.org/syntax/frame-spec.html
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FrameClause<'bump> {
     /// unit
     pub mode: FrameMode,
@@ -2347,6 +2416,7 @@ pub struct FrameClause<'bump> {
 
 /// Frame modes
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum FrameMode {
     /// `GROUPS`
     Groups,
@@ -2358,6 +2428,7 @@ pub enum FrameMode {
 
 /// Frame bounds
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum FrameBound<'bump> {
     /// `CURRENT ROW`
     CurrentRow,
@@ -2373,6 +2444,7 @@ pub enum FrameBound<'bump> {
 
 /// Frame exclusions
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum FrameExclude {
     /// `NO OTHERS`
     NoOthers,
