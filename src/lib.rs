@@ -1,5 +1,6 @@
 //! SQLite3 syntax lexer and parser
 #![warn(missing_docs)]
+#![forbid(unsafe_code)]
 
 pub use bumpalo::{Bump, collections::Vec};
 pub use fallible_iterator::FallibleIterator;
