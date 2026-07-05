@@ -1,7 +1,7 @@
 //! SQLite3 syntax lexer and parser
 #![warn(missing_docs)]
 
-pub use bumpalo::{collections::Vec, Bump};
+pub use bumpalo::{Bump, collections::Vec};
 pub use fallible_iterator::FallibleIterator;
 pub mod dialect;
 // In Lemon, the tokenizer calls the parser.

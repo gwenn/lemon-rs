@@ -5,8 +5,8 @@ use std::assert_matches;
 use super::{Error, Parser};
 use crate::parser::ast::fmt::ToTokens as _;
 use crate::parser::{
-    ast::{Cmd, Name, ParameterInfo, QualifiedName, Stmt},
     ParserError,
+    ast::{Cmd, Name, ParameterInfo, QualifiedName, Stmt},
 };
 
 #[test]

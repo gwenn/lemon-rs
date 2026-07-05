@@ -4,7 +4,7 @@ use std::panic;
 
 #[cfg(not(feature = "YYNOERRORRECOVERY"))]
 use sqlite3_parser::lexer::sql::Error;
-use sqlite3_parser::{lexer::sql::Parser, Bump, FallibleIterator as _};
+use sqlite3_parser::{Bump, FallibleIterator as _, lexer::sql::Parser};
 
 /// Parse specified files and print all commands.
 fn main() {

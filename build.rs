@@ -12,15 +12,17 @@ fn main() -> Result<()> {
 
     // compile rlemon:
     {
-        assert!(Build::new()
-            .target(&env::var("HOST").unwrap())
-            .get_compiler()
-            .to_command()
-            .arg("-o")
-            .arg(rlemon.clone())
-            .arg(Path::new("third_party").join("lemon").join("lemon.c"))
-            .status()?
-            .success());
+        assert!(
+            Build::new()
+                .target(&env::var("HOST").unwrap())
+                .get_compiler()
+                .to_command()
+                .arg("-o")
+                .arg(rlemon.clone())
+                .arg(Path::new("third_party").join("lemon").join("lemon.c"))
+                .status()?
+                .success()
+        );
     }
 
     let sql_parser = "src/parser/parse.y";
@@ -42,26 +44,30 @@ fn main() -> Result<()> {
     // compile mkkeywordhash
     let mkkeywordhash = out_path.join("mkkeywordhash");
     {
-        assert!(Build::new()
-            .target(&env::var("HOST").unwrap())
-            //#[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
-            //.define("SQLITE_ENABLE_ORDERED_SET_AGGREGATES", None)
-            .get_compiler()
-            .to_command()
-            .arg("-o")
-            .arg(mkkeywordhash.clone())
-            .arg(Path::new("third_party").join("mkkeywordhash.c"))
-            .status()?
-            .success());
+        assert!(
+            Build::new()
+                .target(&env::var("HOST").unwrap())
+                //#[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+                //.define("SQLITE_ENABLE_ORDERED_SET_AGGREGATES", None)
+                .get_compiler()
+                .to_command()
+                .arg("-o")
+                .arg(mkkeywordhash.clone())
+                .arg(Path::new("third_party").join("mkkeywordhash.c"))
+                .status()?
+                .success()
+        );
     }
     // run mkkeywordhash
     {
         let keywords = out_path.join("keywords.rs");
         let outputs = std::fs::File::create(keywords)?;
-        assert!(Command::new(mkkeywordhash)
-            .stdout(outputs)
-            .status()?
-            .success());
+        assert!(
+            Command::new(mkkeywordhash)
+                .stdout(outputs)
+                .status()?
+                .success()
+        );
     }
 
     println!("cargo:rerun-if-changed=third_party/lemon/lemon.c");
