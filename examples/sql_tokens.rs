@@ -1,5 +1,5 @@
-use sqlite3_parser::lexer::sql::{TokenType, Tokenizer};
 use sqlite3_parser::lexer::Scanner;
+use sqlite3_parser::lexer::sql::{TokenType, Tokenizer};
 
 use std::env;
 use std::fs::read;

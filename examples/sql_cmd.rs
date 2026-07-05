@@ -1,9 +1,9 @@
 use std::{
     env,
-    io::{stdin, IsTerminal as _, Read as _},
+    io::{IsTerminal as _, Read as _, stdin},
 };
 
-use sqlite3_parser::{lexer::sql::Parser, Bump, FallibleIterator as _};
+use sqlite3_parser::{Bump, FallibleIterator as _, lexer::sql::Parser};
 
 /// Parse args.
 // RUST_LOG=sqlite3Parser=debug
