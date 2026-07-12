@@ -1,9 +1,8 @@
+use std::fs::read;
+use std::{env, str};
+
 use sqlite3_parser::lexer::Scanner;
 use sqlite3_parser::lexer::sql::{TokenType, Tokenizer};
-
-use std::env;
-use std::fs::read;
-use std::str;
 
 /// Tokenize specified files (and do some checks)
 fn main() {
@@ -60,7 +59,8 @@ fn main() {
                         if let Err(err) = res {
                             eprintln!("Err: {err} in {arg}");
                         }
-                        //debug_assert!(str::from_utf8(token).unwrap().parse::<f64>().is_ok())
+                        //debug_assert!(str::from_utf8(token).unwrap().
+                        // parse::<f64>().is_ok())
                     }
                     TK_CTIME_KW => debug_assert!(
                         b"CURRENT_DATE".eq_ignore_ascii_case(token)

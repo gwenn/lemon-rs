@@ -1,10 +1,9 @@
 //! Adaptation/port of [Go scanner](http://tip.golang.org/pkg/bufio/#Scanner).
 
-use log::debug;
-
 use std::error::Error;
-use std::fmt;
-use std::io;
+use std::{fmt, io};
+
+use log::debug;
 
 /// Position
 #[derive(Debug)]
@@ -103,10 +102,12 @@ impl<S: Splitter> Scanner<S> {
     pub fn splitter(&self) -> &S {
         &self.splitter
     }
+
     /// Mark current position
     pub fn mark(&mut self) {
         self.mark = self.offset;
     }
+
     /// Reset to mark
     pub fn reset_to_mark(&mut self) {
         self.offset = self.mark;

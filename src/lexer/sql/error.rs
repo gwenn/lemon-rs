@@ -1,6 +1,4 @@
-use std::error;
-use std::fmt;
-use std::io;
+use std::{error, fmt, io};
 
 use crate::lexer::scan::{Pos, ScanError};
 use crate::parser::ParserError;
@@ -25,9 +23,11 @@ pub enum Error {
     BadNumber(Option<Pos>),
     /// Invalid or missing sign after `!`
     ExpectedEqualsSign(Option<Pos>),
-    /// BLOB literals are string literals containing hexadecimal data and preceded by a single "x" or "X" character.
+    /// BLOB literals are string literals containing hexadecimal data and
+    /// preceded by a single "x" or "X" character.
     MalformedBlobLiteral(Option<Pos>),
-    /// Hexadecimal integer literals follow the C-language notation of "0x" or "0X" followed by hexadecimal digits.
+    /// Hexadecimal integer literals follow the C-language notation of "0x" or
+    /// "0X" followed by hexadecimal digits.
     MalformedHexInteger(Option<Pos>),
     /// Grammar error
     ParserError(ParserError, Option<Pos>),

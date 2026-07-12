@@ -16,10 +16,10 @@ mod error;
 #[cfg(test)]
 mod test;
 
+pub use self::error::Error;
 use crate::lexer::Scanner;
 use crate::lexer::scan::{Pos, ScanError as _, Splitter};
 pub use crate::parser::ParserError;
-pub use error::Error;
 
 // TODO Extract scanning stuff and move this into the parser crate
 // to make possible to use the tokenizer without depending on the parser...
@@ -44,6 +44,7 @@ impl<'input> Parser<'input> {
             parser,
         }
     }
+
     /// Current position in input
     pub fn position(&self) -> Pos {
         self.scanner.position(self.input)
@@ -51,7 +52,7 @@ impl<'input> Parser<'input> {
 }
 
 /*
- ** Return the id of the next token in input.
+ * Return the id of the next token in input.
  */
 fn get_token(scanner: &mut Scanner<Tokenizer>, input: &[u8]) -> Result<TokenType, Error> {
     let mut t = {
@@ -76,34 +77,34 @@ fn get_token(scanner: &mut Scanner<Tokenizer>, input: &[u8]) -> Result<TokenType
 }
 
 /*
- ** The following three functions are called immediately after the tokenizer
- ** reads the keywords WINDOW, OVER and FILTER, respectively, to determine
- ** whether the token should be treated as a keyword or an SQL identifier.
- ** This cannot be handled by the usual lemon %fallback method, due to
- ** the ambiguity in some constructions. e.g.
- **
- **   SELECT sum(x) OVER ...
- **
- ** In the above, "OVER" might be a keyword, or it might be an alias for the
- ** sum(x) expression. If a "%fallback ID OVER" directive were added to
- ** grammar, then SQLite would always treat "OVER" as an alias, making it
- ** impossible to call a window-function without a FILTER clause.
- **
- ** WINDOW is treated as a keyword if:
- **
- **   * the following token is an identifier, or a keyword that can fallback
- **     to being an identifier, and
- **   * the token after than one is TK_AS.
- **
- ** OVER is a keyword if:
- **
- **   * the previous token was TK_RP, and
- **   * the next token is either TK_LP or an identifier.
- **
- ** FILTER is a keyword if:
- **
- **   * the previous token was TK_RP, and
- **   * the next token is TK_LP.
+ * The following three functions are called immediately after the tokenizer
+ * reads the keywords WINDOW, OVER and FILTER, respectively, to determine
+ * whether the token should be treated as a keyword or an SQL identifier.
+ * This cannot be handled by the usual lemon %fallback method, due to
+ * the ambiguity in some constructions. e.g.
+ *
+ *   SELECT sum(x) OVER ...
+ *
+ * In the above, "OVER" might be a keyword, or it might be an alias for the
+ * sum(x) expression. If a "%fallback ID OVER" directive were added to
+ * grammar, then SQLite would always treat "OVER" as an alias, making it
+ * impossible to call a window-function without a FILTER clause.
+ *
+ * WINDOW is treated as a keyword if:
+ *
+ *   * the following token is an identifier, or a keyword that can fallback
+ *     to being an identifier, and
+ *   * the token after than one is TK_AS.
+ *
+ * OVER is a keyword if:
+ *
+ *   * the previous token was TK_RP, and
+ *   * the next token is either TK_LP or an identifier.
+ *
+ * FILTER is a keyword if:
+ *
+ *   * the previous token was TK_RP, and
+ *   * the next token is TK_LP.
  */
 fn analyze_window_keyword(
     scanner: &mut Scanner<Tokenizer>,
@@ -157,8 +158,8 @@ macro_rules! try_with_position {
 }
 
 impl<'input> FallibleIterator for Parser<'input> {
-    type Item = Cmd<'input>;
     type Error = Error;
+    type Item = Cmd<'input>;
 
     fn next(&mut self) -> Result<Option<Cmd<'input>>, Error> {
         //print!("line: {}, column: {}: ", self.scanner.line(), self.scanner.column());
@@ -260,13 +261,15 @@ impl Tokenizer {
 }
 
 /// ```rust
-/// use sqlite3_parser::lexer::sql::Tokenizer;
 /// use sqlite3_parser::lexer::Scanner;
+/// use sqlite3_parser::lexer::sql::Tokenizer;
 ///
 /// let tokenizer = Tokenizer::new();
 /// let input = b"PRAGMA parser_trace=ON;";
 /// let mut s = Scanner::new(tokenizer);
-/// let Ok((_, Some((token1, _)), _)) = s.scan(input) else { panic!() };
+/// let Ok((_, Some((token1, _)), _)) = s.scan(input) else {
+///     panic!()
+/// };
 /// s.scan(input).unwrap();
 /// assert!(b"PRAGMA".eq_ignore_ascii_case(token1));
 /// ```
@@ -640,11 +643,12 @@ impl Tokenizer {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::Tokenizer;
     use crate::dialect::TokenType;
     use crate::lexer::Scanner;
     use crate::lexer::sql::Error;
-    use std::assert_matches;
 
     #[test]
     fn fallible_iterator() -> Result<(), Error> {

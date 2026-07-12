@@ -1,13 +1,12 @@
-use bumpalo::Bump;
-use fallible_iterator::FallibleIterator as _;
 use std::assert_matches;
 
+use bumpalo::Bump;
+use fallible_iterator::FallibleIterator as _;
+
 use super::{Error, Parser};
+use crate::parser::ParserError;
 use crate::parser::ast::fmt::ToTokens as _;
-use crate::parser::{
-    ParserError,
-    ast::{Cmd, Name, ParameterInfo, QualifiedName, Stmt},
-};
+use crate::parser::ast::{Cmd, Name, ParameterInfo, QualifiedName, Stmt};
 
 #[test]
 fn count_placeholders() {
@@ -550,15 +549,13 @@ fn indexed_by_clause_within_triggers() {
         b"CREATE TRIGGER main.t16err5 AFTER INSERT ON tA BEGIN
             UPDATE t16 INDEXED BY t16a SET rowid=rowid+1 WHERE a=1;
           END;",
-        "the INDEXED BY clause is not allowed on UPDATE or DELETE statements \
-           within triggers",
+        "the INDEXED BY clause is not allowed on UPDATE or DELETE statements within triggers",
     );
     expect_parser_err_msg(
         b"CREATE TRIGGER main.t16err6 AFTER INSERT ON tA BEGIN
             DELETE FROM t16 NOT INDEXED WHERE a=123;
           END;",
-        "the NOT INDEXED clause is not allowed on UPDATE or DELETE statements \
-         within triggers",
+        "the NOT INDEXED clause is not allowed on UPDATE or DELETE statements within triggers",
     );
 }
 

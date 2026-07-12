@@ -13,6 +13,7 @@ impl<T> Stack<T> {
             vec: Vec::with_capacity(capacity),
         }
     }
+
     fn shift(&self, shift: i8) -> usize {
         assert!(shift <= 1);
         match shift.cmp(&0) {
@@ -46,6 +47,7 @@ impl<T> Stack<T> {
             self.vec[self.yyidx] = entry;
         }
     }
+
     pub fn grow(&mut self)
     where
         T: Default,
@@ -54,6 +56,7 @@ impl<T> Stack<T> {
             self.vec.push(T::default());
         }
     }
+
     pub fn pop(&mut self) -> T
     where
         T: Default,

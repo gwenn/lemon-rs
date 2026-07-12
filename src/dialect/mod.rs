@@ -1,8 +1,9 @@
 //! SQLite dialect
 
-use bumpalo::Bump;
 use std::fmt::Formatter;
 use std::str;
+
+use bumpalo::Bump;
 
 mod token;
 pub use token::TokenType;
@@ -29,8 +30,8 @@ impl std::fmt::Debug for Token<'_> {
 }
 
 impl TokenType {
-    // TODO try Cow<&'static, str> (Borrowed<&'static str> for keyword and Owned<String> for below),
-    // => Syntax error on keyword will be better
+    // TODO try Cow<&'static, str> (Borrowed<&'static str> for keyword and
+    // Owned<String> for below), => Syntax error on keyword will be better
     // => `from_token` will become unnecessary
     pub(crate) fn to_token(self, start: usize, value: &[u8], end: usize) -> Token<'_> {
         Token(start, value, end)

@@ -11,6 +11,7 @@ impl<'bump> Cmd<'bump> {
             Self::Stmt(stmt) => stmt,
         }
     }
+
     /// Like `sqlite3_column_count` but more limited
     pub fn column_count(&self) -> ColumnCount {
         match self {
@@ -19,14 +20,17 @@ impl<'bump> Cmd<'bump> {
             Self::Stmt(stmt) => stmt.column_count(),
         }
     }
+
     /// Like `sqlite3_stmt_isexplain`
     pub fn is_explain(&self) -> bool {
         matches!(self, Self::Explain(_) | Self::ExplainQueryPlan(_))
     }
+
     /// Like `sqlite3_stmt_readonly`
     pub fn readonly(&self) -> bool {
         self.stmt().readonly()
     }
+
     /// check for extra rules
     pub fn check(&self) -> Result<(), ParserError> {
         self.stmt().check()
@@ -38,7 +42,8 @@ pub enum ColumnCount {
     /// With `SELECT *` / PRAGMA
     Dynamic,
     /// Constant count
-    // The default setting for SQLITE_MAX_COLUMN is 2000. You can change it at compile time to values as large as 32767.
+    // The default setting for SQLITE_MAX_COLUMN is 2000. You can change it at compile time to
+    // values as large as 32767.
     Fixed(u16),
     /// No column
     None,
@@ -243,7 +248,8 @@ impl CreateTableBody<'_> {
                             }
                         }
                         _ => {
-                            // Every column definition must specify a datatype for that column. The freedom to specify a column without a datatype is removed.
+                            // Every column definition must specify a datatype for that column. The
+                            // freedom to specify a column without a datatype is removed.
                             return Err(custom_err!(
                                 "missing datatype for {}.{}",
                                 tbl_name,
@@ -262,11 +268,11 @@ impl CreateTableBody<'_> {
 }
 
 impl<'a, 'bump> IntoIterator for &'a ColumnDefinition<'bump> {
-    type Item = &'a ColumnConstraint<'bump>;
     type IntoIter = std::iter::Map<
         std::slice::Iter<'a, NamedColumnConstraint<'bump>>,
         fn(&'a NamedColumnConstraint<'bump>) -> &'a ColumnConstraint<'bump>,
     >;
+    type Item = &'a ColumnConstraint<'bump>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.constraints.iter().map(|nc| &nc.constraint)

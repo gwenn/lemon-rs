@@ -7,23 +7,25 @@ use std::num::ParseIntError;
 use std::ops::Deref;
 use std::str::{self, Bytes, FromStr as _};
 
-use bumpalo::{Bump, collections::Vec};
+use bumpalo::Bump;
+use bumpalo::collections::Vec;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
 #[cfg(feature = "extra_checks")]
-use check::ColumnCount;
-use fmt::TokenStream;
-
+use self::check::ColumnCount;
+use self::fmt::TokenStream;
 use crate::custom_err;
 use crate::dialect::TokenType::{self, *};
 use crate::dialect::{Token, from_token, is_identifier};
-use crate::parser::{ParserError, parse::YYCODETYPE};
+use crate::parser::ParserError;
+use crate::parser::parse::YYCODETYPE;
 
 /// `?` or `$` Prepared statement arg placeholder(s)
 #[derive(Default)]
 pub struct ParameterInfo {
-    /// Number of SQL parameters in a prepared statement, like `sqlite3_bind_parameter_count`
+    /// Number of SQL parameters in a prepared statement, like
+    /// `sqlite3_bind_parameter_count`
     pub count: u16,
     /// Parameter name(s) if any
     pub names: indexmap::IndexSet<String>,
@@ -293,6 +295,7 @@ impl<'bump> Stmt<'bump> {
             where_clause,
         })
     }
+
     /// UPDATE constructor
     #[allow(clippy::too_many_arguments)]
     pub fn update(
@@ -495,14 +498,17 @@ impl<'bump> Expr<'bump> {
     pub fn parenthesized(x: Self, b: &'bump Bump) -> Self {
         Self::Parenthesized(bumpalo::vec![in b; x])
     }
+
     /// Constructor
     pub fn id(xt: YYCODETYPE, x: Token, b: &'bump Bump) -> Self {
         Self::Id(Id::from_token(xt, x, b))
     }
+
     /// Constructor
     pub fn collate(x: Self, ct: YYCODETYPE, c: Token, b: &'bump Bump) -> Self {
         Self::Collate(b.alloc(x), from_token(ct, c, b))
     }
+
     /// Constructor
     pub fn cast(x: Self, type_name: Option<Type<'bump>>, b: &'bump Bump) -> Self {
         Self::Cast {
@@ -510,10 +516,12 @@ impl<'bump> Expr<'bump> {
             type_name,
         }
     }
+
     /// Constructor
     pub fn binary(left: Self, op: YYCODETYPE, right: Self, b: &'bump Bump) -> Self {
         Self::Binary(b.alloc(left), Operator::from(op), b.alloc(right))
     }
+
     /// Constructor
     pub fn ptr(left: Self, op: Token, right: Self, b: &'bump Bump) -> Self {
         let mut ptr = Operator::ArrowRight;
@@ -522,6 +530,7 @@ impl<'bump> Expr<'bump> {
         }
         Self::Binary(b.alloc(left), ptr, b.alloc(right))
     }
+
     /// Constructor
     pub fn like(
         lhs: Self,
@@ -539,6 +548,7 @@ impl<'bump> Expr<'bump> {
             escape: escape.map(|e| b.alloc(e) as _),
         }
     }
+
     /// Constructor
     pub fn not_null(x: Self, op: YYCODETYPE, b: &'bump Bump) -> Self {
         if op == TK_ISNULL as YYCODETYPE {
@@ -549,10 +559,12 @@ impl<'bump> Expr<'bump> {
             unreachable!()
         }
     }
+
     /// Constructor
     pub fn unary(op: UnaryOperator, x: Self, b: &'bump Bump) -> Self {
         Self::Unary(op, b.alloc(x))
     }
+
     /// Constructor
     pub fn between(lhs: Self, not: bool, start: Self, end: Self, b: &'bump Bump) -> Self {
         Self::Between {
@@ -562,6 +574,7 @@ impl<'bump> Expr<'bump> {
             end: b.alloc(end),
         }
     }
+
     /// Constructor
     pub fn in_list(lhs: Self, not: bool, rhs: Option<Vec<'bump, Self>>, b: &'bump Bump) -> Self {
         Self::InList {
@@ -570,6 +583,7 @@ impl<'bump> Expr<'bump> {
             rhs: rhs.map(|r| r.into_bump_slice()),
         }
     }
+
     /// Constructor
     pub fn in_select(lhs: Self, not: bool, rhs: Select<'bump>, b: &'bump Bump) -> Self {
         Self::InSelect {
@@ -578,6 +592,7 @@ impl<'bump> Expr<'bump> {
             rhs: b.alloc(rhs),
         }
     }
+
     /// Constructor
     pub fn in_table(
         lhs: Self,
@@ -593,10 +608,12 @@ impl<'bump> Expr<'bump> {
             args: args.map(|a| a.into_bump_slice()),
         }
     }
+
     /// Constructor
     pub fn sub_query(query: Select<'bump>, b: &'bump Bump) -> Self {
         Self::Subquery(b.alloc(query))
     }
+
     /// Constructor
     pub fn function_call(
         xt: YYCODETYPE,
@@ -636,6 +653,7 @@ impl<'bump> Expr<'bump> {
             None
         }
     }
+
     #[cfg(feature = "extra_checks")]
     fn check_range(&self, term: &str, mx: u16) -> Result<(), ParserError> {
         if let Some(i) = self.is_integer() {
@@ -838,7 +856,8 @@ pub struct Select<'bump> {
     /// body
     pub body: SelectBody<'bump>,
     /// `ORDER BY`
-    pub order_by: Option<&'bump [SortedColumn<'bump>]>, // TODO: ORDER BY term does not match any column in the result set
+    pub order_by: Option<&'bump [SortedColumn<'bump>]>, /* TODO: ORDER BY term does not match
+                                                         * any column in the result set */
     /// `LIMIT`
     pub limit: Option<&'bump Limit<'bump>>,
 }
@@ -894,7 +913,8 @@ impl<'bump> SelectBody<'bump> {
             if let ColumnCount::Fixed(m) = cs.select.column_count() {
                 if n != m {
                     return Err(custom_err!(
-                        "SELECTs to the left and right of {} do not have the same number of result columns",
+                        "SELECTs to the left and right of {} do not have the same number of \
+                         result columns",
                         cs.operator
                     ));
                 }
@@ -1003,6 +1023,7 @@ impl<'bump> OneSelect<'bump> {
         }
         Ok(select)
     }
+
     /// Check all VALUES have the same number of terms
     pub fn push(
         values: &mut Vec<'bump, Vec<'bump, Expr<'bump>>>,
@@ -1180,6 +1201,7 @@ impl JoinOperator {
             Self::TypedJoin(Some(jt))
         })
     }
+
     fn is_natural(&self) -> bool {
         match self {
             Self::TypedJoin(Some(jt)) => jt.contains(JoinType::NATURAL),
@@ -1211,6 +1233,7 @@ bitflags::bitflags! {
 
 impl TryFrom<&[u8]> for JoinType {
     type Error = ParserError;
+
     fn try_from(s: &[u8]) -> Result<Self, ParserError> {
         if b"CROSS".eq_ignore_ascii_case(s) {
             Ok(Self::INNER | Self::CROSS)
@@ -1259,7 +1282,8 @@ impl<'bump> Id<'bump> {
 
 // TODO ids (identifier or string)
 
-/// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL` or `OUTER` or `RIGHT`.
+/// identifier or string or `CROSS` or `FULL` or `INNER` or `LEFT` or `NATURAL`
+/// or `OUTER` or `RIGHT`.
 #[derive(Clone, Debug, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Name<'bump>(pub &'bump str); // TODO distinction between Name and "Name"/[Name]/`Name`
@@ -1295,6 +1319,7 @@ impl<'bump> Name<'bump> {
         let (sub, quote) = unquote(self.0);
         QuotedIterator(sub.bytes(), quote)
     }
+
     #[cfg(feature = "extra_checks")]
     fn is_reserved(&self) -> bool {
         let bytes = self.as_bytes();
@@ -1391,6 +1416,7 @@ impl<'bump> QualifiedName<'bump> {
             alias: None,
         }
     }
+
     /// Constructor
     pub fn fullname(db_name: Name<'bump>, name: Name<'bump>) -> Self {
         Self {
@@ -1399,6 +1425,7 @@ impl<'bump> QualifiedName<'bump> {
             alias: None,
         }
     }
+
     /// Constructor
     pub fn xfullname(db_name: Name<'bump>, name: Name<'bump>, alias: Name<'bump>) -> Self {
         Self {
@@ -1407,6 +1434,7 @@ impl<'bump> QualifiedName<'bump> {
             alias: Some(alias),
         }
     }
+
     /// Constructor
     pub fn alias(name: Name<'bump>, alias: Name<'bump>) -> Self {
         Self {
@@ -1429,12 +1457,14 @@ impl<'bump> DistinctNames<'bump> {
         dn.0.push(name);
         dn
     }
+
     /// Single column name
     pub fn single(name: Name<'bump>, bump: &'bump Bump) -> Self {
         let mut dn = Self(Vec::with_capacity_in(1, bump));
         dn.0.push(name);
         dn
     }
+
     /// Push a distinct name or fail
     pub fn insert(&mut self, name: Name<'bump>) -> Result<(), ParserError> {
         if self.0.contains(&name) {
@@ -1464,7 +1494,8 @@ pub enum AlterTableBody<'bump> {
     /// `ALTER COLUMN _ DROP NOT NULL`
     DropColumnNotNull(Name<'bump>), // TODO distinction between ALTER and ALTER COLUMN
     /// `ALTER COLUMN _ SET NOT NULL`
-    SetColumnNotNull(Name<'bump>, Option<ResolveType>), // TODO distinction between ALTER and ALTER COLUMN
+    SetColumnNotNull(Name<'bump>, Option<ResolveType>), /* TODO distinction between ALTER and
+                                                         * ALTER COLUMN */
     /// `RENAME COLUMN`
     RenameColumn {
         /// old name
@@ -1654,7 +1685,8 @@ impl<'bump> ColumnDefinition<'bump> {
                         },
                     ..
                 } => {
-                    // The child table may reference the primary key of the parent without specifying the primary key column
+                    // The child table may reference the primary key of the parent without
+                    // specifying the primary key column
                     if columns.as_ref().map_or(0, |cs| cs.len()) > 1 {
                         return Err(custom_err!(
                             "foreign key on {} should reference only one column of table {}",
@@ -1727,6 +1759,7 @@ impl<'bump> ColumnDefinition<'bump> {
             flags,
         })
     }
+
     /// Collector
     pub fn add_column(columns: &mut Vec<'bump, Self>, cd: Self) -> Result<(), ParserError> {
         if columns.iter().any(|c| c.col_name == cd.col_name) {
@@ -1863,6 +1896,7 @@ impl<'bump> TableConstraint<'bump> {
             conflict_clause,
         })
     }
+
     /// UNIQUE constructor
     pub fn unique(
         columns: Vec<'bump, SortedColumn<'bump>>,
@@ -2045,7 +2079,8 @@ pub struct Limit<'bump> {
     /// count
     pub expr: Expr<'bump>,
     /// `OFFSET`
-    pub offset: Option<Expr<'bump>>, // TODO distinction between LIMIT offset, count and LIMIT count OFFSET offset
+    pub offset: Option<Expr<'bump>>, /* TODO distinction between LIMIT offset, count and LIMIT
+                                      * count OFFSET offset */
 }
 
 /// `INSERT` body
@@ -2238,6 +2273,7 @@ impl<'bump> CommonTableExpr<'bump> {
             select: b.alloc(select),
         })
     }
+
     /// Constructor
     pub fn add_cte(ctes: &mut Vec<Self>, cte: Self) -> Result<(), ParserError> {
         #[cfg(feature = "extra_checks")]

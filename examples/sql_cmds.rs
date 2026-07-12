@@ -1,10 +1,10 @@
-use std::env;
 use std::fs::read;
-use std::panic;
+use std::{env, panic};
 
 #[cfg(not(feature = "YYNOERRORRECOVERY"))]
 use sqlite3_parser::lexer::sql::Error;
-use sqlite3_parser::{Bump, FallibleIterator as _, lexer::sql::Parser};
+use sqlite3_parser::lexer::sql::Parser;
+use sqlite3_parser::{Bump, FallibleIterator as _};
 
 /// Parse specified files and print all commands.
 fn main() {

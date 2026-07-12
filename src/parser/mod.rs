@@ -1,5 +1,6 @@
 //! SQLite parser
-use bumpalo::{Bump, collections::Vec};
+use bumpalo::Bump;
+use bumpalo::collections::Vec;
 
 pub mod ast;
 pub mod parse {
@@ -13,8 +14,8 @@ pub mod parse {
 }
 mod stack;
 
+use self::ast::{Cmd, ExplainKind, Name, Stmt};
 use crate::dialect::Token;
-use ast::{Cmd, ExplainKind, Name, Stmt};
 
 /// Parser error
 #[derive(Debug, PartialEq)]
@@ -104,6 +105,7 @@ impl<'input> Context<'input> {
     fn constraint_name(&mut self) -> Option<Name<'input>> {
         self.constraint_name.take()
     }
+
     fn no_constraint_name(&self) -> bool {
         self.constraint_name.is_none()
     }
@@ -112,6 +114,7 @@ impl<'input> Context<'input> {
         self.add_module_arg();
         self.module_arg = None;
     }
+
     fn vtab_arg_extend(&mut self, any: Token) {
         if let Some((_, ref mut n)) = self.module_arg {
             *n = any.2;
@@ -119,6 +122,7 @@ impl<'input> Context<'input> {
             self.module_arg = Some((any.0, any.2));
         }
     }
+
     fn add_module_arg(&mut self) {
         if let Some((start, end)) = self.module_arg.take()
             && let Ok(arg) = std::str::from_utf8(&self.input[start..end])
@@ -128,6 +132,7 @@ impl<'input> Context<'input> {
                 .push(self.bump.alloc_str(arg));
         } // FIXME error handling
     }
+
     fn module_args(&mut self) -> Option<Vec<'input, &'input str>> {
         self.add_module_arg();
         self.module_args.take()
