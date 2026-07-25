@@ -48,6 +48,17 @@ fn count_named_placeholders() {
 }
 
 #[test]
+#[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+fn ordered_set_aggregates() {
+    let b = Bump::new();
+    parse_cmd(b"SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x)", &b);
+    parse_cmd(
+        b"SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x) FILTER (WHERE x IS NOT NULL)",
+        &b,
+    );
+}
+
+#[test]
 fn duplicate_column() {
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT, x TEXT)",
