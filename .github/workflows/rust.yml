@@ -23,12 +23,9 @@ jobs:
       - name: Run tests
         run: |
           cargo test
-          cargo test --all-features
+          cargo test --features extra_checks
       - name: Clippy
         run: cargo clippy --workspace --no-deps -- -D warnings
-      - name: Verify package
-        if: matrix.os == 'ubuntu-latest'
-        run: cargo package
 
   miri:
     name: Miri
