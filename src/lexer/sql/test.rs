@@ -70,12 +70,8 @@ fn create_table_without_column() {
 
 #[test]
 fn auto_increment() {
-    let b = Bump::new();
-    parse_cmd(b"CREATE TABLE t (x INTEGER PRIMARY KEY AUTOINCREMENT)", &b);
-    parse_cmd(
-        b"CREATE TABLE t (x \"INTEGER\" PRIMARY KEY AUTOINCREMENT)",
-        &b,
-    );
+    assert_string("CREATE TABLE t (x INTEGER PRIMARY KEY AUTOINCREMENT);");
+    assert_string("CREATE TABLE t (x \"INTEGER\" PRIMARY KEY AUTOINCREMENT);");
     #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT PRIMARY KEY AUTOINCREMENT)",
@@ -209,9 +205,8 @@ fn extra_comments_between_statements() {
 
 #[test]
 fn values() {
-    let b = Bump::new();
-    parse_cmd(b"SELECT * FROM (VALUES (1))", &b);
-    parse_cmd(b"SELECT * FROM (VALUES (1), (2))", &b);
+    assert_string("SELECT * FROM (VALUES (1));");
+    assert_string("SELECT * FROM (VALUES (1), (2));");
     expect_parser_err(
         b"SELECT * FROM (VALUES (1), VALUES (2))",
         ParserError::SyntaxError("VALUES".into()),
@@ -220,8 +215,7 @@ fn values() {
 
 #[test]
 fn having_without_group_by() {
-    let b = Bump::new();
-    parse_cmd(b"SELECT count(*) FROM t2 HAVING count(*)>1", &b);
+    assert_string("SELECT count (*) FROM t2 HAVING count (*) > 1;");
 }
 
 #[test]
@@ -273,8 +267,7 @@ fn create_temporary_table_with_qualified_name() {
         b"CREATE TEMPORARY TABLE mem.x AS SELECT 1",
         "temporary table name must be unqualified",
     );
-    let b = Bump::new();
-    parse_cmd(b"CREATE TEMPORARY TABLE temp.x AS SELECT 1", &b);
+    assert_string("CREATE TEMP TABLE temp.x AS SELECT 1;");
 }
 
 #[test]
@@ -293,18 +286,18 @@ fn create_strict_table_missing_datatype() {
 }
 
 #[test]
-#[cfg(feature = "extra_checks")]
 fn create_strict_table_unknown_datatype() {
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE TABLE t (c1 BOOL) STRICT",
         "unknown datatype for t.c1: \"BOOL\"",
     );
+    #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE TABLE t (c1 INT(10)) STRICT",
         "unknown datatype for t.c1: \"INT(...)\"",
     );
-    let b = Bump::new();
-    parse_cmd(b"CREATE TABLE t(c1 \"INT\", c2 [TEXT], c3 `INTEGER`)", &b);
+    assert_string("CREATE TABLE t (c1 \"INT\", c2 [TEXT], c3 `INTEGER`);");
 }
 
 #[test]
@@ -422,8 +415,7 @@ fn missing_join_clause() {
 
 #[test]
 fn cast_without_typename() {
-    let b = Bump::new();
-    parse_cmd(b"SELECT CAST(a AS ) FROM t", &b);
+    assert_string("SELECT CAST (a AS) FROM t;");
 }
 
 #[test]
@@ -479,8 +471,7 @@ fn no_tables_specified() {
     expect_parser_err_msg(b"SELECT t.*", "no tables specified");
     #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(b"SELECT count(*), *", "no tables specified");
-    let b = Bump::new();
-    parse_cmd(b"SELECT count(*)", &b);
+    assert_string("SELECT count (*);");
 }
 
 #[test]
@@ -534,12 +525,10 @@ fn unknown_table_option() {
 
 #[test]
 fn qualified_table_name_within_triggers() {
-    let b = Bump::new();
-    parse_cmd(
-        b"CREATE TRIGGER tr1 AFTER INSERT ON t1 BEGIN
-            DELETE FROM main.t2;
-          END;",
-        &b,
+    assert_string(
+        "CREATE TRIGGER tr1 AFTER INSERT ON t1 BEGIN
+DELETE FROM main.t2;
+END;",
     );
 }
 
@@ -586,9 +575,8 @@ fn reserved_name() {
         b"CREATE TRIGGER sqlite_x AFTER INSERT ON x BEGIN SELECT 1; END;",
         "object name reserved for internal use: sqlite_x",
     );
-    let b = Bump::new();
-    parse_cmd(b"CREATE TABLE sqlite(a)", &b);
-    parse_cmd(b"CREATE INDEX \"\" ON t(a)", &b);
+    assert_string("CREATE TABLE sqlite (a);");
+    assert_string("CREATE INDEX \"\" ON t (a);");
 }
 
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
@@ -602,6 +590,11 @@ fn expect_parser_err(input: &[u8], err: ParserError) {
     } else {
         panic!("unexpected error type")
     }
+}
+fn assert_string(input: &str) {
+    let b = Bump::new();
+    let cmd = parse_cmd(input.as_bytes(), &b);
+    assert_eq!(cmd.to_string(), input);
 }
 fn parse_cmd<'bump>(input: &'bump [u8], b: &'bump Bump) -> Cmd<'bump> {
     parse(input, b).unwrap().unwrap()

@@ -11,6 +11,7 @@ categories = ["parser-implementations"]
 keywords = ["sql", "parser", "scanner", "tokenizer"]
 license = "Apache-2.0/MIT"
 build = "build.rs" # Lemon preprocessing
+exclude = ["**/*.sh"]
 
 [workspace]
 exclude = ["sqlparser_bench"]

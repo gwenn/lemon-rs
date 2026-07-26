@@ -15,6 +15,8 @@ use crate::parser::parse::{YYCODETYPE, yyParser};
 mod error;
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod window_test;
 
 pub use self::error::Error;
 use crate::lexer::Scanner;
