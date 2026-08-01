@@ -15,7 +15,7 @@ impl TokenStream for FmtTokenStream<'_, '_> {
     fn append(&mut self, ty: TokenType, value: Option<&str>) -> fmt::Result {
         if !self.spaced {
             match ty {
-                TK_COMMA | TK_SEMI | TK_RP | TK_DOT => {}
+                TK_COMMA | TK_SEMI | TK_LP | TK_RP | TK_DOT => {}
                 _ => {
                     self.f.write_char(' ')?;
                     self.spaced = true;
@@ -627,6 +627,7 @@ impl ToTokens for Expr<'_> {
                             s.append(TK_RP, None)?;
                             s.append(TK_WITHIN, None)?;
                             s.append(TK_GROUP, None)?;
+                            s.append(TK_SPACE, None)?;
                             s.append(TK_LP, None)?;
                             s.append(TK_ORDER, None)?;
                             s.append(TK_BY, None)?;
@@ -657,6 +658,7 @@ impl ToTokens for Expr<'_> {
                     s.append(TK_NOT, None)?;
                 }
                 s.append(TK_IN, None)?;
+                s.append(TK_SPACE, None)?;
                 s.append(TK_LP, None)?;
                 if let Some(rhs) = rhs {
                     comma(*rhs, s)?;
@@ -669,6 +671,7 @@ impl ToTokens for Expr<'_> {
                     s.append(TK_NOT, None)?;
                 }
                 s.append(TK_IN, None)?;
+                s.append(TK_SPACE, None)?;
                 s.append(TK_LP, None)?;
                 rhs.to_tokens(s)?;
                 s.append(TK_RP, None)
@@ -722,6 +725,7 @@ impl ToTokens for Expr<'_> {
                 s.append(TK_NOTNULL, None)
             }
             Self::Parenthesized(exprs) => {
+                s.append(TK_SPACE, None)?;
                 s.append(TK_LP, None)?;
                 comma(exprs, s)?;
                 s.append(TK_RP, None)
@@ -742,6 +746,7 @@ impl ToTokens for Expr<'_> {
                 s.append(TK_RP, None)
             }
             Self::Subquery(query) => {
+                s.append(TK_SPACE, None)?;
                 s.append(TK_LP, None)?;
                 query.to_tokens(s)?;
                 s.append(TK_RP, None)
@@ -1049,6 +1054,7 @@ impl ToTokens for SelectTable<'_> {
                 Ok(())
             }
             Self::Select(select, alias) => {
+                s.append(TK_SPACE, None)?;
                 s.append(TK_LP, None)?;
                 select.to_tokens(s)?;
                 s.append(TK_RP, None)?;
@@ -1058,6 +1064,7 @@ impl ToTokens for SelectTable<'_> {
                 Ok(())
             }
             Self::Sub(from, alias) => {
+                s.append(TK_SPACE, None)?;
                 s.append(TK_LP, None)?;
                 from.to_tokens(s)?;
                 s.append(TK_RP, None)?;
@@ -1357,6 +1364,7 @@ impl ToTokens for ColumnConstraint<'_> {
             }
             Self::Generated { expr, typ } => {
                 s.append(TK_AS, None)?;
+                s.append(TK_SPACE, None)?;
                 s.append(TK_LP, None)?;
                 expr.to_tokens(s)?;
                 s.append(TK_RP, None)?;
@@ -1641,6 +1649,7 @@ impl ToTokens for Set<'_> {
         if self.col_names.len() == 1 {
             comma(self.col_names.deref(), s)?;
         } else {
+            s.append(TK_SPACE, None)?;
             s.append(TK_LP, None)?;
             comma(self.col_names.deref(), s)?;
             s.append(TK_RP, None)?;
@@ -1798,6 +1807,7 @@ impl ToTokens for CommonTableExpr<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         self.tbl_name.to_tokens(s)?;
         if let Some(columns) = self.columns {
+            s.append(TK_SPACE, None)?;
             s.append(TK_LP, None)?;
             comma(columns, s)?;
             s.append(TK_RP, None)?;
@@ -1813,6 +1823,7 @@ impl ToTokens for CommonTableExpr<'_> {
                 s.append(TK_MATERIALIZED, None)?;
             }
         }
+        s.append(TK_SPACE, None)?;
         s.append(TK_LP, None)?;
         self.select.to_tokens(s)?;
         s.append(TK_RP, None)
@@ -1913,6 +1924,7 @@ impl ToTokens for FunctionTail<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
         if let Some(filter_clause) = self.filter_clause {
             s.append(TK_FILTER, None)?;
+            s.append(TK_SPACE, None)?;
             s.append(TK_LP, None)?;
             s.append(TK_WHERE, None)?;
             filter_clause.to_tokens(s)?;
@@ -1945,6 +1957,7 @@ impl ToTokens for WindowDef<'_> {
 
 impl ToTokens for Window<'_> {
     fn to_tokens<S: TokenStream>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.append(TK_SPACE, None)?;
         s.append(TK_LP, None)?;
         if let Some(ref base) = self.base {
             base.to_tokens(s)?;

@@ -70,8 +70,8 @@ fn create_table_without_column() {
 
 #[test]
 fn auto_increment() {
-    assert_string("CREATE TABLE t (x INTEGER PRIMARY KEY AUTOINCREMENT);");
-    assert_string("CREATE TABLE t (x \"INTEGER\" PRIMARY KEY AUTOINCREMENT);");
+    assert_string("CREATE TABLE t(x INTEGER PRIMARY KEY AUTOINCREMENT);");
+    assert_string("CREATE TABLE t(x \"INTEGER\" PRIMARY KEY AUTOINCREMENT);");
     #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(
         b"CREATE TABLE t (x TEXT PRIMARY KEY AUTOINCREMENT)",
@@ -205,8 +205,8 @@ fn extra_comments_between_statements() {
 
 #[test]
 fn values() {
-    assert_string("SELECT * FROM (VALUES (1));");
-    assert_string("SELECT * FROM (VALUES (1), (2));");
+    assert_string("SELECT * FROM (VALUES(1));");
+    assert_string("SELECT * FROM (VALUES(1),(2));");
     expect_parser_err(
         b"SELECT * FROM (VALUES (1), VALUES (2))",
         ParserError::SyntaxError("VALUES".into()),
@@ -215,7 +215,7 @@ fn values() {
 
 #[test]
 fn having_without_group_by() {
-    assert_string("SELECT count (*) FROM t2 HAVING count (*) > 1;");
+    assert_string("SELECT count(*) FROM t2 HAVING count(*) > 1;");
 }
 
 #[test]
@@ -297,7 +297,7 @@ fn create_strict_table_unknown_datatype() {
         b"CREATE TABLE t (c1 INT(10)) STRICT",
         "unknown datatype for t.c1: \"INT(...)\"",
     );
-    assert_string("CREATE TABLE t (c1 \"INT\", c2 [TEXT], c3 `INTEGER`);");
+    assert_string("CREATE TABLE t(c1 \"INT\", c2 [TEXT], c3 `INTEGER`);");
 }
 
 #[test]
@@ -415,7 +415,7 @@ fn missing_join_clause() {
 
 #[test]
 fn cast_without_typename() {
-    assert_string("SELECT CAST (a AS) FROM t;");
+    assert_string("SELECT CAST(a AS) FROM t;");
 }
 
 #[test]
@@ -471,7 +471,7 @@ fn no_tables_specified() {
     expect_parser_err_msg(b"SELECT t.*", "no tables specified");
     #[cfg(feature = "extra_checks")]
     expect_parser_err_msg(b"SELECT count(*), *", "no tables specified");
-    assert_string("SELECT count (*);");
+    assert_string("SELECT count(*);");
 }
 
 #[test]
@@ -575,13 +575,15 @@ fn reserved_name() {
         b"CREATE TRIGGER sqlite_x AFTER INSERT ON x BEGIN SELECT 1; END;",
         "object name reserved for internal use: sqlite_x",
     );
-    assert_string("CREATE TABLE sqlite (a);");
-    assert_string("CREATE INDEX \"\" ON t (a);");
+    assert_string("CREATE TABLE sqlite(a);");
+    assert_string("CREATE INDEX \"\" ON t(a);");
 }
 
+#[track_caller]
 fn expect_parser_err_msg(input: &[u8], error_msg: &str) {
     expect_parser_err(input, ParserError::Custom(error_msg.to_owned()));
 }
+#[track_caller]
 fn expect_parser_err(input: &[u8], err: ParserError) {
     let b = Bump::new();
     let r = parse(input, &b);
@@ -591,6 +593,7 @@ fn expect_parser_err(input: &[u8], err: ParserError) {
         panic!("unexpected error type")
     }
 }
+#[track_caller]
 fn assert_string(input: &str) {
     let b = Bump::new();
     let cmd = parse_cmd(input.as_bytes(), &b);
