@@ -15,8 +15,6 @@ use crate::parser::parse::{YYCODETYPE, yyParser};
 mod error;
 #[cfg(test)]
 mod test;
-#[cfg(test)]
-mod window_test;
 
 pub use self::error::Error;
 use crate::lexer::Scanner;
@@ -803,6 +801,7 @@ mod tests {
 
     #[test]
     fn errors() -> Result<(), Error> {
+        assert_matches!(expect_error(&[0]), Error::UnrecognizedToken(_));
         assert_matches!(expect_error(b"/*"), Error::UnterminatedBlockComment(_));
         assert_matches!(expect_error(b"!"), Error::ExpectedEqualsSign(_));
         assert_matches!(expect_error(b"! "), Error::ExpectedEqualsSign(_));

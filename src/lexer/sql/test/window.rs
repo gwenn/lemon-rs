@@ -1,7 +1,4 @@
-use bumpalo::Bump;
-use fallible_iterator::FallibleIterator as _;
-
-use super::Parser;
+use super::assert_string;
 
 #[test]
 fn over() {
@@ -23,11 +20,4 @@ fn filter() {
         "SELECT c, a, b, group_concat(b, '.') FILTER (WHERE c <> 'two') OVER (ORDER BY a) AS \
          group_concat FROM t1 ORDER BY a;",
     );
-}
-
-fn assert_string(input: &str) {
-    let b = Bump::new();
-    let mut parser = Parser::new(&b, input.as_bytes());
-    let cmd = parser.next().unwrap().unwrap();
-    assert_eq!(cmd.to_string(), input);
 }
