@@ -1212,6 +1212,7 @@ impl ToTokens for AlterTableBody<'_> {
             }
             Self::RenameColumn { old, new } => {
                 s.append(TK_RENAME, None)?;
+                s.append(TK_COLUMNKW, None)?;
                 old.to_tokens(s)?;
                 s.append(TK_TO, None)?;
                 new.to_tokens(s)

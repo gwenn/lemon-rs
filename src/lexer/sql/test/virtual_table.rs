@@ -1,6 +1,6 @@
 use bumpalo::Bump;
 
-use super::parse_cmd;
+use super::{assert_string, parse_cmd};
 use crate::ast::{Cmd, Name, QualifiedName, Stmt};
 use crate::lexer::sql::Error;
 
@@ -30,4 +30,11 @@ fn vtab_args() -> Result<(), Error> {
     assert_eq!(args[0], "subject VARCHAR(256) NOT NULL");
     assert_eq!(args[1], "body TEXT CHECK(length(body)<10240)");
     Ok(())
+}
+
+#[test]
+fn vtab() {
+    assert_string("CREATE VIRTUAL TABLE zip USING zipfile('document.docx');");
+    assert_string("CREATE VIRTUAL TABLE temp.t1 USING csv(filename='thefile.csv');");
+    assert_string("CREATE VIRTUAL TABLE enrondata1 USING fts3(content TEXT);");
 }

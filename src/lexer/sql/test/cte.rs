@@ -1,3 +1,4 @@
+#[cfg(feature = "extra_checks")]
 use super::expect_parser_err_msg;
 
 #[test]

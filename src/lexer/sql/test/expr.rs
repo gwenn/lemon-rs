@@ -1,4 +1,6 @@
-use super::{assert_string, expect_parser_err_msg};
+use super::assert_string;
+#[cfg(feature = "extra_checks")]
+use super::expect_parser_err_msg;
 
 #[test]
 fn cast_without_typename() {

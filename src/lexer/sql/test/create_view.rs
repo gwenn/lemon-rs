@@ -1,3 +1,5 @@
+use super::assert_string;
+#[cfg(feature = "extra_checks")]
 use super::expect_parser_err_msg;
 
 #[test]
@@ -16,4 +18,9 @@ fn create_view_duplicate_column_name() {
         b"CREATE VIEW v (c1, c1) AS SELECT 1, 2",
         "duplicate column name: c1",
     );
+}
+
+#[test]
+fn create_view() {
+    assert_string("CREATE VIEW v1(x, y, z) AS SELECT b, a + c, 42 FROM t1 WHERE b <> 11;");
 }
