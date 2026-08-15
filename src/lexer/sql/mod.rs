@@ -236,11 +236,11 @@ impl<'input> FallibleIterator for Parser<'input> {
         }
         let cmd = self.parser.ctx.cmd();
         #[cfg(feature = "extra_checks")]
-        if let Some(ref cmd) = cmd {
-            if let Err(e) = cmd.check() {
-                let err = Error::ParserError(e, Some(Pos::from(self.input, offset)));
-                return Err(err);
-            }
+        if let Some(ref cmd) = cmd
+            && let Err(e) = cmd.check()
+        {
+            let err = Error::ParserError(e, Some(Pos::from(self.input, offset)));
+            return Err(err);
         }
         Ok(cmd)
     }
