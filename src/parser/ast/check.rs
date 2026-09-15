@@ -124,12 +124,11 @@ impl Stmt<'_> {
                 ..
             } => {
                 check_reserved_name(tbl_name)?;
-                if *temporary {
-                    if let Some(ref db_name) = tbl_name.db_name {
-                        if db_name != "TEMP" {
-                            return Err(custom_err!("temporary table name must be unqualified"));
-                        }
-                    }
+                if *temporary
+                    && let Some(ref db_name) = tbl_name.db_name
+                    && db_name != "TEMP"
+                {
+                    return Err(custom_err!("temporary table name must be unqualified"));
                 }
                 body.check(tbl_name)
             }

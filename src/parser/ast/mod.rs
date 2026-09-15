@@ -316,19 +316,17 @@ impl<'bump> Stmt<'bump> {
             ref joins,
             ..
         }) = from
-        {
-            if matches!(select,
+            && (matches!(select,
                 SelectTable::Table(qn, _, _) | SelectTable::TableCall(qn, _, _)
                     if *qn == tbl_name)
                 || joins.as_ref().is_some_and(|js| js.iter().any(|j|
                     matches!(j.table, SelectTable::Table(ref qn, _, _) | SelectTable::TableCall(ref qn, _, _)
-                    if *qn == tbl_name)))
+                    if *qn == tbl_name))))
             {
                 return Err(custom_err!(
                     "target object/alias may not appear in FROM clause",
                 ));
             }
-        }
         #[cfg(feature = "extra_checks")]
         if order_by.is_some() && limit.is_none() {
             return Err(custom_err!("ORDER BY without LIMIT on UPDATE"));
@@ -625,12 +623,12 @@ impl<'bump> Expr<'bump> {
         b: &'bump Bump,
     ) -> Result<Self, ParserError> {
         #[cfg(feature = "extra_checks")]
-        if let Some(Distinctness::Distinct) = distinctness {
-            if args.as_ref().map_or(0, Vec::len) != 1 {
-                return Err(custom_err!(
-                    "DISTINCT aggregates must have exactly one argument"
-                ));
-            }
+        if let Some(Distinctness::Distinct) = distinctness
+            && args.as_ref().map_or(0, Vec::len) != 1
+        {
+            return Err(custom_err!(
+                "DISTINCT aggregates must have exactly one argument"
+            ));
         }
         Ok(Self::FunctionCall {
             name: Id::from_token(xt, x, b),
@@ -656,14 +654,14 @@ impl<'bump> Expr<'bump> {
 
     #[cfg(feature = "extra_checks")]
     fn check_range(&self, term: &str, mx: u16) -> Result<(), ParserError> {
-        if let Some(i) = self.is_integer() {
-            if i < 1 || i > mx as i64 {
-                return Err(custom_err!(
-                    "{} BY term out of range - should be between 1 and {}",
-                    term,
-                    mx
-                ));
-            }
+        if let Some(i) = self.is_integer()
+            && (i < 1 || i > mx as i64)
+        {
+            return Err(custom_err!(
+                "{} BY term out of range - should be between 1 and {}",
+                term,
+                mx
+            ));
         }
         Ok(())
     }
@@ -881,11 +879,10 @@ impl<'bump> Select<'bump> {
             order_by: Some(scs),
             ..
         } = select
+            && let ColumnCount::Fixed(n) = select.column_count()
         {
-            if let ColumnCount::Fixed(n) = select.column_count() {
-                for sc in scs {
-                    sc.expr.check_range("ORDER", n)?;
-                }
+            for sc in scs {
+                sc.expr.check_range("ORDER", n)?;
             }
         }
         Ok(select)
@@ -909,16 +906,14 @@ impl<'bump> SelectBody<'bump> {
         b: &'bump Bump,
     ) -> Result<(), ParserError> {
         #[cfg(feature = "extra_checks")]
-        if let ColumnCount::Fixed(n) = self.select.column_count() {
-            if let ColumnCount::Fixed(m) = cs.select.column_count() {
-                if n != m {
-                    return Err(custom_err!(
-                        "SELECTs to the left and right of {} do not have the same number of \
-                         result columns",
-                        cs.operator
-                    ));
-                }
-            }
+        if let ColumnCount::Fixed(n) = self.select.column_count()
+            && let ColumnCount::Fixed(m) = cs.select.column_count()
+            && n != m
+        {
+            return Err(custom_err!(
+                "SELECTs to the left and right of {} do not have the same number of result columns",
+                cs.operator
+            ));
         }
         if let Some(ref mut v) = self.compounds {
             v.push(cs);
@@ -1014,11 +1009,10 @@ impl<'bump> OneSelect<'bump> {
         if let Self::Select {
             group_by: Some(gb), ..
         } = select
+            && let ColumnCount::Fixed(n) = select.column_count()
         {
-            if let ColumnCount::Fixed(n) = select.column_count() {
-                for expr in gb {
-                    expr.check_range("GROUP", n)?;
-                }
+            for expr in gb {
+                expr.check_range("GROUP", n)?;
             }
         }
         Ok(select)
@@ -2254,17 +2248,16 @@ impl<'bump> CommonTableExpr<'bump> {
         b: &'bump Bump,
     ) -> Result<Self, ParserError> {
         #[cfg(feature = "extra_checks")]
-        if let Some(ref columns) = columns {
-            if let check::ColumnCount::Fixed(cc) = select.column_count() {
-                if cc as usize != columns.len() {
-                    return Err(custom_err!(
-                        "table {} has {} values for {} columns",
-                        tbl_name,
-                        cc,
-                        columns.len()
-                    ));
-                }
-            }
+        if let Some(ref columns) = columns
+            && let check::ColumnCount::Fixed(cc) = select.column_count()
+            && cc as usize != columns.len()
+        {
+            return Err(custom_err!(
+                "table {} has {} values for {} columns",
+                tbl_name,
+                cc,
+                columns.len()
+            ));
         }
         Ok(Self {
             tbl_name,
