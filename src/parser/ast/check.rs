@@ -203,6 +203,11 @@ impl CreateTableBody<'_> {
             flags,
         } = self
         {
+            if flags.contains(TabFlags::Autoincrement) && flags.contains(TabFlags::WithoutRowid) {
+                return Err(custom_err!(
+                    "AUTOINCREMENT not allowed on WITHOUT ROWID tables"
+                ));
+            }
             let mut generated_count = 0;
             for c in columns {
                 if c.flags.intersects(ColFlags::GENERATED) {

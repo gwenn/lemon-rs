@@ -81,6 +81,11 @@ fn auto_increment() {
         b"CREATE TABLE t (x TEXT PRIMARY KEY AUTOINCREMENT)",
         "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY",
     );
+    #[cfg(feature = "extra_checks")]
+    expect_parser_err_msg(
+        b"CREATE TABLE tbl (x INTEGER PRIMARY KEY AUTOINCREMENT) WITHOUT ROWID;",
+        "AUTOINCREMENT not allowed on WITHOUT ROWID tables",
+    );
 }
 
 #[test]
