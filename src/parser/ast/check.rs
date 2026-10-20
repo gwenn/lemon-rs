@@ -124,12 +124,11 @@ impl Stmt<'_> {
                 ..
             } => {
                 check_reserved_name(tbl_name)?;
-                if *temporary {
-                    if let Some(ref db_name) = tbl_name.db_name {
-                        if db_name != "TEMP" {
-                            return Err(custom_err!("temporary table name must be unqualified"));
-                        }
-                    }
+                if *temporary
+                    && let Some(ref db_name) = tbl_name.db_name
+                    && db_name != "TEMP"
+                {
+                    return Err(custom_err!("temporary table name must be unqualified"));
                 }
                 body.check(tbl_name)
             }
@@ -231,7 +230,8 @@ impl CreateTableBody<'_> {
                         // FIXME unquote
                         Some(Type { name, .. }) => {
                             let name = unquote(name).0;
-                            // The datatype must be one of following: INT INTEGER REAL TEXT BLOB ANY
+                            // The datatype must be one of following:
+                            // INT INTEGER REAL TEXT BLOB ANY
                             if !(name.eq_ignore_ascii_case("INT")
                                 || name.eq_ignore_ascii_case("INTEGER")
                                 || name.eq_ignore_ascii_case("REAL")
@@ -248,8 +248,9 @@ impl CreateTableBody<'_> {
                             }
                         }
                         _ => {
-                            // Every column definition must specify a datatype for that column. The
-                            // freedom to specify a column without a datatype is removed.
+                            // Every column definition must specify a datatype
+                            // for that column. The freedom to specify a column
+                            // without a datatype is removed.
                             return Err(custom_err!(
                                 "missing datatype for {}.{}",
                                 tbl_name,

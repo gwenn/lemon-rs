@@ -162,7 +162,8 @@ impl<'input> FallibleIterator for Parser<'input> {
     type Item = Cmd<'input>;
 
     fn next(&mut self) -> Result<Option<Cmd<'input>>, Error> {
-        //print!("line: {}, column: {}: ", self.scanner.line(), self.scanner.column());
+        //print!("line: {}, column: {}: ", self.scanner.line(),
+        // self.scanner.column());
         self.parser.ctx.reset();
         let mut last_token_parsed = TK_EOF;
         let offset;
@@ -236,11 +237,11 @@ impl<'input> FallibleIterator for Parser<'input> {
         }
         let cmd = self.parser.ctx.cmd();
         #[cfg(feature = "extra_checks")]
-        if let Some(ref cmd) = cmd {
-            if let Err(e) = cmd.check() {
-                let err = Error::ParserError(e, Some(Pos::from(self.input, offset)));
-                return Err(err);
-            }
+        if let Some(ref cmd) = cmd
+            && let Err(e) = cmd.check()
+        {
+            let err = Error::ParserError(e, Some(Pos::from(self.input, offset)));
+            return Err(err);
         }
         Ok(cmd)
     }

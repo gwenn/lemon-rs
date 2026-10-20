@@ -17,7 +17,8 @@ fn main() {
             match s.scan(&input) {
                 Ok((_, None, _)) => break,
                 Err(err) => {
-                    //eprintln!("{} at line: {}, column: {}", err, s.line(), s.column());
+                    //eprintln!("{} at line: {}, column: {}", err, s.line(),
+                    // s.column());
                     eprintln!("Err: {err} in {arg}");
                     break;
                 }
