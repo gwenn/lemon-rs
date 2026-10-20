@@ -1572,6 +1572,16 @@ impl<'bump> CreateTableBody<'bump> {
             if col.flags.contains(ColFlags::PRIMKEY) {
                 flags |= TabFlags::HasPrimaryKey;
             }
+            for c in col.constraints {
+                if let ColumnConstraint::PrimaryKey {
+                    auto_increment: true,
+                    ..
+                } = c.constraint
+                {
+                    flags |= TabFlags::Autoincrement;
+                    break;
+                }
+            }
         }
         if let Some(ref constraints) = constraints {
             for c in constraints {
