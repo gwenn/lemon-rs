@@ -199,7 +199,7 @@ impl CreateTableBody<'_> {
     pub fn check(&self, tbl_name: &QualifiedName) -> Result<(), ParserError> {
         if let Self::ColumnsAndConstraints {
             columns,
-            constraints,
+            constraints: _,
             flags,
         } = self
         {
