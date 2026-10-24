@@ -344,6 +344,47 @@ fn selects_compound_mismatch_columns_count() {
 }
 
 #[test]
+fn select_limit() {
+    check_limit("SELECT * FROM t ORDER BY x");
+}
+
+#[test]
+fn delete_limit() {
+    check_limit("DELETE FROM t ORDER BY x");
+}
+
+#[test]
+fn update_limit() {
+    check_limit("UPDATE t SET x = 1 ORDER BY x");
+}
+
+fn check_limit(statement: &str) {
+    for (clause, canonical) in [
+        ("LIMIT 5", "LIMIT 5"),
+        ("LIMIT 5 OFFSET 2", "LIMIT 5 OFFSET 2"),
+        ("LIMIT 2, 5", "LIMIT 5 OFFSET 2"),
+        ("LIMIT 0, 5", "LIMIT 5 OFFSET 0"),
+        ("LIMIT 2, 0", "LIMIT 0 OFFSET 2"),
+        ("LIMIT 2, -1", "LIMIT -1 OFFSET 2"),
+        ("LIMIT -1, 5", "LIMIT 5 OFFSET -1"),
+        ("LIMIT 1 + 2, 3 * 4", "LIMIT 3 * 4 OFFSET 1 + 2"),
+        ("LIMIT ?1, ?2", "LIMIT ?2 OFFSET ?1"),
+        ("LIMIT :offset, :count", "LIMIT :count OFFSET :offset"),
+    ] {
+        let b = Bump::new();
+        let sql = format!("{statement} {clause}");
+        let expected_sql = format!("{statement} {canonical}");
+        let ast = parse_cmd(sql.as_bytes(), &b);
+        let expected = parse_cmd(expected_sql.as_bytes(), &b);
+        assert_eq!(ast, expected, "{sql}");
+
+        let formatted = ast.to_string();
+        assert_eq!(formatted, expected.to_string(), "{sql}");
+        assert_eq!(parse_cmd(formatted.as_bytes(), &b), ast, "{sql}");
+    }
+}
+
+#[test]
 #[cfg(feature = "extra_checks")]
 fn delete_order_by_without_limit() {
     expect_parser_err_msg(

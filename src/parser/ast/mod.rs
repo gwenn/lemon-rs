@@ -2082,9 +2082,9 @@ fn has_explicit_nulls(columns: &[SortedColumn]) -> Result<(), ParserError> {
 pub struct Limit<'bump> {
     /// count
     pub expr: Expr<'bump>,
-    /// `OFFSET`
-    pub offset: Option<Expr<'bump>>, /* TODO distinction between LIMIT offset, count and LIMIT
-                                      * count OFFSET offset */
+    /// `OFFSET`. Both `LIMIT count OFFSET offset` and `LIMIT offset, count`
+    /// are normalized to the same count and offset fields.
+    pub offset: Option<Expr<'bump>>,
 }
 
 /// `INSERT` body

@@ -771,7 +771,7 @@ limit_opt(A) ::= LIMIT expr(X).
 limit_opt(A) ::= LIMIT expr(X) OFFSET expr(Y).
                          {A = Some(self.ctx.bump.alloc(Limit{ expr: X, offset: Some(Y) }));}
 limit_opt(A) ::= LIMIT expr(X) COMMA expr(Y).
-                         {A = Some(self.ctx.bump.alloc(Limit{ expr: X, offset: Some(Y) }));}
+                         {A = Some(self.ctx.bump.alloc(Limit{ expr: Y, offset: Some(X) }));}
 
 /////////////////////////// The DELETE statement /////////////////////////////
 //
