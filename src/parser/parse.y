@@ -251,8 +251,8 @@ columnname(A) ::= nm(X) typetoken(Y). {A = (X, Y);}
 // The name of a column or table can be any of the following:
 //
 %type nm "Name<'i>"
-nm(A) ::= idj(X). { A = Name::from_token(@X, X, self.ctx.bump); }
-nm(A) ::= STRING(X). { A = Name::from_token(@X, X, self.ctx.bump); }
+nm(A) ::= idj(X). { A = Name::from_token(@X, X, self.ctx.bump)?; }
+nm(A) ::= STRING(X). { A = Name::from_token(@X, X, self.ctx.bump)?; }
 
 // A typetoken is really zero or more tokens that form a type name such
 // as can be found after the column name in a CREATE TABLE statement.
@@ -268,9 +268,9 @@ typetoken(A) ::= typename(X) LP signed(Y) COMMA signed(Z) RP. {
   A = Some(Type{ name: X, size: Some(TypeSize::TypeSize(self.ctx.bump.alloc(Y), self.ctx.bump.alloc(Z))) });
 }
 %type typename "&'i str"
-typename(A) ::= ids(X). {A=from_token(@X, X, self.ctx.bump);}
+typename(A) ::= ids(X). {A=from_token(@X, X, self.ctx.bump)?;}
 typename(A) ::= typename(X) ids(Y). {
-  let ids = from_token(@Y, Y, self.ctx.bump);
+  let ids = from_token(@Y, Y, self.ctx.bump)?;
   let mut s = bumpalo::collections::String::from_str_in(X, self.ctx.bump);
   s.push(' '); s.push_str(ids);
   A = s.into_bump_str();
@@ -323,7 +323,7 @@ ccons(A) ::= DEFAULT MINUS term(X).      {
 }
 ccons(A) ::= DEFAULT id(X).       {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Default(Expr::id(@X, X, self.ctx.bump));
+  let constraint = ColumnConstraint::Default(Expr::id(@X, X, self.ctx.bump)?);
   A = NamedColumnConstraint{ name, constraint };
 }
 
@@ -367,7 +367,7 @@ ccons(A) ::= defer_subclause(D).    {
 }
 ccons(A) ::= COLLATE ids(C).        {
   let name = self.ctx.constraint_name();
-  let constraint = ColumnConstraint::Collate{ collation_name: Name::from_token(@C, C, self.ctx.bump) };
+  let constraint = ColumnConstraint::Collate{ collation_name: Name::from_token(@C, C, self.ctx.bump)? };
   A = NamedColumnConstraint{ name, constraint };
 }
 ccons(A) ::= GENERATED ALWAYS AS generated(X). {
@@ -385,7 +385,7 @@ generated(X) ::= LP expr(E) RP. {
   X = ColumnConstraint::Generated{ expr: E, typ: None };
 }
 generated(X) ::= LP expr(E) RP ID(TYPE). {
-  X = ColumnConstraint::Generated{ expr: E, typ: Some(Id::from_token(@TYPE, TYPE, self.ctx.bump)) };
+  X = ColumnConstraint::Generated{ expr: E, typ: Some(Id::from_token(@TYPE, TYPE, self.ctx.bump)?) };
 }
 
 // The optional AUTOINCREMENT keyword
@@ -603,7 +603,7 @@ selcollist(A) ::= sclp(A) nm(X) DOT STAR. {
 //
 %type as "Option<As<'i>>"
 as(X) ::= AS nm(Y).    {X = Some(As::As(Y));}
-as(X) ::= ids(Y).      {X = Some(As::Elided(Name::from_token(@Y, Y, self.ctx.bump)));}
+as(X) ::= ids(Y).      {X = Some(As::Elided(Name::from_token(@Y, Y, self.ctx.bump)?));}
 as(X) ::= .            {X = None;}
 
 
@@ -908,7 +908,7 @@ idlist(A) ::= nm(Y).
 
 expr(A) ::= term(A).
 expr(A) ::= LP expr(X) RP. {A = Expr::parenthesized(X, self.ctx.bump);}
-expr(A) ::= idj(X).          {A= Expr::id(@X, X, self.ctx.bump); /*A-overwrites-X*/}
+expr(A) ::= idj(X).          {A= Expr::id(@X, X, self.ctx.bump)?; /*A-overwrites-X*/}
 expr(A) ::= nm(X) DOT nm(Y). {
   A = Expr::Qualified(X, Y); /*A-overwrites-X*/
 }
@@ -916,16 +916,16 @@ expr(A) ::= nm(X) DOT nm(Y) DOT nm(Z). {
   A = Expr::DoublyQualified(X, Y, Z); /*A-overwrites-X*/
 }
 term(A) ::= NULL. {A=Expr::Literal(Literal::Null);}
-term(A) ::= BLOB(X). {A=Expr::Literal(Literal::Blob(X.unwrap(self.ctx.bump))); /*A-overwrites-X*/}
-term(A) ::= STRING(X).          {A=Expr::Literal(Literal::String(X.unwrap(self.ctx.bump))); /*A-overwrites-X*/}
+term(A) ::= BLOB(X). {A=Expr::Literal(Literal::Blob(X.unwrap(self.ctx.bump)?)); /*A-overwrites-X*/}
+term(A) ::= STRING(X).          {A=Expr::Literal(Literal::String(X.unwrap(self.ctx.bump)?)); /*A-overwrites-X*/}
 term(A) ::= FLOAT|INTEGER(X). {
-  A = Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump))); /*A-overwrites-X*/
+  A = Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump)?)); /*A-overwrites-X*/
 }
 expr(A) ::= VARIABLE(X).     {
-  A = Expr::Variable(X.unwrap(self.ctx.bump)); /*A-overwrites-X*/
+  A = Expr::Variable(X.unwrap(self.ctx.bump)?); /*A-overwrites-X*/
 }
 expr(A) ::= expr(X) COLLATE ids(C). {
-  A = Expr::collate(X, @C, C, self.ctx.bump); /*A-overwrites-X*/
+  A = Expr::collate(X, @C, C, self.ctx.bump)?; /*A-overwrites-X*/
 }
 %ifndef SQLITE_OMIT_CAST
 expr(A) ::= CAST LP expr(E) AS typetoken(T) RP. {
@@ -940,7 +940,7 @@ expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP. {
   A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O.into_bump_slice())), None, self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP. {
-  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X, self.ctx.bump), filter_over: None }; /*A-overwrites-X*/
+  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X, self.ctx.bump)?, filter_over: None }; /*A-overwrites-X*/
 }
 
 %ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
@@ -957,7 +957,7 @@ expr(A) ::= idj(X) LP distinct(D) exprlist(Y) ORDER BY sortlist(O) RP filter_ove
   A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::SortList(O.into_bump_slice())), Some(Z), self.ctx.bump)?; /*A-overwrites-X*/
 }
 expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
-  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X, self.ctx.bump), filter_over: Some(Z) }; /*A-overwrites-X*/
+  A = Expr::FunctionCallStar{ name: Id::from_token(@X, X, self.ctx.bump)?, filter_over: Some(Z) }; /*A-overwrites-X*/
 }
 %ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP
@@ -1148,7 +1148,7 @@ eidlist(A) ::= nm(Y) collate(C) sortorder(Z). {
 
 %type collate "Option<Name<'i>>"
 collate(C) ::= .              {C = None;}
-collate(C) ::= COLLATE ids(X).   {C = Some(Name::from_token(@X, X, self.ctx.bump));}
+collate(C) ::= COLLATE ids(X).   {C = Some(Name::from_token(@X, X, self.ctx.bump)?);}
 
 
 ///////////////////////////// The DROP INDEX command /////////////////////////
@@ -1179,16 +1179,16 @@ cmd ::= PRAGMA fullname(X) LP minus_num(Y) RP.
 %type nmnum "Expr<'i>"
 nmnum(A) ::= plus_num(A).
 nmnum(A) ::= nm(X). {A = Expr::Name(X);}
-nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X, self.ctx.bump)));}
-nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X, self.ctx.bump)));}
-nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X, self.ctx.bump)));}
+nmnum(A) ::= ON(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X, self.ctx.bump)?));}
+nmnum(A) ::= DELETE(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X, self.ctx.bump)?));}
+nmnum(A) ::= DEFAULT(X). {A = Expr::Literal(Literal::Keyword(from_token(@X, X, self.ctx.bump)?));}
 %endif SQLITE_OMIT_PRAGMA
 %token_class number INTEGER|FLOAT.
 %type plus_num "Expr<'i>"
-plus_num(A) ::= PLUS number(X).       {A = Expr::unary(UnaryOperator::Positive, Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump))), self.ctx.bump);}
-plus_num(A) ::= number(X).            {A = Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump)));}
+plus_num(A) ::= PLUS number(X).       {A = Expr::unary(UnaryOperator::Positive, Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump)?)), self.ctx.bump);}
+plus_num(A) ::= number(X).            {A = Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump)?));}
 %type minus_num "Expr<'i>"
-minus_num(A) ::= MINUS number(X).     {A = Expr::unary(UnaryOperator::Negative, Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump))), self.ctx.bump);}
+minus_num(A) ::= MINUS number(X).     {A = Expr::unary(UnaryOperator::Negative, Expr::Literal(Literal::Numeric(X.unwrap(self.ctx.bump)?)), self.ctx.bump);}
 //////////////////////////// The CREATE TRIGGER command /////////////////////
 
 %ifndef SQLITE_OMIT_TRIGGER
