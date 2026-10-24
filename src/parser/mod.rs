@@ -1,4 +1,6 @@
 //! SQLite parser
+use std::str::Utf8Error;
+
 use bumpalo::Bump;
 use bumpalo::collections::Vec;
 
@@ -26,6 +28,8 @@ pub enum ParserError {
     UnexpectedEof,
     /// Custom error
     Custom(String),
+    /// Encoding error
+    Utf8Error(Utf8Error),
 }
 
 impl std::fmt::Display for ParserError {
@@ -36,11 +40,17 @@ impl std::fmt::Display for ParserError {
             }
             Self::UnexpectedEof => f.write_str("unexpected end of input"),
             Self::Custom(s) => f.write_str(s),
+            Self::Utf8Error(err) => err.fmt(f),
         }
     }
 }
 
 impl std::error::Error for ParserError {}
+impl From<Utf8Error> for ParserError {
+    fn from(err: Utf8Error) -> Self {
+        ParserError::Utf8Error(err)
+    }
+}
 
 /// Custom error constructor
 #[macro_export]

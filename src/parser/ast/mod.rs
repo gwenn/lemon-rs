@@ -5,7 +5,7 @@ pub mod fmt;
 
 use std::num::ParseIntError;
 use std::ops::Deref;
-use std::str::{self, Bytes, FromStr as _};
+use std::str::{self, Bytes, FromStr as _, Utf8Error};
 
 use bumpalo::Bump;
 use bumpalo::collections::Vec;
@@ -498,13 +498,13 @@ impl<'bump> Expr<'bump> {
     }
 
     /// Constructor
-    pub fn id(xt: YYCODETYPE, x: Token, b: &'bump Bump) -> Self {
-        Self::Id(Id::from_token(xt, x, b))
+    pub fn id(xt: YYCODETYPE, x: Token, b: &'bump Bump) -> Result<Self, Utf8Error> {
+        Ok(Self::Id(Id::from_token(xt, x, b)?))
     }
 
     /// Constructor
-    pub fn collate(x: Self, ct: YYCODETYPE, c: Token, b: &'bump Bump) -> Self {
-        Self::Collate(b.alloc(x), from_token(ct, c, b))
+    pub fn collate(x: Self, ct: YYCODETYPE, c: Token, b: &'bump Bump) -> Result<Self, Utf8Error> {
+        Ok(Self::Collate(b.alloc(x), from_token(ct, c, b)?))
     }
 
     /// Constructor
@@ -631,7 +631,7 @@ impl<'bump> Expr<'bump> {
             ));
         }
         Ok(Self::FunctionCall {
-            name: Id::from_token(xt, x, b),
+            name: Id::from_token(xt, x, b)?,
             distinctness,
             args: args.map(|a| a.into_bump_slice()),
             order_by,
@@ -1269,8 +1269,8 @@ pub struct Id<'bump>(pub &'bump str);
 
 impl<'bump> Id<'bump> {
     /// Constructor
-    pub fn from_token(ty: YYCODETYPE, token: Token, b: &'bump Bump) -> Self {
-        Self(from_token(ty, token, b))
+    pub fn from_token(ty: YYCODETYPE, token: Token, b: &'bump Bump) -> Result<Self, Utf8Error> {
+        Ok(Self(from_token(ty, token, b)?))
     }
 }
 
@@ -1305,8 +1305,8 @@ pub(crate) fn unquote(s: &str) -> (&str, u8) {
 
 impl<'bump> Name<'bump> {
     /// Constructor
-    pub fn from_token(ty: YYCODETYPE, token: Token, b: &'bump Bump) -> Self {
-        Self(from_token(ty, token, b))
+    pub fn from_token(ty: YYCODETYPE, token: Token, b: &'bump Bump) -> Result<Self, Utf8Error> {
+        Ok(Self(from_token(ty, token, b)?))
     }
 
     fn as_bytes(&self) -> QuotedIterator<'_> {

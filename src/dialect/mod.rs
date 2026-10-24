@@ -2,6 +2,7 @@
 
 use std::fmt::Formatter;
 use std::str;
+use std::str::Utf8Error;
 
 use bumpalo::Bump;
 
@@ -18,7 +19,7 @@ pub(crate) fn sentinel(start: usize) -> Token<'static> {
 
 impl Token<'_> {
     /// Access token value
-    pub fn unwrap(self, b: &Bump) -> &str {
+    pub fn unwrap(self, b: &Bump) -> Result<&str, Utf8Error> {
         from_bytes(self.1, b)
     }
 }
@@ -38,8 +39,8 @@ impl TokenType {
     }
 }
 
-pub(crate) fn from_bytes<'bump>(bytes: &[u8], b: &'bump Bump) -> &'bump str {
-    b.alloc_str(str::from_utf8(bytes).unwrap()) // FIXME error handling
+pub(crate) fn from_bytes<'bump>(bytes: &[u8], b: &'bump Bump) -> Result<&'bump str, Utf8Error> {
+    Ok(b.alloc_str(str::from_utf8(bytes)?))
 }
 
 include!(concat!(env!("OUT_DIR"), "/keywords.rs"));
@@ -74,7 +75,11 @@ pub(crate) fn is_identifier_continue(b: u8) -> bool {
 
 // keyword may become an identifier
 // see %fallback in parse.y
-pub(crate) fn from_token<'bump>(_ty: u16, value: Token, b: &'bump Bump) -> &'bump str {
+pub(crate) fn from_token<'bump>(
+    _ty: u16,
+    value: Token,
+    b: &'bump Bump,
+) -> Result<&'bump str, Utf8Error> {
     from_bytes(value.1, b)
 }
 
