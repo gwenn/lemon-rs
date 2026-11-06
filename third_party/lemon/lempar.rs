@@ -194,6 +194,7 @@ static TARGET: &str = "Parse";
 /* For tracing shifts, the names of all terminals and nonterminals
 ** are required.  The following table supplies these names */
 #[cfg(any(feature = "YYCOVERAGE", not(feature = "NDEBUG")))]
+#[allow(dead_code)]
 %%
 
 /* For tracing reduce actions, the names of all rules are required.
@@ -274,14 +275,12 @@ impl yyParser<'_> {
 #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
 impl yyParser<'_> {
     #[expect(non_snake_case)]
+    #[allow(dead_code)]
     pub fn ParseStackPeak(&self) -> usize {
         self.yyhwm
     }
     fn yyhwm_incr(&mut self) {
-        if self.yystack.yyidx > self.yyhwm {
-            self.yyhwm += 1;
-            assert_eq!(self.yyhwm, self.yystack.yyidx);
-        }
+        self.yyhwm = self.yyhwm.max(self.yystack.yyidx);
     }
 }
 #[cfg(not(feature = "YYTRACKMAXSTACKDEPTH"))]
@@ -296,7 +295,9 @@ impl yyParser<'_> {
 ** systems, every element of this matrix should end up being set.
 */
 #[cfg(feature = "YYCOVERAGE")]
-static yycoverage: [[bool; YYNTOKEN]; YYNSTATE] = [];
+#[expect(non_upper_case_globals)]
+static yycoverage: std::sync::Mutex<[[bool; YYNTOKEN as usize]; YYNSTATE as usize]> =
+    std::sync::Mutex::new([[false; YYNTOKEN as usize]; YYNSTATE as usize]);
 
 /*
 ** Write into out a description of every state/lookahead combination that
@@ -307,22 +308,27 @@ static yycoverage: [[bool; YYNTOKEN]; YYNSTATE] = [];
 ** Return the number of missed state/lookahead combinations.
 */
 #[cfg(feature = "YYCOVERAGE")]
-fn ParseCoverage(/*FILE *out*/) -> i32 {
-    //int stateno, iLookAhead, i;
-    let mut nMissed = 0;
-    /*for(stateno=0; stateno<YYNSTATE; stateno++){
-      i = yy_shift_ofst[stateno];
-      for(iLookAhead=0; iLookAhead<YYNTOKEN; iLookAhead++){
-        if( yy_lookahead[i+iLookAhead]!=iLookAhead ) continue;
-        if( yycoverage[stateno][iLookAhead]==0 ) nMissed++;
-        if( out ){
-          fprintf(out,"State %d lookahead %s %s\n", stateno,
-                  yyTokenName[iLookAhead],
-                  yycoverage[stateno][iLookAhead] ? "ok" : "missed");
+#[expect(non_snake_case)]
+#[allow(dead_code)]
+/// Return the number of valid state/lookahead combinations not yet observed.
+pub fn ParseCoverage(/*FILE *out*/) -> i32 {
+    let coverage = yycoverage
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut n_missed = 0;
+    for stateno in 0..=YY_SHIFT_COUNT as usize {
+        let offset = yy_shift_ofst[stateno] as usize;
+        for lookahead in 0..YYNTOKEN as usize {
+            let index = offset + lookahead;
+            if index < yy_lookahead.len()
+                && yy_lookahead[index] as usize == lookahead
+                && !coverage[stateno][lookahead]
+            {
+                n_missed += 1;
+            }
         }
-      }
-    }*/
-    return nMissed;
+    }
+    n_missed
 }
 
 /*
@@ -340,7 +346,10 @@ fn yy_find_shift_action(
     assert!(stateno <= YY_SHIFT_COUNT);
     #[cfg(feature = "YYCOVERAGE")]
     {
-        //yycoverage[stateno][iLookAhead] = true;
+        yycoverage
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)[stateno as usize]
+            [iLookAhead as usize] = true;
     }
     loop {
         let mut i = yy_shift_ofst[stateno as usize] as usize;
@@ -476,6 +485,40 @@ impl<'input> yyParser<'input> {
         };
         self.yystack.push(yytos);
         yyTraceShift(&self.yystack, yyNewState, "Shift");
+    }
+}
+
+#[cfg(all(
+    test,
+    any(feature = "YYTRACKMAXSTACKDEPTH", feature = "YYCOVERAGE")
+))]
+mod feature_tests {
+    use super::*;
+
+    #[cfg(feature = "YYTRACKMAXSTACKDEPTH")]
+    #[test]
+    fn tracks_stack_peak() {
+        let bump = bumpalo::Bump::new();
+        let mut parser = yyParser::new(Context::new(&bump, b""));
+        assert_eq!(parser.ParseStackPeak(), 0);
+
+        parser.yystack.yyidx_shift(1);
+        parser.yyhwm_incr();
+        assert_eq!(parser.ParseStackPeak(), 1);
+    }
+
+    #[cfg(feature = "YYCOVERAGE")]
+    #[test]
+    fn records_parser_coverage() {
+        yycoverage
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)[0][0] = false;
+        yy_find_shift_action(0, 0);
+        assert!(
+            yycoverage
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)[0][0]
+        );
     }
 }
 

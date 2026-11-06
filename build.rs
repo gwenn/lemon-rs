@@ -44,11 +44,12 @@ fn main() -> Result<()> {
     // compile mkkeywordhash
     let mkkeywordhash = out_path.join("mkkeywordhash");
     {
+        let mut build = Build::new();
+        build.target(&env::var("HOST").unwrap());
+        #[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
+        build.define("SQLITE_ENABLE_ORDERED_SET_AGGREGATES", None);
         assert!(
-            Build::new()
-                .target(&env::var("HOST").unwrap())
-                //#[cfg(feature = "SQLITE_ENABLE_ORDERED_SET_AGGREGATES")]
-                //.define("SQLITE_ENABLE_ORDERED_SET_AGGREGATES", None)
+            build
                 .get_compiler()
                 .to_command()
                 .arg("-o")

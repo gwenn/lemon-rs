@@ -945,7 +945,7 @@ expr(A) ::= idj(X) LP STAR RP. {
 
 %ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP. {
-  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), None, self.ctx.bump);
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(self.ctx.bump.alloc(E))), None, self.ctx.bump)?;
 }
 %endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 
@@ -962,7 +962,7 @@ expr(A) ::= idj(X) LP STAR RP filter_over(Z). {
 %ifdef SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 expr(A) ::= idj(X) LP distinct(D) exprlist(Y) RP WITHIN GROUP LP ORDER BY expr(E) RP
             filter_over(Z). {
-  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(E)), Some(Z), self.ctx.bump); /*A-overwrites-X*/
+  A = Expr::function_call(@X, X, D, Y, Some(FunctionCallOrder::within_group(self.ctx.bump.alloc(E))), Some(Z), self.ctx.bump)?; /*A-overwrites-X*/
 }
 %endif SQLITE_ENABLE_ORDERED_SET_AGGREGATES
 
