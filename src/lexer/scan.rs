@@ -3,7 +3,8 @@
 use std::error::Error;
 use std::{fmt, io};
 
-use log::debug;
+use log::Level::Debug;
+use log::{debug, log_enabled};
 
 /// Position
 #[derive(Debug)]
@@ -131,7 +132,11 @@ impl<S: Splitter> Scanner<S> {
         &mut self,
         input: &'input [u8],
     ) -> ScanResult<'input, S::TokenType, S::Error> {
-        debug!(target: "scanner", "scan({})", Pos::from(input, self.offset));
+        if log_enabled!(target: "scanner", Debug) {
+            // `Pos::from` walks the input from its start: build it only when logged.
+            let pos = Pos::from(input, self.offset);
+            debug!(target: "scanner", "scan({})", pos);
+        }
         // Loop until we have a token.
         loop {
             // See if we can get a token with what we already have.
