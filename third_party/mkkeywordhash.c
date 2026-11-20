@@ -335,7 +335,7 @@ static int nKeyword = (sizeof(aKeywordTable)/sizeof(aKeywordTable[0]));
 #define charMap(X)   (0x20|(X))
 
 /*
-** Comparision function for two Keyword records
+** Comparison function for two Keyword records
 */
 static int keywordCompare1(const void *a, const void *b){
   const Keyword *pA = (Keyword*)a;
